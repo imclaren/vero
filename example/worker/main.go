@@ -17,7 +17,7 @@ import (
 
 // version has to increase on every release, so the frontend can tell which
 // of two copies is newer.
-var version = "0.9.2"
+var version = "0.11.0"
 
 type Job struct {
 	ID       int    `json:"id"`
