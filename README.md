@@ -8,7 +8,7 @@ requests, and the Go worker pushes its state back the instant it changes.
 
 Then use the same Go code backend with Windows and Linux frontends.
 
-[![Go reference](https://pkg.go.dev/badge/github.com/calmdocs/vero.svg)](https://pkg.go.dev/github.com/calmdocs/vero)
+[![Go reference](https://pkg.go.dev/badge/github.com/imclaren/vero.svg)](https://pkg.go.dev/github.com/imclaren/vero)
 
 <table>
 <tr>
@@ -29,7 +29,7 @@ app in about 5 minutes.
 The example is a menu bar app driving the Go worker (main.go below):
 
 ```bash
-git clone https://github.com/calmdocs/vero && cd vero
+git clone https://github.com/imclaren/vero && cd vero
 cd example/menubar-app && ./build.sh
 ./.build/debug/MenuBarExample
 ```
@@ -46,7 +46,7 @@ Get vero:
 ```bash
 mkdir -p ~/vero-example/macos-app && cd ~/vero-example/macos-app
 go mod init macos-app
-go get github.com/calmdocs/vero
+go get github.com/imclaren/vero
 ```
 
 Create `main.go` (file also available at
@@ -67,7 +67,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/calmdocs/vero"
+	"github.com/imclaren/vero"
 )
 
 // version has to increase on every release, so the frontend can tell which
@@ -184,7 +184,7 @@ lipo -create worker-amd64 worker-arm64 -output worker
 In Xcode, File -> New -> Project -> macOS -> App, with Interface set to
 SwiftUI. Then:
 
-- File -> Add Package Dependencies... -> `https://github.com/calmdocs/vero`
+- File -> Add Package Dependencies... -> `https://github.com/imclaren/vero`
 - drag `~/vero-example/macos-app/worker` into the project, ticking your app
   under **Add to targets**
 

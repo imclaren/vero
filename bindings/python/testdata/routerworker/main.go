@@ -6,7 +6,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/calmdocs/vero"
+	"github.com/imclaren/vero"
 )
 
 type restart struct {

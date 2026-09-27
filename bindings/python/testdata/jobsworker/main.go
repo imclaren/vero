@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/calmdocs/vero"
+	"github.com/imclaren/vero"
 )
 
 type Job struct {

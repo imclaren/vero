@@ -60,7 +60,7 @@ Put these two beside the executable that loads them:
 vero.h declares the nine C functions, for calling them from C or C++ directly.
 The Swift, C# and Python bindings do not need it.
 
-  https://github.com/calmdocs/vero
+  https://github.com/imclaren/vero
 TXT
 }
 
@@ -126,7 +126,7 @@ if [ "$PUBLISH" = yes ]; then
     # Package.swift and the binary it names have to come from one commit, or a
     # consumer gets Swift from one version and Go from another.
     echo "==> pointing Package.swift at $VERSION"
-    URL="https://github.com/calmdocs/vero/releases/download/$VERSION/CVero.xcframework.zip"
+    URL="https://github.com/imclaren/vero/releases/download/$VERSION/CVero.xcframework.zip"
     python3 - "$ROOT/Package.swift" "$URL" "$CHECKSUM" <<'PY'
 import re, sys
 path, url, checksum = sys.argv[1], sys.argv[2], sys.argv[3]

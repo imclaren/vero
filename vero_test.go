@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/calmdocs/vero"
+	"github.com/imclaren/vero"
 )
 
 // The tests run this same binary as the worker, so there is nothing to build

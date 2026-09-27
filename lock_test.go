@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/calmdocs/vero"
+	"github.com/imclaren/vero"
 )
 
 // The same trick the other tests use: this binary is the worker.

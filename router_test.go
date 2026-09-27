@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/calmdocs/vero"
+	"github.com/imclaren/vero"
 )
 
 const envRouterWorker = "VERO_ROUTER_WORKER"

@@ -34,7 +34,7 @@ import (
 	"sync"
 	"unsafe"
 
-	"github.com/calmdocs/vero"
+	"github.com/imclaren/vero"
 )
 
 var (

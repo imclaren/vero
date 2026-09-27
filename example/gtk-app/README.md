@@ -5,7 +5,7 @@ builds the app in a container, runs it on a virtual display, and opens it in
 Screen Sharing:
 
 ```bash
-git clone https://github.com/calmdocs/vero && cd vero
+git clone https://github.com/imclaren/vero && cd vero
 ./scripts/run-linux.sh
 ```
 
@@ -32,15 +32,15 @@ compiled on Linux, so that part happens in a container:
 ```bash
 mkdir -p ~/vero-example/gtk-app && cd ~/vero-example/gtk-app
 go mod init gtk-app
-go get github.com/calmdocs/vero
+go get github.com/imclaren/vero
 
 docker run --rm -v "$PWD":/src -w /src \
     -e GOCACHE=/tmp/gocache -e GOPATH=/tmp/go -e GOTOOLCHAIN=auto \
     golang:1.24-bookworm \
-    sh -c 'CGO_ENABLED=1 go build -buildmode=c-shared -o libvero.so github.com/calmdocs/vero/cshim'
+    sh -c 'CGO_ENABLED=1 go build -buildmode=c-shared -o libvero.so github.com/imclaren/vero/cshim'
 
 CGO_ENABLED=0 GOOS=linux GOARCH=arm64 \
-    go build -o worker github.com/calmdocs/vero/example/worker
+    go build -o worker github.com/imclaren/vero/example/worker
 ```
 
 ### 3. Add the app's files to the same directory
@@ -49,7 +49,7 @@ The app is [main.py](main.py), and [vero.py](../../bindings/python/vero.py) is
 the Python binding. Download both:
 
 ```bash
-base=https://raw.githubusercontent.com/calmdocs/vero/main
+base=https://raw.githubusercontent.com/imclaren/vero/main
 curl -O $base/bindings/python/vero.py
 curl -O $base/example/gtk-app/main.py
 chmod +x main.py

@@ -12,7 +12,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/calmdocs/vero"
+	"github.com/imclaren/vero"
 )
 
 // version has to increase on every release, so the frontend can tell which

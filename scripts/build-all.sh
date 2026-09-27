@@ -26,7 +26,7 @@ mkdir -p "$DIST"
 
 WORKER=${WORKER:-./example/worker}
 # The C shim.  In your own project this is the import path instead:
-#   CSHIM=github.com/calmdocs/vero/cshim WORKER=./cmd/worker ./build-all.sh
+#   CSHIM=github.com/imclaren/vero/cshim WORKER=./cmd/worker ./build-all.sh
 CSHIM=${CSHIM:-./cshim}
 SKIPPED=""
 skip() { SKIPPED="$SKIPPED
