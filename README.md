@@ -167,7 +167,7 @@ func work(w *vero.Worker, state *vero.State[Status]) {
 }
 ```
 
-Build it for both architectures and join them into one binary, so the app runs
+Build it for both architectures (old Intel Macs and new Apple Silicon Macs) and join them into one binary, so the app runs
 on either. `lipo` comes with Xcode:
 
 ```bash
@@ -272,7 +272,7 @@ Both can be built on your Mac:
 | [example/wpf-app](example/wpf-app) | Windows, WPF |
 | [example/gtk-app](example/gtk-app) | Linux, GTK4 |
 
-To see all three at once instead, `./scripts/setup.sh` installs the toolchains
+To see the app running on all three operating systems at once, `./scripts/setup.sh` installs the toolchains
 for every platform and builds everything, and `./scripts/run.sh` then opens the
 three examples together on your Mac.
 
