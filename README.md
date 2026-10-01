@@ -293,31 +293,35 @@ API needs nothing else, and the Python and C# bindings need only the worker.
 
 ## What runs where
 
-A frontend reaches the Go worker one of two ways. Swift **links** it, as a C
-archive compiled into the application. Python and C# **spawn** it: the worker
-supervises a copy of itself and answers on a pipe, which is all a process
-needs to do. Linking needs cgo and a platform Go can build a C archive for;
-spawning needs nothing but an executable, which is why the list below is as
-long as it is.
+vero is two programs: the Go **worker**, and the native app that drives it.
+They are joined in one of two ways.
 
-| | worker | linked (Swift) | spawned (Python, C#) | |
-|---|---|---|---|---|
-| **macOS** | ✅ | ✅ | ✅ | the SwiftUI example links the archive |
-| **Windows** | ✅ amd64, arm64, 386 | — | ✅ | the WPF example, with no DLL to match to an architecture |
-| **Linux** | ✅ 13 architectures | — | ✅ | the GTK4 example; amd64 and arm64 are released |
-| **FreeBSD** | ✅ amd64, arm64 | — | ✅ | the same GTK4 example, unchanged |
-| **OpenBSD** | ✅ 6 architectures | — | ✅ | no example recorded, but nothing in one would differ |
-| **NetBSD** | ✅ 4 architectures | — | ✅ | as above |
-| **DragonFly** | ✅ amd64 | — | ✅ | as above |
-| **illumos** | ✅ amd64 | — | ✅ | as above |
-| **Android** | ✅ arm64 | — | ✅ | a Kotlin frontend would spawn the worker from its library directory; none written |
-| **Solaris, AIX, Plan 9** | ✖ | — | — | the single-worker lock uses `flock`, which these do not have. Roughly thirty lines to fix with `fcntl` |
-| **iOS** | ✖ | ✅ in principle | ✖ | the sandbox forbids spawning a process, so an iOS frontend would have to link the archive and do without supervision |
-| **wasm** | ✖ | — | — | no processes at all: neither half of vero's design applies |
+- **Compiled in.** The Go code is built as a C archive and linked into the
+  app, so both halves are one executable. This is what the Swift package does
+  on macOS, and it needs a platform Go can build a C archive for.
+- **Started as a process.** The app runs the worker as an ordinary program and
+  talks to it over a pipe. The worker supervises itself - it launches a second
+  copy to do the work and restarts it if it dies - so the app only has to
+  write and read JSON. This is what the Python and C# bindings do, and it
+  needs nothing but a worker binary.
 
-Go builds the worker for 35 of its ports today. Only `-buildmode=c-shared` is
-narrow - among the BSDs it exists on freebsd/amd64 alone - and nothing needs
-it any more, which is the whole reason the list is not three rows long.
+The second way is why the list is long: Go builds an executable for 35 of its
+ports, while the C library needed by the first way exists on a handful.
+
+| Operating system | Can you build the worker? | Is there a working example? | What that means in practice |
+|---|---|---|---|
+| macOS | yes - arm64, amd64 | yes, SwiftUI in the menu bar | the only platform where Go is compiled into the app rather than started beside it |
+| Windows | yes - arm64, amd64, 386 | yes, WPF | the C# app starts `worker.exe`; nothing is loaded, so no DLL to ship or match to the architecture |
+| Linux | yes - 13 architectures | yes, GTK4 | the Python app starts the worker; releases carry amd64 and arm64 |
+| FreeBSD | yes - amd64, arm64 | yes, the Linux GTK4 example unchanged | proof that starting the worker is enough: Go cannot build its C library here at all |
+| OpenBSD | yes - 6 architectures | not written | a GTK or Qt app would work the same way; nothing in vero is Linux-specific |
+| NetBSD | yes - 4 architectures | not written | as above |
+| DragonFly | yes - amd64 | not written | as above |
+| illumos | yes - amd64 | not written | as above |
+| Android | yes - arm64 | not written | a Kotlin app could start the worker from its library directory, with no JNI |
+| Solaris, AIX, Plan 9 | no | - | vero's single-worker lock uses `flock`, which these do not provide. About thirty lines with `fcntl` would fix it |
+| iOS | no | - | the sandbox forbids starting another process, so an iOS app would have to compile the worker in and lose the supervision that comes with running it separately |
+| wasm | no | - | there are no processes at all, so neither way of joining the halves exists |
 
 ## Licence
 
