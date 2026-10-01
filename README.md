@@ -24,7 +24,7 @@ Run a Go binary embedded in a native macOS SwiftUI app. The Go binary and the Sw
 | **wasm** — WASI (`wasip1/wasm`) | — | Builds and runs. [`scripts/build-all.sh`](scripts/build-all.sh) produces `worker-wasip1-wasm.wasm`, which a supervisor starts with `wasmtime` like any other worker - so the worker runs on a machine with no Go on it. WASI has no screen, so there is no window: the frontend is whatever program started the runtime. It answers one request at a time, because a read on standard input stops every other goroutine in the module. |
 
 [macOS example](#run-the-macos-example) ·
-[Windows, Linux, FreeBSD, iOS and browser examples](#build-the-same-worker-for-windows-linux-freebsd-ios-and-the-browser)
+[the other examples](#build-the-same-worker-for-windows-linux-freebsd-android-ios-and-the-browser)
 
 If you already have Xcode and Go installed, the example below builds a running
 app in about 5 minutes.
@@ -271,12 +271,9 @@ Press Cmd-R in Xcode. The icon appears in the menu bar, and spins while the
 worker has jobs in flight. Click the menu bar icon to see progress changes.
 Click the button on a row to restart that job.
 
-## Build the same worker for Windows, Linux, FreeBSD, iOS and the browser
+## Build the same worker for Windows, Linux, FreeBSD, Android, iOS and the browser
 
-All of them can be built on your Mac, with no C toolchain: the worker is pure
-Go, and the frontend spawns it rather than loading a library.  iOS and the
-browser are the exceptions, since neither may start a program - there the
-worker is compiled into the application itself, and runs on a goroutine.
+All of them can be built on your Mac:
 
 | | | |
 |---|---|---|
