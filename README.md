@@ -8,7 +8,7 @@ Run a Go binary embedded in a native macOS SwiftUI app. The Go binary and the Sw
 
 | Operating system | Example | Building on macOS |
 |---|:---:|---|
-| **macOS** — arm64, amd64 | <a href="#run-the-macos-example"><img src="docs/screenshots/macos.gif" width="300"></a> | Builds and runs. SwiftUI, in the menu bar, built by running [`example/menubar-app/build.sh`](example/menubar-app/build.sh). Also see [how to build a native Mac app](#create-a-vero-macos-app-on-your-mac), below. |
+| **macOS** — arm64, amd64 | <a href="#run-the-macos-example"><img src="docs/screenshots/macos.gif" width="300"></a> | Builds and runs. SwiftUI, in the menu bar, built by running [`example/menubar-app/build.sh`](example/menubar-app/build.sh).<br><br>If you already have Xcode and Go installed, the [macOS example](#run-the-macos-example) below builds a running app in about 5 minutes. |
 | **Windows** — arm64, amd64, 386 | <a href="example/wpf-app"><img src="docs/screenshots/windows.gif" width="300"></a> | Builds and runs. WPF, started in a Windows VM by running [`scripts/run-windows.sh`](scripts/run-windows.sh). |
 | **Linux** — 13 architectures | <a href="example/gtk-app"><img src="docs/screenshots/linux.gif" width="300"></a> | Builds and runs. GTK4, started in a Docker container by running [`scripts/run-linux.sh`](scripts/run-linux.sh). |
 | **FreeBSD** — amd64, arm64 | <a href="example/gtk-app"><img src="docs/screenshots/freebsd.gif" width="300"></a> | Builds and runs. GTK4, the same app as Linux, started in a VM by running [`scripts/run-freebsd.sh`](scripts/run-freebsd.sh). |
@@ -33,10 +33,6 @@ seventeen targets across macOS, Windows, Linux, FreeBSD, OpenBSD, NetBSD,
 DragonFly, illumos, Solaris, AIX, Plan 9 and WASI. Anywhere Go produces an
 executable, vero runs - the Go API needs nothing else, and the Python, C# and
 Kotlin bindings need only the worker.
-
-If you already have Xcode and Go installed, the
-[macOS example](#run-the-macos-example) below builds a running app in about
-5 minutes.
 
 ## Run the macOS example
 
