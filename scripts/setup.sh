@@ -1,5 +1,5 @@
 #!/bin/sh
-# Installs everything needed to build vero for macOS, Windows and Linux on a
+# Installs what is needed to run the examples for every platform on a
 # Mac, then builds it.
 #
 #   ./scripts/setup.sh
@@ -9,7 +9,6 @@ set -e
 
 ROOT=$(cd "$(dirname "$0")" && pwd)/..
 cd "$ROOT"
-TOOLCHAINS=${TOOLCHAINS:-$HOME/toolchains}
 
 command -v brew >/dev/null 2>&1 || {
     echo "Homebrew is needed: https://brew.sh" >&2; exit 1; }
@@ -27,8 +26,10 @@ command -v go >/dev/null 2>&1 || {
     exit 1
 }
 
-for pair in x86_64-w64-mingw32-gcc:mingw-w64 colima:colima docker:docker \
-            qemu-system-aarch64:qemu; do
+# Docker runs the Linux example; qemu runs the Windows and FreeBSD ones.
+# Nothing here is needed to *build*: the worker supervises itself, so every
+# target but macOS is a plain Go cross-compile with no C toolchain at all.
+for pair in colima:colima docker:docker qemu-system-aarch64:qemu; do
     cmd=${pair%%:*}; formula=${pair#*:}
     command -v "$cmd" >/dev/null 2>&1 && continue
     echo "    installing $formula"
@@ -38,22 +39,6 @@ for pair in x86_64-w64-mingw32-gcc:mingw-w64 colima:colima docker:docker \
     command -v "$cmd" >/dev/null 2>&1 ||
         { echo "    $formula installed but $cmd is not on the PATH" >&2; }
 done
-
-# llvm-mingw is the only Windows-on-ARM cross compiler, and it is not in
-# Homebrew, so take the latest release straight from GitHub.
-if ! command -v aarch64-w64-mingw32-clang >/dev/null 2>&1 &&
-   [ ! -x "$TOOLCHAINS/llvm-mingw/bin/aarch64-w64-mingw32-clang" ]; then
-    echo "==> llvm-mingw (Windows ARM64 cross compiler)"
-    URL=$(curl -fsSL https://api.github.com/repos/mstorsjo/llvm-mingw/releases/latest |
-          sed -n 's/.*"browser_download_url": *"\(.*macos-universal.tar.xz\)".*/\1/p' | head -1)
-    [ -n "$URL" ] || { echo "could not find the llvm-mingw download" >&2; exit 1; }
-    mkdir -p "$TOOLCHAINS/llvm-mingw"
-    curl -fsSL "$URL" | tar -xJ -C "$TOOLCHAINS/llvm-mingw" --strip-components=1
-    echo "    installed in $TOOLCHAINS/llvm-mingw"
-fi
-# Deliberately not on PATH: llvm-mingw ships its own clang, which shadows the
-# system one and then cannot find the macOS SDK.  The build scripts look in
-# ~/toolchains/llvm-mingw and use it by full path, only for windows/arm64.
 
 # colima can report "running" while the docker socket is not reachable.
 docker info >/dev/null 2>&1 || { echo "==> starting colima"; colima start; }

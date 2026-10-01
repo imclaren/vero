@@ -30,35 +30,30 @@ DIST="$ROOT/dist"
 missing=""
 need() { [ -f "$DIST/$1" ] || missing="$missing $1"; }
 need libvero.a
-need vero-amd64.dll
-need vero-arm64.dll
-need libvero-amd64.so
-need libvero-arm64.so
 need worker-macos-universal
 [ -n "$missing" ] && { echo "not releasing, these did not build:$missing" >&2; exit 1; }
 
 echo "==> packaging"
-# The names inside an archive are the names the bindings load: vero.dll,
-# libvero.so, libvero.a, worker.  Nobody should have to rename anything.
+# A worker and, on macOS, the archive Swift links.  Everywhere else the
+# frontend spawns the worker rather than loading a library, so the worker is
+# the whole of it.
 stage() {
     name=$1; shift
     dir="$OUT/$name"; rm -rf "$dir"; mkdir -p "$dir"
     while [ $# -gt 0 ]; do
+        [ -f "$DIST/$1" ] || { rm -rf "$dir"; return 1; }
         cp "$DIST/$1" "$dir/$2"
         shift 2
     done
-    [ -f "$DIST/vero.h" ] && cp "$DIST/vero.h" "$dir/vero.h"
     cp "$ROOT/LICENSE" "$dir/" 2>/dev/null || true
     cat > "$dir/README.txt" <<TXT
 vero $VERSION - $name
 
-Put these two beside the executable that loads them:
+  worker   the Go half of your application
 
-  the library  linked or loaded by name (libvero.a, vero.dll, libvero.so)
-  worker       launched by the library at runtime
-
-vero.h declares the nine C functions, for calling them from C or C++ directly.
-The Swift, C# and Python bindings do not need it.
+A frontend starts it with VERO_HOST=1, which makes it supervise a second copy
+of itself and speak JSON on its standard input and output.  The Python and C#
+bindings do that for you; so can anything that can spawn a process.
 
   https://github.com/imclaren/vero
 TXT
@@ -72,25 +67,30 @@ archive() {
     echo "  $name.$format"
 }
 
+# macOS carries the archive as well: the Swift package links it into the
+# application rather than spawning anything.
 n="vero-$VERSION-darwin-universal"
 stage "$n" libvero.a libvero.a worker-macos-universal worker
+cp "$DIST/vero.h" "$OUT/$n/vero.h" 2>/dev/null || true
 archive "$n" tar.gz
 
-n="vero-$VERSION-windows-amd64"
-stage "$n" vero-amd64.dll vero.dll worker-windows-amd64.exe worker.exe
-archive "$n" zip
-
-n="vero-$VERSION-windows-arm64"
-stage "$n" vero-arm64.dll vero.dll worker-windows-arm64.exe worker.exe
-archive "$n" zip
-
-n="vero-$VERSION-linux-amd64"
-stage "$n" libvero-amd64.so libvero.so worker-linux-amd64 worker
-archive "$n" tar.gz
-
-n="vero-$VERSION-linux-arm64"
-stage "$n" libvero-arm64.so libvero.so worker-linux-arm64 worker
-archive "$n" tar.gz
+# Everything else is the worker on its own.  One line per platform rather than
+# a loop over dist/, so a release says what it ships.
+for t in windows/amd64 windows/arm64 \
+         linux/amd64 linux/arm64 \
+         freebsd/amd64 freebsd/arm64 \
+         openbsd/amd64 openbsd/arm64 \
+         netbsd/amd64 dragonfly/amd64 illumos/amd64; do
+    os=${t%/*}; arch=${t#*/}
+    ext=""; format=tar.gz
+    [ "$os" = windows ] && { ext=".exe"; format=zip; }
+    n="vero-$VERSION-$os-$arch"
+    if stage "$n" "worker-$os-$arch$ext" "worker$ext"; then
+        archive "$n" "$format"
+    else
+        echo "  skipped $n (not in dist/)"
+    fi
+done
 
 # The Swift package links this rather than asking every application to build
 # its own: the archive is identical for all of them.

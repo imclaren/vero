@@ -39,9 +39,6 @@ mkdir -p "$VM"
 
 # Build the Windows pieces if they are not there, so this works on its own.
 # With --payload the directory already holds them, so none of this runs.
-ARM_CC=$(command -v aarch64-w64-mingw32-clang 2>/dev/null || true)
-[ -z "$ARM_CC" ] && [ -x "$HOME/toolchains/llvm-mingw/bin/aarch64-w64-mingw32-clang" ] \
-    && ARM_CC="$HOME/toolchains/llvm-mingw/bin/aarch64-w64-mingw32-clang"
 # Rebuild when a source file is newer than what was built from it.  Checking
 # only that the file exists is how a months-old dist/ ends up on the disc,
 # which looks exactly like the current build until the worker reports its
@@ -52,17 +49,13 @@ stale() {
     [ -n "$(find "$@" -newer "$target" -print -quit 2>/dev/null)" ]
 }
 
-if [ -z "$PAYLOAD" ] && { stale "$ROOT/dist/vero-arm64.dll" "$ROOT"/*.go "$ROOT/cshim" ||
-                         stale "$ROOT/dist/worker-windows-arm64.exe" "$ROOT"/*.go "$ROOT/example/worker"; }; then
-    [ -n "$ARM_CC" ] || { echo "need llvm-mingw for windows/arm64 - see example/wpf-app/README.md" >&2; exit 1; }
-    echo "building the Windows pieces"
+if [ -z "$PAYLOAD" ] && stale "$ROOT/dist/worker-windows-arm64.exe" "$ROOT"/*.go "$ROOT/example/worker"; then
+    echo "building the Windows worker"
     mkdir -p "$ROOT/dist"
-    ( cd "$ROOT" &&
-      CGO_ENABLED=1 GOOS=windows GOARCH=arm64 CC="$ARM_CC" \
-          go build -buildmode=c-shared -o dist/vero-arm64.dll ./cshim &&
-      CGO_ENABLED=0 GOOS=windows GOARCH=arm64 \
+    # Pure Go: the worker supervises itself, so there is no DLL to build and
+    # no C toolchain to find.
+    ( cd "$ROOT" && CGO_ENABLED=0 GOOS=windows GOARCH=arm64 \
           go build -o dist/worker-windows-arm64.exe ./example/worker )
-    rm -f "$ROOT/dist"/*.h
 fi
 DOTNET=$(command -v dotnet 2>/dev/null || true)
 [ -z "$DOTNET" ] && [ -x "$HOME/.dotnet/dotnet" ] && DOTNET="$HOME/.dotnet/dotnet"
@@ -81,13 +74,12 @@ if [ -n "$PAYLOAD" ]; then
     cp -R "$PAYLOAD/." "$STAGE/vero/"
 else
     echo "packing the build onto a disc"
-    cp "$ROOT/dist/vero-arm64.dll"          "$STAGE/vero/vero.dll"
     cp "$ROOT/dist/worker-windows-arm64.exe" "$STAGE/vero/worker.exe"
     if [ -d "$ROOT/dist/wpf-arm64" ]; then
         cp -R "$ROOT/dist/wpf-arm64/." "$STAGE/vero/"
         echo "  including the WPF example"
     else
-        echo "  no dist/wpf-arm64: shipping vero.dll and worker.exe only"
+        echo "  no dist/wpf-arm64: shipping worker.exe only"
     fi
 fi
 rm -f "$VM/payload.iso"
