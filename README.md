@@ -2,7 +2,9 @@
 
 **Go backend with native cross-platform GUI frontends.  Build on macOS, run anywhere Go runs.**
 
-Run a Go binary embedded in a native macOS SwiftUI app. The Go binary and the SwiftUI app communicate over a pipe.  Use the same Go backend to communicate over a pipe with native frontends for:
+Run a Go binary embedded in a native macOS SwiftUI app. The Go binary and the SwiftUI app communicate over a pipe.  
+
+Use the same Go backend to communicate over a pipe with native frontends for:
 - macOS
 - Windows
 - Linux
