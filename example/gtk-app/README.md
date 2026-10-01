@@ -1,4 +1,4 @@
-# Linux example
+# Linux and FreeBSD example
 
 Run the following script to build and run this example on a Mac. This script
 builds the app in a container, runs it on a virtual display, and opens it in
@@ -8,6 +8,17 @@ Screen Sharing:
 git clone https://github.com/imclaren/vero && cd vero
 ./scripts/run-linux.sh
 ```
+
+The same app, unchanged, on FreeBSD - in a VM, because there is no FreeBSD
+container to run on a Mac:
+
+```bash
+./scripts/run-freebsd.sh
+```
+
+The first FreeBSD run downloads the official cloud image and installs GTK4 in
+it, which takes a few minutes; after that it boots in seconds.
+`--reset` throws the VM away and starts again.
 
 ## Create a vero Linux app on your Mac
 
@@ -80,3 +91,21 @@ On a Linux machine, run it directly instead:
 sudo apt-get install -y python3-gi gir1.2-gtk-4.0
 chmod +x main.py && ./main.py
 ```
+
+On FreeBSD, the same thing with its own names:
+
+```bash
+pkg install -y gtk4 py312-pygobject
+chmod +x main.py && ./main.py
+```
+
+Nothing in the app is Linux-specific. It needs GTK4, PyGObject and a worker
+binary built for the machine it runs on - and because the binding spawns the
+worker rather than loading a library, there is no shared library to find for
+either of them.
+
+## See also
+
+- [example/gtk-app](.) - this app, finished and runnable
+- [README](../../README.md) - the same worker with a macOS SwiftUI app
+- [example/wpf-app](../wpf-app) - the same worker with a Windows WPF app

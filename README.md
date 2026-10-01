@@ -269,11 +269,11 @@ Click the button on a row to restart that job.
 All of them can be built on your Mac, with no C toolchain: the worker is pure
 Go, and the frontend spawns it rather than loading a library.
 
-| | |
-|---|---|
-| [example/wpf-app](example/wpf-app) | Windows, WPF |
-| [example/gtk-app](example/gtk-app) | Linux, GTK4 |
-| [example/gtk-app](example/gtk-app) | FreeBSD, GTK4 - the same app, unchanged |
+| | | |
+|---|---|---|
+| [example/wpf-app](example/wpf-app) | Windows, WPF | `./scripts/run-windows.sh` |
+| [example/gtk-app](example/gtk-app) | Linux, GTK4 | `./scripts/run-linux.sh` |
+| [example/gtk-app](example/gtk-app) | FreeBSD, GTK4 - the same app, unchanged | `./scripts/run-freebsd.sh` |
 
 To see the app running on three operating systems at once, `./scripts/setup.sh`
 installs what is needed to run them and builds everything, and

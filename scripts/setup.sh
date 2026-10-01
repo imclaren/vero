@@ -44,4 +44,16 @@ done
 docker info >/dev/null 2>&1 || { echo "==> starting colima"; colima start; }
 
 echo "==> building"
-exec "$ROOT/scripts/build-all.sh"
+"$ROOT/scripts/build-all.sh"
+
+cat <<'TXT'
+
+run the examples with:
+  ./scripts/run.sh            macOS, Linux and Windows at once
+  ./scripts/run-linux.sh      Linux on its own, in a container
+  ./scripts/run-windows.sh    Windows on its own, in a VM
+  ./scripts/run-freebsd.sh    FreeBSD on its own, in a VM
+
+The Windows VM needs a Windows 11 ARM64 ISO the first time:
+  ./scripts/run-windows.sh --iso ~/Downloads/win11.iso --install
+TXT
