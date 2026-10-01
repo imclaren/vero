@@ -53,7 +53,9 @@ C toolchain is involved.
 `scripts/setup.sh` installs Docker and qemu - needed to *run* the examples,
 not to build them - and `scripts/run.sh` opens three of them at once: macOS
 natively, Linux in a container over VNC, and Windows in a VM.
-`scripts/run-freebsd.sh` does the same for FreeBSD, in a VM of its own.
+`scripts/run-freebsd.sh`, `scripts/run-netbsd.sh` and
+`scripts/run-openbsd.sh` do the same for the three BSDs, each in a VM of
+its own - the same GTK application, unchanged, on all of them.
 
 The example apps all drive the same worker in
 [example/worker](example/worker):
