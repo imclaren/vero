@@ -12,11 +12,11 @@ Run a Go binary embedded in a native macOS SwiftUI app. The Go binary and the Sw
 | **Windows** — arm64, amd64, 386 | yes | <a href="example/wpf-app"><img src="docs/screenshots/windows.gif" width="300"></a> | Builds and runs.  WPF, run in a Windows VM by `scripts/run-windows.sh` |
 | **Linux** — 13 architectures | yes | <a href="example/gtk-app"><img src="docs/screenshots/linux.gif" width="300"></a> | Builds and runs.  GTK4, run in a Docker container by `scripts/run-linux.sh` |
 | **FreeBSD** — amd64, arm64 | yes | <a href="example/gtk-app"><img src="docs/screenshots/freebsd.gif" width="300"></a> | Builds and runs.  GTK4, the same app as Linux, run in a VM by `scripts/run-freebsd.sh` |
-| **OpenBSD** — 6 architectures | yes | — | Builds; not run here.  The GTK4 app should run unchanged. There is no script for it because OpenBSD publishes an installer rather than a ready-made disk image, so it would need an unattended install driven by an `auto_install` response file to build and display the UI. |
-| **NetBSD** — 4 architectures | yes | — | Builds; not run here.  As OpenBSD, but easier: NetBSD does publish a bootable arm64 image, so a script would download it, enable `sshd`, and install GTK4 with `pkgin`. |
-| **DragonFly** — amd64 | yes | — | Builds; not run here.  No script, because DragonFly runs on x86 only. An x86 VM is emulated rather than virtualised on an Apple Silicon Mac, which would take minutes-per-boot |
-| **illumos** — amd64 | yes | — | Builds; not run here.  As DragonFly: x86 only, and slow to emulate |
-| **Android** — arm64 | yes | — | Builds; not run here.  No UI app written. The worker would ship in `jniLibs` and be started from `nativeLibraryDir`, with no JNI: Kotlin would write and read JSON, exactly as Python and C# do |
+| **OpenBSD** — 6 architectures | yes | — | Builds; no script to run included here.  The GTK4 app should run unchanged. OpenBSD publishes an installer rather than a ready-made disk image, so a script would need an unattended install driven by an `auto_install` response file to build and display the UI. |
+| **NetBSD** — 4 architectures | yes | — | Builds; no script to run included here.  As OpenBSD, but easier: NetBSD does publish a bootable arm64 image, so a script would download it, enable `sshd`, and install GTK4 with `pkgin`. |
+| **DragonFly** — amd64 | yes | — | Builds; no script to run included here.  DragonFly runs on x86 only. An x86 VM is emulated rather than virtualised on an Apple Silicon Mac, which would take minutes-per-boot |
+| **illumos** — amd64 | yes | — | Builds; no script to run included here.  As DragonFly: x86 only, and slow to emulate |
+| **Android** — arm64 | yes | — | Builds; no script to run included here.  No UI app written. The worker would ship in `jniLibs` and be started from `nativeLibraryDir`, with no JNI: Kotlin would write and read JSON, exactly as Python and C# do |
 | **Solaris, AIX, Plan 9** | yes | — | Builds; not run. Locks with `fcntl` on Solaris and AIX, and with an exclusive open on Plan 9. |
 | **iOS** | the Go side does | — | Builds; not run. The worker runs inside the app, on a goroutine, through `SupervisorOptions.Serve`. No Swift app yet. |
 | **wasm** — WASI (`wasip1/wasm`) | yes | — | Builds and runs. A release ships `worker-wasip1-wasm.wasm`; a supervisor runs it with `wasmtime`. One request at a time: WASI has no threads. |
