@@ -8,14 +8,14 @@ Run a Go binary embedded in a native macOS SwiftUI app. The Go binary and the Sw
 
 | Operating system | Example | Needs on your Mac to build | Build on your Mac |
 |---|:---:|---|---|
-| **macOS** — arm64, amd64 | <a href="#run-the-macos-example"><img src="docs/screenshots/macos.gif" width="300"></a> | Xcode, from the App Store, which [`setup-macos.sh`](scripts/setup-macos.sh) checks for | Builds and runs. SwiftUI, in the menu bar, built by running [`example/menubar-app/build.sh`](example/menubar-app/build.sh).<br><br>If you already have Xcode and Go installed, the [macOS example](#run-the-macos-example) below builds a running app in about 5 minutes. |
+| **macOS** — arm64, amd64 | <a href="#run-the-macos-example"><img src="docs/screenshots/macos.gif" width="300"></a> | Xcode, from the App Store. Run [`setup-macos.sh`](scripts/setup-macos.sh) to check that Xcode has been installed | Builds and runs. SwiftUI, in the menu bar, built by running [`example/menubar-app/build.sh`](example/menubar-app/build.sh).<br><br>If you already have Xcode and Go installed, the [macOS example](#run-the-macos-example) below builds a running app in about 5 minutes. |
 | **Windows** — arm64, amd64, 386 | <a href="example/wpf-app"><img src="docs/screenshots/windows.gif" width="300"></a> | qemu, the .NET SDK and a Windows 11 ARM64 ISO, which can be installed by running [`setup-windows.sh`](scripts/setup-windows.sh) | Builds and runs. WPF, started in a Windows VM by running [`scripts/run-windows.sh`](scripts/run-windows.sh). |
 | **Linux** — 13 architectures | <a href="example/gtk-app"><img src="docs/screenshots/linux.gif" width="300"></a> | Docker and colima, which can be installed by running [`setup-linux.sh`](scripts/setup-linux.sh) | Builds and runs. GTK4, started in a Docker container by running [`scripts/run-linux.sh`](scripts/run-linux.sh). |
 | **FreeBSD** — amd64, arm64 | <a href="example/gtk-app"><img src="docs/screenshots/freebsd.gif" width="300"></a> | qemu, which can be installed by running [`setup-freebsd.sh`](scripts/setup-freebsd.sh) | Builds and runs. GTK4, the same app as Linux, started in a VM by running [`scripts/run-freebsd.sh`](scripts/run-freebsd.sh). |
 | **OpenBSD** — 6 architectures | — | — | Builds; no script to run included here. The GTK4 app should run unchanged. OpenBSD publishes an installer rather than a ready-made disk image, so a script would need an unattended install driven by an `auto_install` response file to build and display the UI. |
 | **NetBSD** — 4 architectures | <a href="example/gtk-app"><img src="docs/screenshots/netbsd.gif" width="300"></a> | qemu, which can be installed by running [`setup-netbsd.sh`](scripts/setup-netbsd.sh) | Builds and runs. GTK4, the same app as Linux and FreeBSD, started in a VM by running [`scripts/run-netbsd.sh`](scripts/run-netbsd.sh). |
 | **DragonFly** — amd64 | — | — | Builds; no script to run included here. DragonFly runs on x86 only. An x86 VM is emulated rather than virtualised on an Apple Silicon Mac, which would take minutes-per-boot. |
-| **illumos** — amd64 | — | — | Builds; no script to run included here. As DragonFly: x86 only, and slow to emulate. |
+| **illumos** — amd64 | — | — | Builds; no script to run included here. As with DragonFly: x86 only, and slow to emulate. |
 | **Android** — arm64 | <a href="example/android-app"><img src="docs/screenshots/android.gif" width="300"></a> | the Android SDK, a JDK and Kotlin, which can be installed by running [`setup-android.sh`](scripts/setup-android.sh) | Builds and runs in the emulator, built and started by running [`scripts/run-android.sh`](scripts/run-android.sh). |
 | **Plan 9** — amd64, 386 | <a href="scripts/run-plan9.sh"><img src="docs/screenshots/plan9.png" width="300"></a> | qemu, which can be installed by running [`setup-plan9.sh`](scripts/setup-plan9.sh) | Builds, and the tests pass on 9front under qemu: [`scripts/run-plan9.sh`](scripts/run-plan9.sh) boots it and runs them. No frontend - Plan 9 draws through libdraw, and we have not built a UI using libdraw at this stage. |
 | **Solaris** — amd64, **AIX** — ppc64 | — | — | Builds but does not run. Solaris needs an Oracle licence to download and runs on x86, which this Mac emulates rather than virtualises; AIX needs IBM hardware. |
@@ -27,8 +27,8 @@ Run a Go binary embedded in a native macOS SwiftUI app. The Go binary and the Sw
 all the examples. Only two things are not installed for you using this
 script: Xcode, which comes from the App Store, and a Windows ISO, which
 Microsoft will not serve to a script.
-[`./scripts/run.sh`](scripts/run.sh) will build and open macOS, Linux and
-Windows side by side.
+[`./scripts/run.sh`](scripts/run.sh) will then build and open macOS, Linux
+and Windows side by side.
 
 [`./scripts/build-all.sh`](scripts/build-all.sh) goes wider than the examples: it builds a worker for
 seventeen targets across macOS, Windows, Linux, FreeBSD, OpenBSD, NetBSD,
