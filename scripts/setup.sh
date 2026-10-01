@@ -56,6 +56,7 @@ run the examples with:
   ./scripts/run-web.sh        a browser, with the worker compiled in
   ./scripts/run-ios.sh        the iOS Simulator - needs Xcode
   ./scripts/run-android.sh    the Android emulator - run setup-android.sh first
+  ./scripts/run-plan9.sh      vero's tests on 9front, in a VM
 
 The Windows VM needs a Windows 11 ARM64 ISO the first time:
   ./scripts/run-windows.sh --iso ~/Downloads/win11.iso --install

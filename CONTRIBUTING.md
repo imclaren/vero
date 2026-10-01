@@ -12,7 +12,7 @@ cd bindings/python && python3 -m unittest       # the Python binding, end to end
 swift build                                     # the Swift package compiles
 ```
 
-The same Go suite runs on three other platforms, each with a runtime to
+The same Go suite runs on four other platforms, each with a runtime to
 install first:
 
 ```bash
@@ -20,7 +20,13 @@ scripts/run-ios.sh --test                                   # in the iOS Simulat
 GOOS=js GOARCH=wasm go test -exec="$(go env GOROOT)/lib/wasm/go_js_wasm_exec" \
     -run InThisProcess .                                    # in node
 go test -run Wasm .                                         # under wasmtime, if installed
+scripts/run-plan9.sh                                        # on 9front, in a VM
 ```
+
+The Plan 9 one takes a few minutes: it is x86, so an Apple Silicon Mac
+emulates it. It is worth the wait - the lock there is the exclusive-use bit
+rather than flock, and that is the only part of vero no other platform
+exercises.
 
 The Go tests take about half a minute, because several of them start a real
 worker process and wait on it.

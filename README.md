@@ -17,7 +17,8 @@ Run a Go binary embedded in a native macOS SwiftUI app. The Go binary and the Sw
 | **DragonFly** — amd64 | yes | — | Builds; no script to run included here.  DragonFly runs on x86 only. An x86 VM is emulated rather than virtualised on an Apple Silicon Mac, which would take minutes-per-boot |
 | **illumos** — amd64 | yes | — | Builds; no script to run included here.  As DragonFly: x86 only, and slow to emulate |
 | **Android** — arm64 | yes | <a href="example/android-app"><img src="docs/screenshots/android.gif" width="300"></a> | Builds and runs in the emulator. The worker ships as `lib/arm64-v8a/libworker.so`, the only place Android starts an executable from. No NDK and no JNI: Kotlin writes and reads JSON. |
-| **Solaris, AIX, Plan 9** | yes | — | Builds; not run. Nothing the worker needs is missing here. No example frontend covers these three, so the GUI would be yours to write. |
+| **Plan 9** — amd64, 386 | yes | <a href="scripts/run-plan9.sh"><img src="docs/screenshots/plan9.png" width="300"></a> | Builds, and the tests pass on 9front under qemu: `scripts/run-plan9.sh` boots it and runs them. No frontend - Plan 9 draws through libdraw, and nothing here speaks it. |
+| **Solaris** — amd64, **AIX** — ppc64 | yes | — | Builds; not run. Solaris needs an Oracle licence to download and runs on x86, which this Mac emulates rather than virtualises; AIX needs IBM hardware. |
 | **iOS** | yes | <a href="example/ios-app"><img src="docs/screenshots/ios.gif" width="300"></a> | Builds and runs in the Simulator, not on a phone. An app may not start a program on iOS, so the worker is compiled into the app and runs on a goroutine. `scripts/run-ios.sh` builds and launches it. |
 | **wasm** — WASI (`wasip1/wasm`) | yes | — | Builds and runs, without a GUI. A release ships `worker-wasip1-wasm.wasm`, which `wasmtime` runs; the frontend is whatever starts it. One request at a time: WASI has no threads. |
 | **wasm** — browser (`js/wasm`) | yes | <a href="example/web-app"><img src="docs/screenshots/web.gif" width="300"></a> | Builds and runs. A page may not start a program, so the worker is compiled into the same wasm as the UI, as on iOS. `scripts/run-web.sh` builds it and opens it. |
@@ -290,6 +291,10 @@ To see the app running on three operating systems at once, `./scripts/setup.sh`
 installs what is needed to run them and builds everything, and
 `./scripts/run.sh` then opens macOS, Linux and Windows together on your Mac.
 `./scripts/run-freebsd.sh` opens FreeBSD in a VM of its own.
+
+`./scripts/run-plan9.sh` is the odd one out: there is no application to look
+at on Plan 9, so it boots 9front in a VM and runs vero's own test suite
+there instead.
 
 `./scripts/build-all.sh` goes wider than the examples: it builds a worker for
 seventeen targets across macOS, Windows, Linux, FreeBSD, OpenBSD, NetBSD,
