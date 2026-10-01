@@ -8,7 +8,7 @@ Run a Go binary embedded in a native macOS SwiftUI app. The Go binary and the Sw
 
 | Operating system | Example | Building on macOS |
 |---|:---:|---|
-| **macOS** — arm64, amd64 | <a href="#run-the-macos-example"><img src="docs/screenshots/macos.gif" width="300"></a> | Builds and runs. SwiftUI, in the menu bar, built by running [`example/menubar-app/build.sh`](example/menubar-app/build.sh). |
+| **macOS** — arm64, amd64 | <a href="#run-the-macos-example"><img src="docs/screenshots/macos.gif" width="300"></a> | Builds and runs. SwiftUI, in the menu bar, built by running [`example/menubar-app/build.sh`](example/menubar-app/build.sh). Also see [how to build a native Mac app](#create-a-vero-macos-app-on-your-mac), below. |
 | **Windows** — arm64, amd64, 386 | <a href="example/wpf-app"><img src="docs/screenshots/windows.gif" width="300"></a> | Builds and runs. WPF, started in a Windows VM by running [`scripts/run-windows.sh`](scripts/run-windows.sh). |
 | **Linux** — 13 architectures | <a href="example/gtk-app"><img src="docs/screenshots/linux.gif" width="300"></a> | Builds and runs. GTK4, started in a Docker container by running [`scripts/run-linux.sh`](scripts/run-linux.sh). |
 | **FreeBSD** — amd64, arm64 | <a href="example/gtk-app"><img src="docs/screenshots/freebsd.gif" width="300"></a> | Builds and runs. GTK4, the same app as Linux, started in a VM by running [`scripts/run-freebsd.sh`](scripts/run-freebsd.sh). |
@@ -24,11 +24,11 @@ Run a Go binary embedded in a native macOS SwiftUI app. The Go binary and the Sw
 | **wasm** — WASI (`wasip1/wasm`) | — | Builds and runs. [`scripts/build-all.sh`](scripts/build-all.sh) produces `worker-wasip1-wasm.wasm`, which a supervisor starts with `wasmtime` like any other worker - so the worker runs on a machine with no Go on it. WASI has no screen, so there is no window: the frontend is whatever program started the runtime. It answers one request at a time, because a read on standard input stops every other goroutine in the module. |
 
 Every example above is built and run by its own script, and three of them
-open together: `./scripts/setup.sh` installs what they need and builds
-everything, then `./scripts/run.sh` opens macOS, Linux and Windows side by
+open together: [`./scripts/setup.sh`](scripts/setup.sh) installs what they need and builds
+everything, then [`./scripts/run.sh`](scripts/run.sh) opens macOS, Linux and Windows side by
 side on your Mac.
 
-`./scripts/build-all.sh` goes wider than the examples: it builds a worker for
+[`./scripts/build-all.sh`](scripts/build-all.sh) goes wider than the examples: it builds a worker for
 seventeen targets across macOS, Windows, Linux, FreeBSD, OpenBSD, NetBSD,
 DragonFly, illumos, Solaris, AIX, Plan 9 and WASI. Anywhere Go produces an
 executable, vero runs - the Go API needs nothing else, and the Python, C# and
