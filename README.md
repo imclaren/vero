@@ -8,18 +8,19 @@ Run a Go binary embedded in a native macOS SwiftUI app. The Go binary and the Sw
 
 | Operating system | Builds on a Mac | Example | Build details |
 |---|---|:---:|---|
-| **macOS** — arm64, amd64 | yes | <a href="#run-the-macos-example"><img src="docs/screenshots/macos.gif" width="300"></a> | SwiftUI, in the menu bar. |
-| **Windows** — arm64, amd64, 386 | yes | <a href="example/wpf-app"><img src="docs/screenshots/windows.gif" width="300"></a> | WPF, run in a Windows VM by `scripts/run-windows.sh` |
-| **Linux** — 13 architectures | yes | <a href="example/gtk-app"><img src="docs/screenshots/linux.gif" width="300"></a> | GTK4, run in a Docker container by `scripts/run-linux.sh` |
-| **FreeBSD** — amd64, arm64 | yes | <a href="example/gtk-app"><img src="docs/screenshots/freebsd.gif" width="300"></a> | GTK4, the same app as Linux, run in a VM by `scripts/run-freebsd.sh` |
-| **OpenBSD** — 6 architectures | yes | — | The GTK4 app should run unchanged. There is no script for it because OpenBSD publishes an installer rather than a ready-made disk image, so it would need an unattended install driven by an `auto_install` response file bot build and display the UI. |
-| **NetBSD** — 4 architectures | yes | — | As OpenBSD, but easier: NetBSD does publish a bootable arm64 image, so a script would download it, enable `sshd`, and install GTK4 with `pkgin`. |
-| **DragonFly** — amd64 | yes | — | No script, because DragonFly runs on x86 only. An x86 VM is emulated rather than virtualised on an Apple Silicon Mac, which would take minutes-per-boot |
-| **illumos** — amd64 | yes | — | As DragonFly: x86 only, and slow to emulate |
-| **Android** — arm64 | yes | — | No UI app written. The worker would ship in `jniLibs` and be started from `nativeLibraryDir`, with no JNI: Kotlin would write and read JSON, exactly as Python and C# do |
-| **Solaris, AIX, Plan 9** | yes | — | The worker builds but is untested.  Plan 9 can be run on a Mac, under qemu |
-| **iOS** | the Go side does | — | iOS will not let an app start another program, so the worker cannot run beside the app as it does everywhere else. Compiling it into the app does work - the archive builds for iOS today - but vero has no mode for that yet: the worker and the supervisor would have to talk over an in-memory pipe, and restarting would mean nothing, because a worker on a goroutine dies only when the app does |
-| **wasm** | yes, once it has a lock | — | Two answers, because there are two targets. Under WASI the worker needs nothing else: WASI gives it standard input and output, which is what it speaks, and the supervisor already starts whatever path and arguments it is given, so `wasmtime run worker.wasm` works. In a browser there is no process to start and no standard input to speak over, so the pipe would have to become a Web Worker and `postMessage` - a transport change rather than a lock change. Neither is written yet, and the lock itself is three lines: nothing else can hold it, so it can do nothing |
+| **macOS** — arm64, amd64 | yes | <a href="#run-the-macos-example"><img src="docs/screenshots/macos.gif" width="300"></a> | Builds and runs.  SwiftUI, in the menu bar. |
+| **Windows** — arm64, amd64, 386 | yes | <a href="example/wpf-app"><img src="docs/screenshots/windows.gif" width="300"></a> | Builds and runs.  WPF, run in a Windows VM by `scripts/run-windows.sh` |
+| **Linux** — 13 architectures | yes | <a href="example/gtk-app"><img src="docs/screenshots/linux.gif" width="300"></a> | Builds and runs.  GTK4, run in a Docker container by `scripts/run-linux.sh` |
+| **FreeBSD** — amd64, arm64 | yes | <a href="example/gtk-app"><img src="docs/screenshots/freebsd.gif" width="300"></a> | Builds and runs.  GTK4, the same app as Linux, run in a VM by `scripts/run-freebsd.sh` |
+| **OpenBSD** — 6 architectures | yes | — | Builds; not run here.  The GTK4 app should run unchanged. There is no script for it because OpenBSD publishes an installer rather than a ready-made disk image, so it would need an unattended install driven by an `auto_install` response file to build and display the UI. |
+| **NetBSD** — 4 architectures | yes | — | Builds; not run here.  As OpenBSD, but easier: NetBSD does publish a bootable arm64 image, so a script would download it, enable `sshd`, and install GTK4 with `pkgin`. |
+| **DragonFly** — amd64 | yes | — | Builds; not run here.  No script, because DragonFly runs on x86 only. An x86 VM is emulated rather than virtualised on an Apple Silicon Mac, which would take minutes-per-boot |
+| **illumos** — amd64 | yes | — | Builds; not run here.  As DragonFly: x86 only, and slow to emulate |
+| **Android** — arm64 | yes | — | Builds; not run here.  No UI app written. The worker would ship in `jniLibs` and be started from `nativeLibraryDir`, with no JNI: Kotlin would write and read JSON, exactly as Python and C# do |
+| **Solaris, AIX, Plan 9** | yes | — | Builds; not run.  The lock is the only part of vero these three needed, and they have it: `fcntl` on Solaris and AIX, and on Plan 9 the open itself, which is exclusive.  None of it has been run, and Plan 9 at least could be, under qemu on a Mac |
+| **iOS** | the Go side does | — | Builds, and the mode it needs now exists.  iOS forbids one app starting another, so the worker cannot run beside the app - it has to run inside it.  `SupervisorOptions.Serve` is that: a supervisor and a worker compiled into the same binary, joined by an in-memory pipe instead of a process, with the same requests, replies and events.  Restarting falls away, since a worker on a goroutine dies only when the app does.  What is left is the Swift half - no iOS example is written, and none of this has run on a device or in the Simulator |
+| **wasm** — WASI (`wasip1/wasm`) | yes | — | Builds and runs.  `scripts/build-all.sh` produces `worker-wasip1-wasm.wasm`, and a supervisor runs it like any other worker: `Path` is `wasmtime` and `Args` are `run --env VERO_SERVE=1 worker.wasm`, because a WASI runtime passes the guest nothing it is not told to.  WASI has no threads and a read on standard input parks the whole instance, so a worker there answers one request at a time, in the goroutine that read it, instead of one per goroutine.  There is no UI, because WASI has no screen: the frontend is whatever runs the runtime |
+| **wasm** — browser (`js/wasm`) | yes | — | Builds, and runs in process.  A browser has no process to start and no standard input, so no worker can be spawned - but none has to be, because the in-process mode iOS uses joins a supervisor and a worker with an in-memory pipe, and that works here: those tests pass on `js/wasm` under `node`, which runs the same wasm and the same `wasm_exec.js` glue a page would.  Both halves are then one module, so the worker shares the UI thread with the page; putting it in a Web Worker and speaking `postMessage` would be a transport change rather than a lock or a mode change.  No browser app is written |
 
 [macOS example](#run-the-macos-example) ·
 [Windows, Linux and FreeBSD examples](#build-the-same-worker-for-windows-linux-and-freebsd)
@@ -286,9 +287,10 @@ installs what is needed to run them and builds everything, and
 `./scripts/run-freebsd.sh` opens FreeBSD in a VM of its own.
 
 `./scripts/build-all.sh` goes wider than the examples: it builds a worker for
-sixteen targets across macOS, Windows, Linux, FreeBSD, OpenBSD, NetBSD,
-DragonFly, illumos, Solaris, AIX and Plan 9. Anywhere Go produces an executable, vero runs - the Go
-API needs nothing else, and the Python and C# bindings need only the worker.
+seventeen targets across macOS, Windows, Linux, FreeBSD, OpenBSD, NetBSD,
+DragonFly, illumos, Solaris, AIX, Plan 9 and WASI. Anywhere Go produces an
+executable, vero runs - the Go API needs nothing else, and the Python and C#
+bindings need only the worker.
 
 ## Licence
 
