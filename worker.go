@@ -118,6 +118,13 @@ type Worker struct {
 // anything else could be printing: another goroutine writing while this
 // reassigns is a data race, and one the race detector will find.
 func NewWorker(opts WorkerOptions) *Worker {
+	// A host supervises a copy of this executable instead of serving, and
+	// never comes back: nothing an application writes after NewWorker runs
+	// twice, because the parent never reaches it.
+	if Hosting() {
+		host()
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	w := &Worker{
 		opts:   opts,
