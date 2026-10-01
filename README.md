@@ -17,17 +17,26 @@ Run a Go binary embedded in a native macOS SwiftUI app. The Go binary and the Sw
 | **DragonFly** — amd64 | — | Builds; no script to run included here. DragonFly runs on x86 only. An x86 VM is emulated rather than virtualised on an Apple Silicon Mac, which would take minutes-per-boot. |
 | **illumos** — amd64 | — | Builds; no script to run included here. As DragonFly: x86 only, and slow to emulate. |
 | **Android** — arm64 | <a href="example/android-app"><img src="docs/screenshots/android.gif" width="300"></a> | Builds and runs in the emulator, built and started by running [`scripts/run-android.sh`](scripts/run-android.sh). |
-| **Plan 9** — amd64, 386 | <a href="scripts/run-plan9.sh"><img src="docs/screenshots/plan9.png" width="300"></a> | Builds, and the tests pass on 9front under qemu: [`scripts/run-plan9.sh`](scripts/run-plan9.sh) boots it and runs them. No frontend - Plan 9 draws through libdraw, and nothing here speaks it. |
+| **Plan 9** — amd64, 386 | <a href="scripts/run-plan9.sh"><img src="docs/screenshots/plan9.png" width="300"></a> | Builds, and the tests pass on 9front under qemu: [`scripts/run-plan9.sh`](scripts/run-plan9.sh) boots it and runs them. No frontend - Plan 9 draws through libdraw, and we have not built a UI using libdraw at this stage. |
 | **Solaris** — amd64, **AIX** — ppc64 | — | Builds but does not run. Solaris needs an Oracle licence to download and runs on x86, which this Mac emulates rather than virtualises; AIX needs IBM hardware. |
 | **iOS** | <a href="example/ios-app"><img src="docs/screenshots/ios.gif" width="300"></a> | Builds and runs in the Simulator, not on a phone. An app may not start a program on iOS, so the worker is compiled into the app and runs on a goroutine. Built and launched by running [`scripts/run-ios.sh`](scripts/run-ios.sh). |
 | **wasm** — browser (`js/wasm`) | <a href="example/web-app"><img src="docs/screenshots/web.gif" width="300"></a> | Builds and runs. A page may not start a program, so the worker is compiled into the same wasm as the UI, as on iOS. Built and opened by running [`scripts/run-web.sh`](scripts/run-web.sh). |
 | **wasm** — WASI (`wasip1/wasm`) | — | Builds and runs. [`scripts/build-all.sh`](scripts/build-all.sh) produces `worker-wasip1-wasm.wasm`, which a supervisor starts with `wasmtime` like any other worker - so the worker runs on a machine with no Go on it. WASI has no screen, so there is no window: the frontend is whatever program started the runtime. It answers one request at a time, because a read on standard input stops every other goroutine in the module. |
 
-[macOS example](#run-the-macos-example) ·
-[the other examples](#build-the-same-worker-for-windows-linux-freebsd-android-ios-and-the-browser)
+Every example above is built and run by its own script, and three of them
+open together: `./scripts/setup.sh` installs what they need and builds
+everything, then `./scripts/run.sh` opens macOS, Linux and Windows side by
+side on your Mac.
 
-If you already have Xcode and Go installed, the example below builds a running
-app in about 5 minutes.
+`./scripts/build-all.sh` goes wider than the examples: it builds a worker for
+seventeen targets across macOS, Windows, Linux, FreeBSD, OpenBSD, NetBSD,
+DragonFly, illumos, Solaris, AIX, Plan 9 and WASI. Anywhere Go produces an
+executable, vero runs - the Go API needs nothing else, and the Python, C# and
+Kotlin bindings need only the worker.
+
+If you already have Xcode and Go installed, the
+[macOS example](#run-the-macos-example) below builds a running app in about
+5 minutes.
 
 ## Run the macOS example
 
@@ -270,34 +279,6 @@ Delete the `ContentView.swift` and `<YourApp>App.swift` that Xcode generated:
 Press Cmd-R in Xcode. The icon appears in the menu bar, and spins while the
 worker has jobs in flight. Click the menu bar icon to see progress changes.
 Click the button on a row to restart that job.
-
-## Build the same worker for Windows, Linux, FreeBSD, Android, iOS and the browser
-
-All of them can be built on your Mac:
-
-| | | |
-|---|---|---|
-| [example/wpf-app](example/wpf-app) | Windows, WPF | `./scripts/run-windows.sh` |
-| [example/gtk-app](example/gtk-app) | Linux, GTK4 | `./scripts/run-linux.sh` |
-| [example/gtk-app](example/gtk-app) | FreeBSD, GTK4 - the same app, unchanged | `./scripts/run-freebsd.sh` |
-| [example/android-app](example/android-app) | Android, Kotlin | `./scripts/run-android.sh` |
-| [example/ios-app](example/ios-app) | iOS, SwiftUI - the worker is compiled in | `./scripts/run-ios.sh` |
-| [example/web-app](example/web-app) | A browser, in wasm - the worker is compiled in | `./scripts/run-web.sh` |
-
-To see the app running on three operating systems at once, `./scripts/setup.sh`
-installs what is needed to run them and builds everything, and
-`./scripts/run.sh` then opens macOS, Linux and Windows together on your Mac.
-`./scripts/run-freebsd.sh` opens FreeBSD in a VM of its own.
-
-`./scripts/run-plan9.sh` is the odd one out: there is no application to look
-at on Plan 9, so it boots 9front in a VM and runs vero's own test suite
-there instead.
-
-`./scripts/build-all.sh` goes wider than the examples: it builds a worker for
-seventeen targets across macOS, Windows, Linux, FreeBSD, OpenBSD, NetBSD,
-DragonFly, illumos, Solaris, AIX, Plan 9 and WASI. Anywhere Go produces an
-executable, vero runs - the Go API needs nothing else, and the Python, C# and
-Kotlin bindings need only the worker.
 
 ## Licence
 
