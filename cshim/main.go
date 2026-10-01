@@ -30,6 +30,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"sync"
 	"unsafe"
@@ -59,6 +60,12 @@ var (
 )
 
 func main() {}
+
+// inProcess is the worker an application has compiled in, if it has.  An
+// application registers one with vero.ServeInProcess before the frontend
+// calls VeroStart, and VeroStart then runs it here rather than starting a
+// program - which is the only arrangement iOS permits.
+func inProcess() func(in io.Reader, out io.Writer) error { return vero.InProcessWorker() }
 
 // VeroStart launches the worker and begins supervising it.
 //
@@ -96,6 +103,11 @@ func VeroStart(workerPath *C.char, argsJSON *C.char) *C.char {
 	s := vero.Supervise(vero.SupervisorOptions{
 		Path: C.GoString(workerPath),
 		Args: args,
+
+		// Set when the application compiled its worker in rather than
+		// shipping one beside the executable.  Supervise starts a program
+		// when this is nil, and a goroutine when it is not.
+		Serve: inProcess(),
 		OnEvent: func(event json.RawMessage) {
 			mu.Lock()
 			latest = event

@@ -28,6 +28,19 @@ type SupervisorOptions struct {
 	Dir string
 	Env []string
 
+	// Serve runs a worker in this process, reading requests from in and
+	// writing events and replies to out, instead of Path being started as a
+	// program.  Everything else is unchanged: the same requests, the same
+	// events, the same replies, over an io.Pipe rather than a pipe to a
+	// child.
+	//
+	// iOS is why this exists.  An application there may not start another
+	// program, but it may compile Go in, so the worker runs on a goroutine
+	// of its own.  Restarts lose their meaning when it does: a goroutine
+	// dies with the process it is in, and there is nothing left to restart
+	// it into.
+	Serve func(in io.Reader, out io.Writer) error
+
 	// OnEvent receives every event the worker emits, in order.
 	OnEvent func(event json.RawMessage)
 
@@ -142,6 +155,16 @@ func Supervise(opts SupervisorOptions) *Supervisor {
 		stop:    make(chan struct{}),
 		done:    make(chan struct{}),
 	}
+	// A worker running in this process with no key of its own has nothing to
+	// take a lock against: the key would be this directory, which says
+	// nothing about which application is asking.  The lock is there to stop
+	// two workers for one application, and in process there is one worker
+	// because there is one goroutine.
+	if opts.Serve != nil && opts.Lock == "" && opts.Path == "" {
+		opts.NoLock = true
+		s.opts = opts
+	}
+
 	// Before the goroutine: a caller that asks Err() straight away should get
 	// a straight answer, not a race.
 	if !opts.NoLock {
@@ -345,6 +368,10 @@ func (s *Supervisor) supervise() {
 
 // runOnce launches one worker and returns when it exits.
 func (s *Supervisor) runOnce() error {
+	if s.opts.Serve != nil {
+		return s.runInProcess()
+	}
+
 	cmd := exec.Command(s.opts.Path, s.opts.Args...)
 	hideConsole(cmd)
 	cmd.Dir = s.opts.Dir
@@ -408,6 +435,57 @@ func (s *Supervisor) runOnce() error {
 	}
 	s.mu.Unlock()
 	return waitErr
+}
+
+// runInProcess runs a worker on a goroutine and returns when it stops.
+//
+// The shape is runOnce's: pipes in place of the child's, the same reader for
+// events, and the same clearing of whatever was outstanding when it ends.
+// What it does not have is a process to kill, so Stop closes the request pipe
+// and waits.
+func (s *Supervisor) runInProcess() error {
+	requests, toWorker := io.Pipe() // supervisor writes, worker reads
+	fromWorker, events := io.Pipe() // worker writes, supervisor reads
+
+	s.mu.Lock()
+	s.stdin, s.enc, s.cmd = toWorker, json.NewEncoder(toWorker), nil
+	s.mu.Unlock()
+	s.setState(Running)
+
+	served := make(chan error, 1)
+	go func() {
+		err := s.opts.Serve(requests, events)
+		// Closing this is what ends readEvents, as a child exiting does.
+		events.Close()
+		served <- err
+	}()
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() { defer wg.Done(); s.readEvents(fromWorker) }()
+
+	shutdown := make(chan struct{})
+	go func() {
+		select {
+		case <-s.stop:
+			toWorker.Close() // the worker sees its requests end
+		case <-shutdown:
+		}
+	}()
+
+	err := <-served
+	close(shutdown)
+	toWorker.Close()
+	wg.Wait()
+
+	s.mu.Lock()
+	s.enc, s.stdin = nil, nil
+	for id, ch := range s.pending {
+		close(ch)
+		delete(s.pending, id)
+	}
+	s.mu.Unlock()
+	return err
 }
 
 func (s *Supervisor) readEvents(r io.Reader) {

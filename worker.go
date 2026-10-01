@@ -40,6 +40,16 @@ type WorkerOptions struct {
 	// on the flag: vero registers it here so they cannot drift.
 	Version string
 
+	// In and Out replace standard input and output, which is how a worker
+	// runs inside the application rather than beside it.  Setting them also
+	// says this worker is being supervised, since nothing else would.
+	//
+	// iOS is why they exist: an application there may not start another
+	// program, so the only way to run a worker is in the same process, on
+	// the other end of an io.Pipe.
+	In  io.Reader
+	Out io.Writer
+
 	// StateInterval is how often the state is sampled for a change, for a
 	// worker that has one.  Zero means DefaultStateInterval.
 	StateInterval time.Duration
@@ -82,6 +92,7 @@ func (o *WorkerOptions) PrintVersionAndExit() {
 type Worker struct {
 	opts   WorkerOptions
 	serve  bool // a supervisor launched us, so stdin carries requests
+	piped  bool // our streams are a pipe in this process, not stdin and stdout
 	router *router
 	state  state // set by NewState; nil for a worker that emits by hand
 
@@ -126,17 +137,23 @@ func NewWorker(opts WorkerOptions) *Worker {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
+	inProcess := opts.In != nil && opts.Out != nil
 	w := &Worker{
 		opts:   opts,
 		router: newRouter(),
 		ctx:    ctx,
 		cancel: cancel,
-		serve:  os.Getenv(envServe) != "",
+		serve:  inProcess || os.Getenv(envServe) != "",
+		piped:  inProcess,
 		in:     os.Stdin,
 		out:    os.Stdout,
 		err:    os.Stderr,
 	}
-	if w.serve {
+	if inProcess {
+		// Someone else's pipes, so standard output is not the protocol and
+		// there is nothing to protect it from.
+		w.in, w.out = opts.In, opts.Out
+	} else if w.serve {
 		// Take the real stdout for the protocol, and send everyone else's
 		// prints to stderr.
 		os.Stdout = os.Stderr
@@ -306,11 +323,7 @@ func (w *Worker) serveEnvelopes(dispatch func(context.Context, Envelope) (any, e
 			continue
 		}
 
-		// One goroutine per request, so a slow handler holds up neither the
-		// events behind it nor the next request.
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		answer := func() {
 			defer func() {
 				// A panic in a handler should cost that one request, not the
 				// worker.  Go's unrecoverable failures still take the process
@@ -322,6 +335,20 @@ func (w *Worker) serveEnvelopes(dispatch func(context.Context, Envelope) (any, e
 			}()
 			reply, err := dispatch(ctx, req)
 			w.write(replyEnvelope(req.ID, reply, err))
+		}
+
+		if serialDispatch && !w.piped {
+			// WASI, reading standard input: see dispatch_wasip1.go.
+			answer()
+			continue
+		}
+
+		// One goroutine per request, so a slow handler holds up neither the
+		// events behind it nor the next request.
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			answer()
 		}()
 	}
 	// Standard input has closed, so nobody is going to read another reply.
