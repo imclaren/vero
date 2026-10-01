@@ -17,12 +17,13 @@ Use the same Go backend to communicate over a pipe with native frontends for:
 <td align="center" valign="top" width="25%"><a href="#run-the-macos-example"><img src="docs/screenshots/macos.gif" width="100%"></a><br><sub><b>macOS</b> — SwiftUI, in the menu bar</sub></td>
 <td align="center" valign="top" width="25%"><a href="example/wpf-app"><img src="docs/screenshots/windows.gif" width="100%"></a><br><sub><b>Windows</b> — WPF</sub></td>
 <td align="center" valign="top" width="25%"><a href="example/gtk-app"><img src="docs/screenshots/linux.gif" width="100%"></a><br><sub><b>Linux</b> — GTK4</sub></td>
-<td align="center" valign="top" width="25%"><a href="example/gtk-app"><img src="docs/screenshots/freebsd.gif" width="100%"></a><br><sub><b>FreeBSD</b> — GTK4, unchanged</sub></td>
+<td align="center" valign="top" width="25%"><a href="#build-the-same-worker-for-windows-linux-and-freebsd"><img src="docs/screenshots/freebsd.gif" width="100%"></a><br><sub><b>FreeBSD</b> — GTK4, unchanged</sub></td>
 </tr>
 </table>
 
 [macOS example](#run-the-macos-example) ·
-[Windows and Linux examples](#build-the-same-worker-for-windows-and-linux)
+[Windows, Linux and FreeBSD examples](#build-the-same-worker-for-windows-linux-and-freebsd) ·
+[What runs where](#what-runs-where)
 
 If you already have Xcode and Go installed, the example below builds a running
 app in about 5 minutes.
@@ -289,6 +290,34 @@ installs what is needed to run them and builds everything, and
 thirteen targets across macOS, Windows, Linux, FreeBSD, OpenBSD, NetBSD,
 DragonFly and illumos. Anywhere Go produces an executable, vero runs - the Go
 API needs nothing else, and the Python and C# bindings need only the worker.
+
+## What runs where
+
+A frontend reaches the Go worker one of two ways. Swift **links** it, as a C
+archive compiled into the application. Python and C# **spawn** it: the worker
+supervises a copy of itself and answers on a pipe, which is all a process
+needs to do. Linking needs cgo and a platform Go can build a C archive for;
+spawning needs nothing but an executable, which is why the list below is as
+long as it is.
+
+| | worker | linked (Swift) | spawned (Python, C#) | |
+|---|---|---|---|---|
+| **macOS** | ✅ | ✅ | ✅ | the SwiftUI example links the archive |
+| **Windows** | ✅ amd64, arm64, 386 | — | ✅ | the WPF example, with no DLL to match to an architecture |
+| **Linux** | ✅ 13 architectures | — | ✅ | the GTK4 example; amd64 and arm64 are released |
+| **FreeBSD** | ✅ amd64, arm64 | — | ✅ | the same GTK4 example, unchanged |
+| **OpenBSD** | ✅ 6 architectures | — | ✅ | no example recorded, but nothing in one would differ |
+| **NetBSD** | ✅ 4 architectures | — | ✅ | as above |
+| **DragonFly** | ✅ amd64 | — | ✅ | as above |
+| **illumos** | ✅ amd64 | — | ✅ | as above |
+| **Android** | ✅ arm64 | — | ✅ | a Kotlin frontend would spawn the worker from its library directory; none written |
+| **Solaris, AIX, Plan 9** | ✖ | — | — | the single-worker lock uses `flock`, which these do not have. Roughly thirty lines to fix with `fcntl` |
+| **iOS** | ✖ | ✅ in principle | ✖ | the sandbox forbids spawning a process, so an iOS frontend would have to link the archive and do without supervision |
+| **wasm** | ✖ | — | — | no processes at all: neither half of vero's design applies |
+
+Go builds the worker for 35 of its ports today. Only `-buildmode=c-shared` is
+narrow - among the BSDs it exists on freebsd/amd64 alone - and nothing needs
+it any more, which is the whole reason the list is not three rows long.
 
 ## Licence
 
