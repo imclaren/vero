@@ -26,9 +26,10 @@ Run a Go binary embedded in a native macOS SwiftUI app. The Go binary and the Sw
 
 In **bold**, the 21 targets [`./scripts/build-all.sh`](scripts/build-all.sh)
 ships. The other 26 build the same way, one at a time:
-`TARGETS=plan9/386 ./scripts/build-all.sh`. † needs a C toolchain - an NDK for
-the three Androids that are not `arm64`, the Simulator SDK for `ios/amd64` -
-and the other 43 need nothing but Go.
+`TARGETS=plan9/386 ./scripts/build-all.sh`.
+
+† needs a C toolchain: an NDK for the three Androids that are not `arm64`,
+and the Simulator SDK for `ios/amd64`. The other 43 need nothing but Go.
 
 [`./scripts/setup.sh`](scripts/setup.sh) installs the build prerequisites for
 all the examples. Only two things are not installed for you using this
