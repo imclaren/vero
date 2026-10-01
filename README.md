@@ -25,15 +25,12 @@ Run a Go binary embedded in a native macOS SwiftUI app. The Go binary and the Sw
 
 Go is needed for all of them, and nothing else is: the worker is pure Go, and
 every frontend starts it rather than linking it. The column above is what the
-*example* for that platform needs on top of that, and
-[`./scripts/setup.sh`](scripts/setup.sh) installs most of it
-([`./scripts/setup-android.sh`](scripts/setup-android.sh) does Android, which
-is larger).
-
-Every example above is built and run by its own script, and three of them
-open together: [`./scripts/setup.sh`](scripts/setup.sh) installs what they need and builds
-everything, then [`./scripts/run.sh`](scripts/run.sh) opens macOS, Linux and Windows side by
-side on your Mac.
+*example* for that platform needs on top of that.
+[`./scripts/setup.sh`](scripts/setup.sh) installs most of that and builds
+everything; [`./scripts/setup-android.sh`](scripts/setup-android.sh) does
+Android, which is larger. Each example then has its own script, and
+[`./scripts/run.sh`](scripts/run.sh) opens macOS, Linux and Windows side by
+side.
 
 [`./scripts/build-all.sh`](scripts/build-all.sh) goes wider than the examples: it builds a worker for
 seventeen targets across macOS, Windows, Linux, FreeBSD, OpenBSD, NetBSD,
