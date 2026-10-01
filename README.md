@@ -1,9 +1,12 @@
 # vero
 
-**Go backend with native cross-platform GUI frontends.  Build on macOS.  Run on macOS, Windows, Linux and FreeBSD.**
+**Go backend with native cross-platform GUI frontends.  Build on macOS, run anywhere Go runs.**
 
-Run a Go binary embedded in a native macOS SwiftUI app. The Go binary and the
-SwiftUI app communicate over a pipe.  Use the same Go backend to communicate over a pipe with native Windows and Linux frontends.
+Run a Go binary embedded in a native macOS SwiftUI app. The Go binary and the SwiftUI app communicate over a pipe.  Use the same Go backend to communicate over a pipe with native frontends for:
+- macOS
+- Windows
+- Linux
+- *BSD (FreeBSD, OpenBSD, NetBSD, DragonFly and illumos)
 
 [![Go reference](https://pkg.go.dev/badge/github.com/imclaren/vero.svg)](https://pkg.go.dev/github.com/imclaren/vero)
 
