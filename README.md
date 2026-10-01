@@ -8,20 +8,20 @@ Run a Go binary embedded in a native macOS SwiftUI app. The Go binary and the Sw
 
 | Operating system | Example | Building on macOS |
 |---|:---:|---|
-| **macOS** — arm64, amd64 | <a href="#run-the-macos-example"><img src="docs/screenshots/macos.gif" width="300"></a> | Builds and runs.  SwiftUI, in the menu bar. |
-| **Windows** — arm64, amd64, 386 | <a href="example/wpf-app"><img src="docs/screenshots/windows.gif" width="300"></a> | Builds and runs.  WPF, run in a Windows VM by `scripts/run-windows.sh` |
-| **Linux** — 13 architectures | <a href="example/gtk-app"><img src="docs/screenshots/linux.gif" width="300"></a> | Builds and runs.  GTK4, run in a Docker container by `scripts/run-linux.sh` |
-| **FreeBSD** — amd64, arm64 | <a href="example/gtk-app"><img src="docs/screenshots/freebsd.gif" width="300"></a> | Builds and runs.  GTK4, the same app as Linux, run in a VM by `scripts/run-freebsd.sh` |
+| **macOS** — arm64, amd64 | <a href="#run-the-macos-example"><img src="docs/screenshots/macos.gif" width="300"></a> | Builds and runs.  SwiftUI, in the menu bar, built by [`example/menubar-app/build.sh`](example/menubar-app/build.sh). |
+| **Windows** — arm64, amd64, 386 | <a href="example/wpf-app"><img src="docs/screenshots/windows.gif" width="300"></a> | Builds and runs.  WPF, run in a Windows VM by [`scripts/run-windows.sh`](scripts/run-windows.sh) |
+| **Linux** — 13 architectures | <a href="example/gtk-app"><img src="docs/screenshots/linux.gif" width="300"></a> | Builds and runs.  GTK4, run in a Docker container by [`scripts/run-linux.sh`](scripts/run-linux.sh) |
+| **FreeBSD** — amd64, arm64 | <a href="example/gtk-app"><img src="docs/screenshots/freebsd.gif" width="300"></a> | Builds and runs.  GTK4, the same app as Linux, run in a VM by [`scripts/run-freebsd.sh`](scripts/run-freebsd.sh) |
 | **OpenBSD** — 6 architectures | — | Builds; no script to run included here.  The GTK4 app should run unchanged. OpenBSD publishes an installer rather than a ready-made disk image, so a script would need an unattended install driven by an `auto_install` response file to build and display the UI. |
 | **NetBSD** — 4 architectures | — | Builds; no script to run included here.  As OpenBSD, but easier: NetBSD does publish a bootable arm64 image, so a script would download it, enable `sshd`, and install GTK4 with `pkgin`. |
 | **DragonFly** — amd64 | — | Builds; no script to run included here.  DragonFly runs on x86 only. An x86 VM is emulated rather than virtualised on an Apple Silicon Mac, which would take minutes-per-boot |
 | **illumos** — amd64 | — | Builds; no script to run included here.  As DragonFly: x86 only, and slow to emulate |
-| **Android** — arm64 | <a href="example/android-app"><img src="docs/screenshots/android.gif" width="300"></a> | Builds and runs in the emulator. The worker ships as `lib/arm64-v8a/libworker.so`, the only place Android starts an executable from. No NDK and no JNI: Kotlin writes and reads JSON. |
-| **Plan 9** — amd64, 386 | <a href="scripts/run-plan9.sh"><img src="docs/screenshots/plan9.png" width="300"></a> | Builds, and the tests pass on 9front under qemu: `scripts/run-plan9.sh` boots it and runs them. No frontend - Plan 9 draws through libdraw, and nothing here speaks it. |
+| **Android** — arm64 | <a href="example/android-app"><img src="docs/screenshots/android.gif" width="300"></a> | Builds and runs in the emulator. The worker ships as `lib/arm64-v8a/libworker.so`, the only place Android starts an executable from. No NDK and no JNI: Kotlin writes and reads JSON. [`scripts/run-android.sh`](scripts/run-android.sh) builds and runs it. |
+| **Plan 9** — amd64, 386 | <a href="scripts/run-plan9.sh"><img src="docs/screenshots/plan9.png" width="300"></a> | Builds, and the tests pass on 9front under qemu: [`scripts/run-plan9.sh`](scripts/run-plan9.sh) boots it and runs them. No frontend - Plan 9 draws through libdraw, and nothing here speaks it. |
 | **Solaris** — amd64, **AIX** — ppc64 | — | Builds; not run. Solaris needs an Oracle licence to download and runs on x86, which this Mac emulates rather than virtualises; AIX needs IBM hardware. |
-| **iOS** | <a href="example/ios-app"><img src="docs/screenshots/ios.gif" width="300"></a> | Builds and runs in the Simulator, not on a phone. An app may not start a program on iOS, so the worker is compiled into the app and runs on a goroutine. `scripts/run-ios.sh` builds and launches it. |
-| **wasm** — WASI (`wasip1/wasm`) | — | Builds and runs, without a GUI. A release ships `worker-wasip1-wasm.wasm`, which `wasmtime` runs; the frontend is whatever starts it. One request at a time: WASI has no threads. |
-| **wasm** — browser (`js/wasm`) | <a href="example/web-app"><img src="docs/screenshots/web.gif" width="300"></a> | Builds and runs. A page may not start a program, so the worker is compiled into the same wasm as the UI, as on iOS. `scripts/run-web.sh` builds it and opens it. |
+| **iOS** | <a href="example/ios-app"><img src="docs/screenshots/ios.gif" width="300"></a> | Builds and runs in the Simulator, not on a phone. An app may not start a program on iOS, so the worker is compiled into the app and runs on a goroutine. [`scripts/run-ios.sh`](scripts/run-ios.sh) builds and launches it. |
+| **wasm** — WASI (`wasip1/wasm`) | — | Builds and runs, without a GUI. [`scripts/build-all.sh`](scripts/build-all.sh) ships `worker-wasip1-wasm.wasm`, which `wasmtime` runs; the frontend is whatever starts it. One request at a time: WASI has no threads. |
+| **wasm** — browser (`js/wasm`) | <a href="example/web-app"><img src="docs/screenshots/web.gif" width="300"></a> | Builds and runs. A page may not start a program, so the worker is compiled into the same wasm as the UI, as on iOS. [`scripts/run-web.sh`](scripts/run-web.sh) builds it and opens it. |
 
 [macOS example](#run-the-macos-example) ·
 [Windows, Linux, FreeBSD, iOS and browser examples](#build-the-same-worker-for-windows-linux-freebsd-ios-and-the-browser)
