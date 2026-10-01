@@ -23,16 +23,12 @@ Run a Go binary embedded in a native macOS SwiftUI app. The Go binary and the Sw
 | **wasm** — browser (`js/wasm`) | <a href="example/web-app"><img src="docs/screenshots/web.gif" width="300"></a> | a browser | Builds and runs. A page may not start a program, so the worker is compiled into the same wasm as the UI, as on iOS. Built and opened by running [`scripts/run-web.sh`](scripts/run-web.sh). |
 | **wasm** — WASI (`wasip1/wasm`) | — | wasmtime, which can be installed by running [`setup-wasm.sh`](scripts/setup-wasm.sh) | Builds and runs. [`scripts/build-all.sh`](scripts/build-all.sh) produces `worker-wasip1-wasm.wasm`, which a supervisor starts with `wasmtime` like any other worker - so the worker runs on a machine with no Go on it. WASI has no screen, so there is no window: the frontend is whatever program started the runtime. It answers one request at a time, because a read on standard input stops every other goroutine in the module. |
 
-Go is needed for all of them, and nothing else is: the worker is pure Go, and
-every frontend starts it rather than linking it. The column above is what the
-*example* for that platform needs on top of that.
-Each platform has its own install script, listed above, and
-[`./scripts/setup.sh`](scripts/setup.sh) runs the lot and then builds
-everything. Only two things are not installed for you: Xcode, which comes
-from the App Store, and a Windows ISO, which Microsoft will not serve to a
-script. Each example then has its own script, and
-[`./scripts/run.sh`](scripts/run.sh) opens macOS, Linux and Windows side by
-side.
+[`./scripts/setup.sh`](scripts/setup.sh) installs the build prerequisites for
+all the examples. Only two things are not installed for you using this
+script: Xcode, which comes from the App Store, and a Windows ISO, which
+Microsoft will not serve to a script.
+[`./scripts/run.sh`](scripts/run.sh) will build and open macOS, Linux and
+Windows side by side.
 
 [`./scripts/build-all.sh`](scripts/build-all.sh) goes wider than the examples: it builds a worker for
 seventeen targets across macOS, Windows, Linux, FreeBSD, OpenBSD, NetBSD,
