@@ -17,10 +17,10 @@ Run a Go binary embedded in a native macOS SwiftUI app. The Go binary and the Sw
 | **DragonFly** — amd64 | yes | — | Builds; no script to run included here.  DragonFly runs on x86 only. An x86 VM is emulated rather than virtualised on an Apple Silicon Mac, which would take minutes-per-boot |
 | **illumos** — amd64 | yes | — | Builds; no script to run included here.  As DragonFly: x86 only, and slow to emulate |
 | **Android** — arm64 | yes | — | Builds; no script to run included here.  No UI app written. The worker would ship in `jniLibs` and be started from `nativeLibraryDir`, with no JNI: Kotlin would write and read JSON, exactly as Python and C# do |
-| **Solaris, AIX, Plan 9** | yes | — | Builds; not run. The one change needed was the lock that keeps a frontend to a single worker: `fcntl` on Solaris and AIX, and an exclusive open on Plan 9. |
-| **iOS** | the Go side does | — | Builds; not run. iOS forbids starting a program, so the worker is compiled into the app and runs on a goroutine rather than as a child process. No Swift app yet. |
-| **wasm** — WASI (`wasip1/wasm`) | yes | — | Builds and runs. A release ships `worker-wasip1-wasm.wasm`; a frontend starts it with `wasmtime`, as it would any other worker. WASI has no threads, so it answers one request at a time. |
-| **wasm** — browser (`js/wasm`) | yes | — | Builds and runs. A page cannot start a program either, so the worker is compiled in and runs on a goroutine, as on iOS. Tested under node; no browser app yet. |
+| **Solaris, AIX, Plan 9** | yes | — | Builds; not run. Nothing the worker needs is missing here. No example frontend covers these three, so the GUI would be yours to write. |
+| **iOS** | the Go side does | — | Builds; not run. An app may not start a program on iOS, so the worker is compiled into the app instead, on a goroutine of its own, talking over a pipe in memory. The Swift half is unwritten. |
+| **wasm** — WASI (`wasip1/wasm`) | yes | — | Builds and runs, without a GUI. A release ships `worker-wasip1-wasm.wasm`, which `wasmtime` runs; the frontend is whatever starts it. One request at a time: WASI has no threads. |
+| **wasm** — browser (`js/wasm`) | yes | — | Builds and runs. A page may not start a program, so the worker is compiled into the same wasm as the UI, as on iOS. Tested under `node`, which loads the build a page would; no browser app is written. |
 
 [macOS example](#run-the-macos-example) ·
 [Windows, Linux and FreeBSD examples](#build-the-same-worker-for-windows-linux-and-freebsd)
