@@ -1,6 +1,6 @@
 # vero
 
-**Go backend with native cross-platform GUI frontends.  Build on macOS.  Run on macOS, Windows, and Linux.**
+**Go backend with native cross-platform GUI frontends.  Build on macOS.  Run on macOS, Windows, Linux and FreeBSD.**
 
 Run a Go binary embedded in a native macOS SwiftUI app. The Go binary and the
 SwiftUI app communicate over a pipe.  Use the same Go backend to communicate over a pipe with native Windows and Linux frontends.
@@ -9,9 +9,10 @@ SwiftUI app communicate over a pipe.  Use the same Go backend to communicate ove
 
 <table>
 <tr>
-<td align="center" valign="top" width="33%"><a href="#run-the-macos-example"><img src="docs/screenshots/macos.gif" width="100%"></a><br><sub><b>macOS</b> — SwiftUI, in the menu bar</sub></td>
-<td align="center" valign="top" width="33%"><a href="example/wpf-app"><img src="docs/screenshots/windows.gif" width="100%"></a><br><sub><b>Windows</b> — WPF</sub></td>
-<td align="center" valign="top" width="33%"><a href="example/gtk-app"><img src="docs/screenshots/linux.gif" width="100%"></a><br><sub><b>Linux</b> — GTK4</sub></td>
+<td align="center" valign="top" width="25%"><a href="#run-the-macos-example"><img src="docs/screenshots/macos.gif" width="100%"></a><br><sub><b>macOS</b> — SwiftUI, in the menu bar</sub></td>
+<td align="center" valign="top" width="25%"><a href="example/wpf-app"><img src="docs/screenshots/windows.gif" width="100%"></a><br><sub><b>Windows</b> — WPF</sub></td>
+<td align="center" valign="top" width="25%"><a href="example/gtk-app"><img src="docs/screenshots/linux.gif" width="100%"></a><br><sub><b>Linux</b> — GTK4</sub></td>
+<td align="center" valign="top" width="25%"><a href="example/gtk-app"><img src="docs/screenshots/freebsd.gif" width="100%"></a><br><sub><b>FreeBSD</b> — GTK4, unchanged</sub></td>
 </tr>
 </table>
 

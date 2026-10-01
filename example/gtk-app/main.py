@@ -27,7 +27,10 @@ class Window(Gtk.ApplicationWindow):
         super().__init__(application=app, title="vero")
         self.vero = vero
         self.rows: dict[int, dict] = {}
-        self.set_default_size(380, 0)
+        # -1, not 0: a zero height reaches X as a ConfigureWindow with no
+        # height, which a strict server refuses with BadAlloc.  Mesa's X on
+        # Debian lets it pass; FreeBSD's does not.
+        self.set_default_size(380, -1)
 
         self.jobs = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         self.jobs.set_margin_top(16)
