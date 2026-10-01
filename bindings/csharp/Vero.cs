@@ -1,24 +1,23 @@
 // Drive a Go worker from a .NET frontend - WinUI, WPF, or a console program.
 //
-// This is the Windows equivalent of Sources/Vero: a thin layer over the same
-// nine C functions, with no logic of its own.  Supervision, restarts, framing
-// and reconnection all happen in Go, on the other side of the boundary.
+// The worker supervises itself.  Run with VERO_HOST set it becomes a host: it
+// launches a second copy of itself to do the work, restarts that copy if it
+// dies, and speaks JSON on its own standard input and output.  So this file
+// starts one process and writes lines to it; the supervision, the backoff,
+// the single-worker lock and the cleanup are all Go, on the other side of the
+// pipe.
 //
-// Build the shared library once.  It is the same library for every
-// application, because the worker's path arrives at runtime and every message
-// is JSON:
-//
-//     go build -buildmode=c-shared -o vero.dll .\cshim
 //     go build -o worker.exe .\your\worker
 //
-// Build the library for the architecture you will run on.  A windows/amd64 DLL
-// loaded into an x64 .NET process under emulation on Windows-on-ARM does not
-// work: the first call into Go either does not return, or ends the process with
-// 0xC0000409.
+// There is no shared library to build, ship or match to an architecture -
+// which also means no 0xC0000409 from loading an x64 DLL into an ARM process,
+// because nothing is loaded at all.
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
+using System.Diagnostics;
+using System.IO;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -41,10 +40,6 @@ public sealed class RefusedException : VeroException
 }
 
 /// <summary>
-/// The worker is starting, restarting after a crash, or stopped. Nothing you
-/// did was wrong: wait, and say so in the frontend.
-/// </summary>
-/// <summary>
 /// Another process is already running a worker for this application. Offer to
 /// switch to the copy that is running: retrying will not help.
 /// </summary>
@@ -53,6 +48,10 @@ public sealed class AlreadyRunningException : VeroException
     public AlreadyRunningException(string message) : base(message) { }
 }
 
+/// <summary>
+/// The worker is starting, restarting after a crash, or stopped. Nothing you
+/// did was wrong: wait, and say so in the frontend.
+/// </summary>
 public sealed class NotRunningException : VeroException
 {
     public NotRunningException(string message) : base(message) { }
@@ -61,21 +60,22 @@ public sealed class NotRunningException : VeroException
 /// <summary>Runs a Go worker and talks to it.</summary>
 public sealed class VeroClient : IDisposable
 {
-    private const string Library = "vero";   // vero.dll beside the executable
+    private readonly Process host;
+    private readonly StreamWriter requests;
+    private readonly object writeLock = new();
 
-    // IntPtr rather than string on purpose: the marshaller would copy a
-    // returned string and lose the pointer, and then there is nothing left to
-    // hand to VeroFree.
-    [DllImport(Library)] private static extern IntPtr VeroStart(string workerPath, string argsJson);
-    [DllImport(Library)] private static extern IntPtr VeroRequest(string requestJson);
-    [DllImport(Library)] private static extern IntPtr VeroCall(string name, string requestJson);
-    [DllImport(Library)] private static extern IntPtr VeroLatest();
-    [DllImport(Library)] private static extern IntPtr VeroWaitForEvent();
-    [DllImport(Library)] private static extern IntPtr VeroState();
-    [DllImport(Library)] private static extern void VeroStop();
-    [DllImport(Library)] private static extern void VeroFree(IntPtr s);
+    // One slot per request in flight, keyed by the id written on the wire.
+    private readonly ConcurrentDictionary<long, TaskCompletionSource<JsonElement?>> pending = new();
 
+    // Every reader of Events() gets its own channel, so two views watching the
+    // same worker both see every event.
+    private readonly List<BlockingCollection<JsonElement>> subscribers = new();
+
+    private long nextId;
     private volatile bool stopped;
+    private volatile string state = "starting";
+    private volatile int restarts;
+    private JsonElement? latest;
 
     /// <summary>Starts the worker and begins supervising it.</summary>
     /// <remarks>
@@ -84,26 +84,176 @@ public sealed class VeroClient : IDisposable
     /// </remarks>
     public VeroClient(string workerPath, IEnumerable<string>? arguments = null)
     {
-        string argsJson = arguments is null ? "" : JsonSerializer.Serialize(arguments);
-        Check(VeroStart(workerPath, argsJson));
+        var info = new ProcessStartInfo(workerPath)
+        {
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        if (arguments is not null)
+        {
+            foreach (string argument in arguments)
+            {
+                info.ArgumentList.Add(argument);
+            }
+        }
+        info.Environment["VERO_HOST"] = "1";
+
+        host = Process.Start(info)
+            ?? throw new VeroException($"could not start {workerPath}");
+        requests = host.StandardInput;
+
+        // A background thread, so an application that forgets to Dispose
+        // still exits. The worker goes with it either way: its standard input
+        // closes when this process does.
+        var reader = new Thread(Read) { IsBackground = true, Name = "vero" };
+        reader.Start();
+    }
+
+    /// <summary>Sorts what the host says into replies, events and state changes.</summary>
+    private void Read()
+    {
+        string? line;
+        while ((line = host.StandardOutput.ReadLine()) is not null)
+        {
+            JsonElement root;
+            try
+            {
+                using JsonDocument document = JsonDocument.Parse(line);
+                root = document.RootElement.Clone();
+            }
+            catch (JsonException)
+            {
+                continue;   // not ours; a worker's own prints go to stderr
+            }
+
+            string kind = root.TryGetProperty("t", out JsonElement t) ? t.GetString() ?? "" : "";
+            switch (kind)
+            {
+                case "reply":
+                    long id = root.TryGetProperty("id", out JsonElement i) ? i.GetInt64() : 0;
+                    if (pending.TryRemove(id, out var waiting))
+                    {
+                        Answer(waiting, root);
+                    }
+                    break;
+
+                case "event":
+                    if (root.TryGetProperty("p", out JsonElement payload))
+                    {
+                        latest = payload;
+                        lock (subscribers)
+                        {
+                            foreach (var subscriber in subscribers)
+                            {
+                                subscriber.Add(payload);
+                            }
+                        }
+                    }
+                    break;
+
+                case "state":
+                    if (root.TryGetProperty("p", out JsonElement reported))
+                    {
+                        if (reported.TryGetProperty("state", out JsonElement s))
+                        {
+                            state = s.GetString() ?? state;
+                        }
+                        if (reported.TryGetProperty("restarts", out JsonElement r))
+                        {
+                            restarts = r.GetInt32();
+                        }
+                    }
+                    break;
+            }
+        }
+
+        // The host has gone: wake everything waiting on it rather than
+        // leaving a frontend blocked for good.
+        stopped = true;
+        foreach (var waiting in pending.Values)
+        {
+            waiting.TrySetException(new NotRunningException("the worker host has stopped"));
+        }
+        pending.Clear();
+        lock (subscribers)
+        {
+            foreach (var subscriber in subscribers)
+            {
+                subscriber.CompleteAdding();
+            }
+        }
+    }
+
+    /// <summary>Completes one waiting request, with its reply or its error.</summary>
+    private static void Answer(TaskCompletionSource<JsonElement?> waiting, JsonElement root)
+    {
+        if (root.TryGetProperty("e", out JsonElement error))
+        {
+            string message = error.GetString() ?? "unknown error";
+            string code = root.TryGetProperty("c", out JsonElement c) ? c.GetString() ?? "" : "";
+            waiting.TrySetException(code switch
+            {
+                "already_running" => new AlreadyRunningException(message),
+                "not_running" => new NotRunningException(message),
+                "refused" => new RefusedException(message),
+                _ => new VeroException(message),
+            });
+            return;
+        }
+        waiting.TrySetResult(root.TryGetProperty("p", out JsonElement payload) ? payload : null);
+    }
+
+    /// <summary>Writes one request and waits for its reply.</summary>
+    private Task<JsonElement?> Ask(string kind, string name, object? payload)
+    {
+        if (stopped)
+        {
+            throw new NotRunningException("the worker host has stopped");
+        }
+
+        long id = Interlocked.Increment(ref nextId);
+        var waiting = new TaskCompletionSource<JsonElement?>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        pending[id] = waiting;
+
+        var envelope = new Dictionary<string, object?> { ["id"] = id };
+        if (kind.Length > 0) envelope["t"] = kind;
+        if (name.Length > 0) envelope["n"] = name;
+        if (payload is not null) envelope["p"] = payload;
+
+        try
+        {
+            lock (writeLock)
+            {
+                requests.WriteLine(JsonSerializer.Serialize(envelope));
+                requests.Flush();
+            }
+        }
+        catch (Exception broken) when (broken is IOException or ObjectDisposedException)
+        {
+            pending.TryRemove(id, out _);
+            throw new NotRunningException("the worker host has stopped");
+        }
+
+        return waiting.Task;
     }
 
     /// <summary>Sends a request and waits for the reply.</summary>
     /// <remarks>
     /// There is no timeout: a worker may hold a request for as long as the
-    /// work takes, so this runs on a thread pool thread rather than the one
-    /// drawing your frontend.
+    /// work takes. Awaiting it does not block the thread drawing your
+    /// frontend.
     /// </remarks>
-    public Task<JsonElement?> SendAsync<T>(T request) =>
-        Task.Run(() => Check(VeroRequest(JsonSerializer.Serialize(request))));
+    public Task<JsonElement?> SendAsync<T>(T request) => Ask("", "", request);
 
     /// <summary>Sends a request to one named handler, matching vero.Handle.</summary>
     /// <remarks>
     /// The worker routes on the name rather than on something inside the
     /// request, so neither side has to agree on a "type" field.
     /// </remarks>
-    public Task<JsonElement?> CallAsync<T>(string name, T request) =>
-        Task.Run(() => Check(VeroCall(name, JsonSerializer.Serialize(request))));
+    public Task<JsonElement?> CallAsync<T>(string name, T request) => Ask("", name, request);
 
     /// <summary>Calls a named handler and decodes the reply into your own type.</summary>
     public async Task<TReply> CallAsync<T, TReply>(string name, T request)
@@ -133,38 +283,54 @@ public sealed class VeroClient : IDisposable
     /// The most recent event, without waiting for the next one. Use it to draw
     /// a window that has just opened; <see cref="Events"/> keeps it current.
     /// </summary>
-    public JsonElement? Latest() => Check(VeroLatest());
+    public JsonElement? Latest() => latest;
 
     /// <summary>"starting", "running", "restarting" or "stopped".</summary>
-    public string State()
-    {
-        JsonElement? state = Check(VeroState());
-        return state?.GetString() ?? "unknown";
-    }
+    public string State() => state;
+
+    /// <summary>How many times the worker has been restarted after dying.</summary>
+    public int Restarts() => restarts;
 
     /// <summary>Every state change the worker reports, as it happens.</summary>
     /// <remarks>
-    /// Each call blocks until something changes, so enumerate this away from
-    /// the frontend thread and marshal back - Dispatcher.InvokeAsync under
-    /// WPF, DispatcherQueue.TryEnqueue under WinUI. There is no polling and no
+    /// Each step waits for the next event, so enumerate this away from the
+    /// frontend thread and marshal back - Dispatcher.InvokeAsync under WPF,
+    /// DispatcherQueue.TryEnqueue under WinUI. There is no polling and no
     /// interval to choose.
     /// </remarks>
     public async IAsyncEnumerable<JsonElement> Events()
     {
-        while (!stopped)
+        var mine = new BlockingCollection<JsonElement>();
+        lock (subscribers)
         {
-            JsonElement? next;
-            try
-            {
-                next = await Task.Run(() => Check(VeroWaitForEvent())).ConfigureAwait(false);
-            }
-            catch (NotRunningException)
+            if (stopped)
             {
                 yield break;
             }
-            if (next is not null)
+            subscribers.Add(mine);
+        }
+
+        try
+        {
+            while (true)
             {
-                yield return next.Value;
+                JsonElement next;
+                try
+                {
+                    next = await Task.Run(() => mine.Take()).ConfigureAwait(false);
+                }
+                catch (Exception done) when (done is InvalidOperationException or ObjectDisposedException)
+                {
+                    yield break;   // the host closed, and the channel with it
+                }
+                yield return next;
+            }
+        }
+        finally
+        {
+            lock (subscribers)
+            {
+                subscribers.Remove(mine);
             }
         }
     }
@@ -177,49 +343,33 @@ public sealed class VeroClient : IDisposable
     /// </remarks>
     public void Stop()
     {
+        if (stopped)
+        {
+            return;
+        }
+
+        try
+        {
+            Ask("ctl", "stop", null).Wait(TimeSpan.FromSeconds(5));
+        }
+        catch (Exception)
+        {
+            // It is going away; how it went is not interesting.
+        }
+
         stopped = true;
-        VeroStop();
+        try
+        {
+            requests.Close();
+            if (!host.WaitForExit(5000))
+            {
+                host.Kill();
+            }
+        }
+        catch (Exception broken) when (broken is IOException or InvalidOperationException)
+        {
+        }
     }
 
     public void Dispose() => Stop();
-
-    /// <summary>Reads one envelope, frees it, and throws if it carried an error.</summary>
-    private static JsonElement? Check(IntPtr pointer)
-    {
-        if (pointer == IntPtr.Zero)
-        {
-            throw new NotRunningException("the library returned nothing");
-        }
-
-        string raw;
-        try
-        {
-            raw = Marshal.PtrToStringUTF8(pointer) ?? "{}";
-        }
-        finally
-        {
-            VeroFree(pointer);
-        }
-
-        using JsonDocument document = JsonDocument.Parse(raw);
-        JsonElement root = document.RootElement;
-
-        if (root.TryGetProperty("e", out JsonElement error))
-        {
-            string message = error.GetString() ?? "unknown error";
-            string code = root.TryGetProperty("code", out JsonElement c) ? c.GetString() ?? "" : "";
-            throw code switch
-            {
-                "already_running" => new AlreadyRunningException(message),
-                "not_running" => new NotRunningException(message),
-                "refused" => new RefusedException(message),
-                _ => new VeroException(message),
-            };
-        }
-        if (root.TryGetProperty("p", out JsonElement payload))
-        {
-            return payload.Clone();   // the document is disposed on the way out
-        }
-        return null;
-    }
 }
