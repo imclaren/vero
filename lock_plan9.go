@@ -17,8 +17,14 @@ func openLockFile(path string) (*os.File, error) {
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600|os.ModeExclusive)
 	if err != nil {
 		// Plan 9 refuses the open rather than failing a later lock call, so
-		// this is what "somebody else has it" looks like.
-		if strings.Contains(err.Error(), "exclusive") {
+		// this is what "somebody else has it" looks like.  9front says
+		//
+		//	open /tmp/vero-1b18d2d8425c14c6.lock: file is locked
+		//
+		// and older kernels say "exclusive use file already open", so match
+		// either rather than the whole string.
+		if message := err.Error(); strings.Contains(message, "file is locked") ||
+			strings.Contains(message, "exclusive use") {
 			return nil, ErrAlreadyRunning
 		}
 		return nil, err
