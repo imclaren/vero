@@ -7,19 +7,19 @@ Run a Go binary embedded in a native macOS SwiftUI app. The Go binary and the Sw
 [![Go reference](https://pkg.go.dev/badge/github.com/imclaren/vero.svg)](https://pkg.go.dev/github.com/imclaren/vero)
 
 | Operating system | Builds on a Mac | Working examples |
-|---|---|---|
+|---|---|:---:|
 | **macOS** — arm64, amd64 | yes | <a href="#run-the-macos-example"><img src="docs/screenshots/macos.gif" width="340"></a><br><sub>SwiftUI, in the menu bar</sub> |
 | **Windows** — arm64, amd64, 386 | yes | <a href="example/wpf-app"><img src="docs/screenshots/windows.gif" width="340"></a><br><sub>WPF</sub> |
 | **Linux** — 13 architectures | yes | <a href="example/gtk-app"><img src="docs/screenshots/linux.gif" width="340"></a><br><sub>GTK4</sub> |
 | **FreeBSD** — amd64, arm64 | yes | <a href="example/gtk-app"><img src="docs/screenshots/freebsd.gif" width="340"></a><br><sub>GTK4, the Linux example unchanged</sub> |
-| **OpenBSD** — 6 architectures | yes | not recorded: the GTK example would run here too, but no VM is scripted for it yet |
-| **NetBSD** — 4 architectures | yes | not recorded, as above |
-| **DragonFly** — amd64 | yes | not recorded, and slow to try: it is x86 only, so it emulates rather than virtualises on an Apple Silicon Mac |
-| **illumos** — amd64 | yes | not recorded, and x86 only, as above |
-| **Android** — arm64 | yes | no frontend written: a Kotlin app would start the worker from its library directory, with no JNI |
-| **Solaris, AIX, Plan 9** | no | the single-worker lock uses `flock`, which these do not provide; about thirty lines with `fcntl` would fix it |
-| **iOS** | no | the sandbox forbids starting another process, so the worker would have to be compiled into the app and lose its supervision |
-| **wasm** | no | no processes at all, so there is nothing to start and nothing to supervise |
+| **OpenBSD** — 6 architectures | yes | No example yet. The GTK4 app should run here unchanged, as it does on FreeBSD, but nobody has set up an OpenBSD VM to show it |
+| **NetBSD** — 4 architectures | yes | No example yet, for the same reason as OpenBSD |
+| **DragonFly** — amd64 | yes | No example yet. DragonFly runs on x86 only, and an x86 VM has to be emulated on an Apple Silicon Mac, which is too slow to be worth filming |
+| **illumos** — amd64 | yes | No example yet, and x86 only, like DragonFly |
+| **Android** — arm64 | yes | No example yet. The worker runs, but no Android app has been written; a Kotlin one would start it the way the Python and C# apps do |
+| **Solaris, AIX, Plan 9** | no | Cannot be built. vero keeps one worker per application with `flock`, which these systems do not have. Using `fcntl` instead is about thirty lines of work |
+| **iOS** | no | Cannot be built. iOS does not let an app start another program, so the Go code would have to be compiled into the app, giving up the restarts that come with running it separately |
+| **wasm** | no | Cannot be built. There are no processes in a browser or in WASI, so there is nothing to start and nothing to supervise |
 
 [macOS example](#run-the-macos-example) ·
 [Windows, Linux and FreeBSD examples](#build-the-same-worker-for-windows-linux-and-freebsd)
