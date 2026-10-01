@@ -6,20 +6,20 @@ Run a Go binary embedded in a native macOS SwiftUI app. The Go binary and the Sw
 
 [![Go reference](https://pkg.go.dev/badge/github.com/imclaren/vero.svg)](https://pkg.go.dev/github.com/imclaren/vero)
 
-| Operating system | Builds on a Mac | Working examples |
-|---|---|:---:|
-| **macOS** — arm64, amd64 | yes | <a href="#run-the-macos-example"><img src="docs/screenshots/macos.gif" width="340"></a><br><sub>SwiftUI, in the menu bar</sub> |
-| **Windows** — arm64, amd64, 386 | yes | <a href="example/wpf-app"><img src="docs/screenshots/windows.gif" width="340"></a><br><sub>WPF</sub> |
-| **Linux** — 13 architectures | yes | <a href="example/gtk-app"><img src="docs/screenshots/linux.gif" width="340"></a><br><sub>GTK4</sub> |
-| **FreeBSD** — amd64, arm64 | yes | <a href="example/gtk-app"><img src="docs/screenshots/freebsd.gif" width="340"></a><br><sub>GTK4, the Linux example unchanged</sub> |
-| **OpenBSD** — 6 architectures | yes | No example yet. The GTK4 app should run here unchanged, as it does on FreeBSD, but nobody has set up an OpenBSD VM to show it |
-| **NetBSD** — 4 architectures | yes | No example yet, for the same reason as OpenBSD |
-| **DragonFly** — amd64 | yes | No example yet. DragonFly runs on x86 only, and an x86 VM has to be emulated on an Apple Silicon Mac, which is too slow to be worth filming |
-| **illumos** — amd64 | yes | No example yet, and x86 only, like DragonFly |
-| **Android** — arm64 | yes | No example yet. The worker runs, but no Android app has been written; a Kotlin one would start it the way the Python and C# apps do |
-| **Solaris, AIX, Plan 9** | no | Cannot be built. vero keeps one worker per application with `flock`, which these systems do not have. Using `fcntl` instead is about thirty lines of work |
-| **iOS** | no | Cannot be built. iOS does not let an app start another program, so the Go code would have to be compiled into the app, giving up the restarts that come with running it separately |
-| **wasm** | no | Cannot be built. There are no processes in a browser or in WASI, so there is nothing to start and nothing to supervise |
+| Operating system | Builds on a Mac | Example | What is there, and what it would take |
+|---|---|:---:|---|
+| **macOS** — arm64, amd64 | yes | <a href="#run-the-macos-example"><img src="docs/screenshots/macos.gif" width="300"></a> | SwiftUI, in the menu bar. The only platform where the Go code is compiled into the app rather than started beside it |
+| **Windows** — arm64, amd64, 386 | yes | <a href="example/wpf-app"><img src="docs/screenshots/windows.gif" width="300"></a> | WPF, run in a Windows VM by `scripts/run-windows.sh` |
+| **Linux** — 13 architectures | yes | <a href="example/gtk-app"><img src="docs/screenshots/linux.gif" width="300"></a> | GTK4, run in a Docker container by `scripts/run-linux.sh` |
+| **FreeBSD** — amd64, arm64 | yes | <a href="example/gtk-app"><img src="docs/screenshots/freebsd.gif" width="300"></a> | The same GTK4 app, unchanged, in a VM run by `scripts/run-freebsd.sh` |
+| **OpenBSD** — 6 architectures | yes | — | The GTK4 app should run unchanged. There is no script for it because OpenBSD publishes an installer rather than a ready-made disk image, so it needs an unattended install driven by an `auto_install` response file before packages can go on. A day's work |
+| **NetBSD** — 4 architectures | yes | — | As OpenBSD, but easier: NetBSD does publish a bootable arm64 image, so a script would download it, enable `sshd`, and install GTK4 with `pkgin`. The nearest of these to being done |
+| **DragonFly** — amd64 | yes | — | No script, because DragonFly runs on x86 only. An x86 VM is emulated rather than virtualised on an Apple Silicon Mac, which makes it minutes-per-boot slow |
+| **illumos** — amd64 | yes | — | As DragonFly: x86 only, so too slow to be worth scripting here |
+| **Android** — arm64 | yes | — | No app written. The worker would ship in `jniLibs` and be started from `nativeLibraryDir`, with no JNI: Kotlin would write and read JSON, exactly as Python and C# do |
+| **Solaris, AIX, Plan 9** | not yet | — | A small change to vero. It keeps one worker per application with `flock`, which these do not have; `fcntl` locking is about thirty lines and they would build |
+| **iOS** | not yet | — | A bigger change to vero. iOS allows the Go archive to be compiled in, as macOS does, but forbids starting another program - so it would need an in-process mode, where the worker runs on a thread and the restarts have nothing to restart |
+| **wasm** | not yet | — | A different program. There are no processes in a browser or in WASI, so the pipe would have to become a Web Worker and `postMessage`, and supervision would mean nothing |
 
 [macOS example](#run-the-macos-example) ·
 [Windows, Linux and FreeBSD examples](#build-the-same-worker-for-windows-linux-and-freebsd)
