@@ -12,18 +12,23 @@ Use the same Go backend to communicate over a pipe with native frontends for:
 
 [![Go reference](https://pkg.go.dev/badge/github.com/imclaren/vero.svg)](https://pkg.go.dev/github.com/imclaren/vero)
 
-<table>
-<tr>
-<td align="center" valign="top" width="25%"><a href="#run-the-macos-example"><img src="docs/screenshots/macos.gif" width="100%"></a><br><sub><b>macOS</b> — SwiftUI, in the menu bar</sub></td>
-<td align="center" valign="top" width="25%"><a href="example/wpf-app"><img src="docs/screenshots/windows.gif" width="100%"></a><br><sub><b>Windows</b> — WPF</sub></td>
-<td align="center" valign="top" width="25%"><a href="example/gtk-app"><img src="docs/screenshots/linux.gif" width="100%"></a><br><sub><b>Linux</b> — GTK4</sub></td>
-<td align="center" valign="top" width="25%"><a href="#build-the-same-worker-for-windows-linux-and-freebsd"><img src="docs/screenshots/freebsd.gif" width="100%"></a><br><sub><b>FreeBSD</b> — GTK4, unchanged</sub></td>
-</tr>
-</table>
+| Operating system | Builds on a Mac | The example running on it |
+|---|---|---|
+| **macOS** — arm64, amd64 | yes | <a href="#run-the-macos-example"><img src="docs/screenshots/macos.gif" width="340"></a><br><sub>SwiftUI, in the menu bar</sub> |
+| **Windows** — arm64, amd64, 386 | yes | <a href="example/wpf-app"><img src="docs/screenshots/windows.gif" width="340"></a><br><sub>WPF</sub> |
+| **Linux** — 13 architectures | yes | <a href="example/gtk-app"><img src="docs/screenshots/linux.gif" width="340"></a><br><sub>GTK4</sub> |
+| **FreeBSD** — amd64, arm64 | yes | <a href="example/gtk-app"><img src="docs/screenshots/freebsd.gif" width="340"></a><br><sub>GTK4, the Linux example unchanged</sub> |
+| **OpenBSD** — 6 architectures | yes | not recorded: the GTK example would run here too, but no VM is scripted for it yet |
+| **NetBSD** — 4 architectures | yes | not recorded, as above |
+| **DragonFly** — amd64 | yes | not recorded, and slow to try: it is x86 only, so it emulates rather than virtualises on an Apple Silicon Mac |
+| **illumos** — amd64 | yes | not recorded, and x86 only, as above |
+| **Android** — arm64 | yes | no frontend written: a Kotlin app would start the worker from its library directory, with no JNI |
+| **Solaris, AIX, Plan 9** | no | the single-worker lock uses `flock`, which these do not provide; about thirty lines with `fcntl` would fix it |
+| **iOS** | no | the sandbox forbids starting another process, so the worker would have to be compiled into the app and lose its supervision |
+| **wasm** | no | no processes at all, so there is nothing to start and nothing to supervise |
 
 [macOS example](#run-the-macos-example) ·
-[Windows, Linux and FreeBSD examples](#build-the-same-worker-for-windows-linux-and-freebsd) ·
-[What runs where](#what-runs-where)
+[Windows, Linux and FreeBSD examples](#build-the-same-worker-for-windows-linux-and-freebsd)
 
 If you already have Xcode and Go installed, the example below builds a running
 app in about 5 minutes.
@@ -290,38 +295,6 @@ installs what is needed to run them and builds everything, and
 thirteen targets across macOS, Windows, Linux, FreeBSD, OpenBSD, NetBSD,
 DragonFly and illumos. Anywhere Go produces an executable, vero runs - the Go
 API needs nothing else, and the Python and C# bindings need only the worker.
-
-## What runs where
-
-vero is two programs: the Go **worker**, and the native app that drives it.
-They are joined in one of two ways.
-
-- **Compiled in.** The Go code is built as a C archive and linked into the
-  app, so both halves are one executable. This is what the Swift package does
-  on macOS, and it needs a platform Go can build a C archive for.
-- **Started as a process.** The app runs the worker as an ordinary program and
-  talks to it over a pipe. The worker supervises itself - it launches a second
-  copy to do the work and restarts it if it dies - so the app only has to
-  write and read JSON. This is what the Python and C# bindings do, and it
-  needs nothing but a worker binary.
-
-The second way is why the list is long: Go builds an executable for 35 of its
-ports, while the C library needed by the first way exists on a handful.
-
-| Operating system | Can you build the worker? | Is there a working example? | What that means in practice |
-|---|---|---|---|
-| macOS | yes - arm64, amd64 | yes, SwiftUI in the menu bar | the only platform where Go is compiled into the app rather than started beside it |
-| Windows | yes - arm64, amd64, 386 | yes, WPF | the C# app starts `worker.exe`; nothing is loaded, so no DLL to ship or match to the architecture |
-| Linux | yes - 13 architectures | yes, GTK4 | the Python app starts the worker; releases carry amd64 and arm64 |
-| FreeBSD | yes - amd64, arm64 | yes, the Linux GTK4 example unchanged | proof that starting the worker is enough: Go cannot build its C library here at all |
-| OpenBSD | yes - 6 architectures | not written | a GTK or Qt app would work the same way; nothing in vero is Linux-specific |
-| NetBSD | yes - 4 architectures | not written | as above |
-| DragonFly | yes - amd64 | not written | as above |
-| illumos | yes - amd64 | not written | as above |
-| Android | yes - arm64 | not written | a Kotlin app could start the worker from its library directory, with no JNI |
-| Solaris, AIX, Plan 9 | no | - | vero's single-worker lock uses `flock`, which these do not provide. About thirty lines with `fcntl` would fix it |
-| iOS | no | - | the sandbox forbids starting another process, so an iOS app would have to compile the worker in and lose the supervision that comes with running it separately |
-| wasm | no | - | there are no processes at all, so neither way of joining the halves exists |
 
 ## Licence
 
