@@ -39,6 +39,11 @@ and no shared library.
 There is no Swift test target: `swift build` is there to catch a package that
 no longer compiles.
 
+The suite includes one test that is about the README rather than the code:
+it fails when `go tool dist list` names a target the table at the top does
+not. Go adds ports, and that table is the only place the list is written
+down.
+
 Before sending a change, `gofmt -l .` should print nothing and `go vet ./...`
 should be quiet.
 
