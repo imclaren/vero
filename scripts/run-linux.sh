@@ -24,13 +24,12 @@ done
 
 docker info >/dev/null 2>&1 || { echo "docker is not running - try: colima start" >&2; exit 1; }
 
-echo "building the Linux library and worker"
-# c-shared on macOS emits a Mach-O dylib, so this part has to happen on Linux.
-docker run --rm -v "$ROOT":/src:ro -v "$ROOT/example/gtk-app":/out -w /src \
-    -e GOCACHE=/tmp/gocache -e GOPATH=/tmp/go -e GOTOOLCHAIN=auto \
-    golang:1.24-bookworm \
-    sh -c 'CGO_ENABLED=1 go build -buildmode=c-shared -o /out/libvero.so ./cshim &&
-           CGO_ENABLED=0 go build -o /out/worker ./example/worker'
+echo "building the Linux worker"
+# Pure Go, so it cross-compiles here: the worker hosts itself, and the Python
+# binding spawns it rather than loading a C library.  There is nothing left
+# that has to be built on Linux.
+CGO_ENABLED=0 GOOS=linux GOARCH=arm64 \
+    go build -o "$ROOT/example/gtk-app/worker" ./example/worker
 
 echo "building $IMAGE"
 docker build -q -t "$IMAGE" -f scripts/linux.Dockerfile scripts >/dev/null 2>&1

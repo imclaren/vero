@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -85,6 +86,12 @@ func host() {
 	})
 	defer sup.Stop()
 
+	// Another process already holds this worker.  Say so now, rather than
+	// leaving a frontend waiting for something that will never start.
+	if err := sup.Err(); err != nil {
+		write(failed(0, err))
+	}
+
 	sc := bufio.NewScanner(os.Stdin)
 	sc.Buffer(make([]byte, 0, 64<<10), MaxLineSize)
 
@@ -125,7 +132,10 @@ func answer(sup *Supervisor, req Envelope) Envelope {
 	} else {
 		reply, err = sup.Request(context.Background(), req.Payload)
 	}
-	return replyEnvelope(req.ID, reply, err)
+	if err != nil {
+		return failed(req.ID, err)
+	}
+	return Envelope{Kind: kindReply, ID: req.ID, Payload: reply}
 }
 
 // control answers the questions about the worker rather than to it.
@@ -141,16 +151,40 @@ func control(sup *Supervisor, req Envelope) Envelope {
 			"state": sup.State().String(), "restarts": sup.Restarts(),
 		})
 		if err != nil {
-			return replyEnvelope(req.ID, nil, err)
+			return failed(req.ID, err)
 		}
 		return Envelope{Kind: kindReply, ID: req.ID, Payload: payload}
 
 	case "stop":
-		return replyEnvelope(req.ID, nil, sup.Stop())
+		if err := sup.Stop(); err != nil {
+			return failed(req.ID, err)
+		}
+		return Envelope{Kind: kindReply, ID: req.ID}
 
 	default:
-		return replyEnvelope(req.ID, nil, fmt.Errorf("vero: no control request named %q", req.Name))
+		return failed(req.ID, fmt.Errorf("vero: no control request named %q", req.Name))
 	}
+}
+
+// failed answers with an error and the code that tells a frontend what to do
+// about it: show a refusal, wait out a restart, or offer to switch to the
+// copy of the application that is already running.
+//
+// A refusal carries the worker's own words.  The wrapping Go adds on the way
+// here is for Go's benefit and would only be noise in a menu.
+func failed(id uint64, err error) Envelope {
+	e := Envelope{Kind: kindReply, ID: id, Error: err.Error(), Code: "failed"}
+
+	var remote *RemoteError
+	switch {
+	case errors.As(err, &remote):
+		e.Error, e.Code = remote.Message, "refused"
+	case errors.Is(err, ErrAlreadyRunning):
+		e.Code = "already_running"
+	case errors.Is(err, ErrWorkerNotRunning):
+		e.Code = "not_running"
+	}
+	return e
 }
 
 // without returns env with every setting of name removed.

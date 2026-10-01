@@ -2,13 +2,12 @@
 
     cd bindings/python && python3 -m unittest -v
 
-Builds the shared library and the example worker first, so what is exercised
-is the whole stack: ctypes, the C shim, the supervisor, and a worker that is
-genuinely a separate process.
+Builds the example worker first, so what is exercised is the whole stack: the
+host a worker becomes when VERO_HOST is set, the supervisor inside it, and a
+worker that is genuinely a separate process.
 """
 
 import os
-import platform
 import subprocess
 import sys
 import tempfile
@@ -20,17 +19,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from vero import NotRunning, Refused, Vero  # noqa: E402
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-SUFFIX = ".dylib" if platform.system() == "Darwin" else ".so"
 
 
 def build(tmp: str) -> tuple[str, str]:
-    library = os.path.join(tmp, "libvero" + SUFFIX)
     worker = os.path.join(tmp, "worker")
-    env = dict(os.environ, CGO_ENABLED="1")
-    subprocess.run(
-        ["go", "build", "-buildmode=c-shared", "-o", library, "./cshim"],
-        cwd=REPO, env=env, check=True,
-    )
     subprocess.run(["go", "build", "-o", worker, "./bindings/python/testdata/jobsworker"],
                    cwd=REPO, check=True)
     router = os.path.join(tmp, "routerworker")
@@ -38,17 +30,17 @@ def build(tmp: str) -> tuple[str, str]:
         ["go", "build", "-o", router, "./bindings/python/testdata/routerworker"],
         cwd=REPO, check=True,
     )
-    return library, worker, router
+    return worker, router
 
 
 class VeroTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.tmp = tempfile.mkdtemp()
-        cls.library, cls.worker, cls.router = build(cls.tmp)
+        cls.worker, cls.router = build(cls.tmp)
 
     def setUp(self) -> None:
-        self.vero = Vero(self.library, self.worker)
+        self.vero = Vero(self.worker)
         self.addCleanup(self.vero.stop)
         deadline = time.time() + 5
         while time.time() < deadline:
@@ -136,12 +128,10 @@ class VeroTests(unittest.TestCase):
 
 class NoWorkerTests(unittest.TestCase):
     def test_a_missing_worker_reports_not_running(self) -> None:
-        tmp = tempfile.mkdtemp()
-        library, _, _ = build(tmp)
-        vero = Vero(library, "/nonexistent/worker")
-        self.addCleanup(vero.stop)
-        with self.assertRaises(NotRunning):
-            vero.send({"type": "status"})
+        with self.assertRaises((OSError, NotRunning)):
+            # Nothing to host and nothing to supervise: the spawn itself
+            # fails, which is a clearer answer than a wait that never ends.
+            Vero("/nonexistent/worker").send({"type": "status"})
 
 
 class NamedRouteTests(unittest.TestCase):
@@ -150,10 +140,10 @@ class NamedRouteTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.tmp = tempfile.mkdtemp()
-        cls.library, _, cls.router = build(cls.tmp)
+        _, cls.router = build(cls.tmp)
 
     def setUp(self) -> None:
-        self.vero = Vero(self.library, self.router)
+        self.vero = Vero(self.router)
         self.addCleanup(self.vero.stop)
         deadline = time.time() + 5
         while time.time() < deadline:

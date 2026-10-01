@@ -93,8 +93,7 @@ class Application(Gtk.Application):
 
     def do_activate(self) -> None:
         if self.vero is None:
-            self.vero = Vero(os.path.join(HERE, "libvero.so"),
-                             os.path.join(HERE, "worker"))
+            self.vero = Vero(os.path.join(HERE, "worker"))
         Window(self, self.vero).present()
 
     def do_shutdown(self) -> None:

@@ -34,6 +34,12 @@ type Envelope struct {
 
 	// Error is set instead of Payload when a handler returned an error.
 	Error string `json:"e,omitempty"`
+
+	// Code classifies an error for a frontend that cannot match on English:
+	// "refused", "not_running", "already_running" or "failed".  A host sets
+	// it; a worker does not, because the supervisor on the other side of it
+	// has the Go errors themselves.
+	Code string `json:"c,omitempty"`
 }
 
 const (

@@ -1,10 +1,10 @@
 #!/bin/sh
-# Builds the shared library and the worker. Run from this directory.
+# Builds the worker. Run from this directory.
+#
+# There is no shared library to build: the worker supervises itself, and the
+# Python binding spawns it rather than loading one.
 set -e
 cd "$(dirname "$0")"
-
-echo "building libvero.so"
-CGO_ENABLED=1 go build -buildmode=c-shared -o libvero.so ../../cshim
 
 echo "building the worker"
 go build -o worker ../worker
