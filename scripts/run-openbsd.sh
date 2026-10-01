@@ -112,6 +112,11 @@ python3 -m http.server "$HTTP_PORT" --bind 0.0.0.0 --directory "$VM" >/dev/null 
 HTTP=$!
 
 boot() {   # $1: extra -drive for the installer
+    # No GPU here, unlike the other VMs: OpenBSD moves its console to the
+    # framebuffer the moment it finds one, and then nothing more arrives on
+    # the serial line this script drives the installer over.  Nothing needs a
+    # display anyway - the X server inside the guest is Xvnc.
+    #
     # ipv6=off: qemu offers an IPv6 default route that goes nowhere, and a
     # resolver that prefers AAAA records then waits for a timeout on every
     # fetch - which makes pkg_add look like it has hung.
@@ -121,11 +126,11 @@ boot() {   # $1: extra -drive for the installer
         -drive if=pflash,format=raw,file="$VM/vars.fd" \
         -drive if=virtio,format=qcow2,file="$VM/disk.qcow2" \
         $1 \
-        -device virtio-gpu-pci -device qemu-xhci -device usb-kbd -device usb-tablet \
         -netdev "user,id=n0,ipv6=off,hostfwd=tcp::$SSH_PORT-:22,hostfwd=tcp::$PORT-:5900" \
         -device virtio-net-pci,netdev=n0 \
         -display none \
-        -serial unix:"$VM/console.sock",server,nowait \
+        -chardev socket,id=con,path="$VM/console.sock",server=on,wait=off,logfile="$VM/console.log" \
+        -serial chardev:con \
         -pidfile "$VM/qemu.pid" -daemonize
 }
 
@@ -144,7 +149,7 @@ trap cleanup EXIT INT TERM
 
 if [ "$INSTALL" = yes ]; then
     echo "installing OpenBSD (once; about ten minutes)"
-    boot "-drive if=virtio,format=raw,file=$VM/install$VERSION.img"
+    boot "-drive if=virtio,format=raw,readonly=on,file=$VM/install$VERSION.img"
     python3 - "$VM/console.sock" "$HTTP_PORT" <<'PY'
 import socket, sys, time
 
@@ -189,15 +194,16 @@ until("CONGRATULATIONS", 1800)
 print("    installed; rebooting")
 until("login:", 600)
 PY
-    # It reboots into the installed system by itself; the installer image is
-    # not attached again, so nothing can boot from it by accident.
-    kill "$(cat "$VM/qemu.pid")" 2>/dev/null || true
-    sleep 3
-    rm -f "$VM/qemu.pid" "$VM/console.sock"
+    # It reboots into the installed system by itself, and that is the VM
+    # this script goes on to use.  Not killed and started again: the system
+    # has just written its ssh host keys, and killing qemu before they reach
+    # the disk leaves files of the right length with nothing in them - which
+    # sshd reports three steps later as "no hostkeys available", nowhere near
+    # the cause.
+else
+    echo "booting the VM"
+    boot ""
 fi
-
-echo "booting the VM"
-boot ""
 
 printf "waiting for ssh"
 n=0

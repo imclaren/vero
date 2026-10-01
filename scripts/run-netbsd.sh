@@ -96,7 +96,8 @@ qemu-system-aarch64 \
     -netdev "user,id=n0,ipv6=off,hostfwd=tcp::$SSH_PORT-:22,hostfwd=tcp::$PORT-:5900" \
     -device virtio-net-pci,netdev=n0 \
     -display none \
-    -serial unix:"$VM/console.sock",server,nowait \
+    -chardev socket,id=con,path="$VM/console.sock",server=on,wait=off,logfile="$VM/console.log" \
+    -serial chardev:con \
     -pidfile "$VM/qemu.pid" -daemonize
 
 cleanup() {
