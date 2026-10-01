@@ -20,10 +20,10 @@ Run a Go binary embedded in a native macOS SwiftUI app. The Go binary and the Sw
 | **Solaris, AIX, Plan 9** | yes | — | Builds; not run. Nothing the worker needs is missing here. No example frontend covers these three, so the GUI would be yours to write. |
 | **iOS** | the Go side does | — | Builds; not run. An app may not start a program on iOS, so the worker is compiled into the app instead, on a goroutine of its own, talking over a pipe in memory. The Swift half is unwritten. |
 | **wasm** — WASI (`wasip1/wasm`) | yes | — | Builds and runs, without a GUI. A release ships `worker-wasip1-wasm.wasm`, which `wasmtime` runs; the frontend is whatever starts it. One request at a time: WASI has no threads. |
-| **wasm** — browser (`js/wasm`) | yes | — | Builds and runs. A page may not start a program, so the worker is compiled into the same wasm as the UI, as on iOS. Tested under `node`, which loads the build a page would; no browser app is written. |
+| **wasm** — browser (`js/wasm`) | yes | <a href="example/web-app"><img src="docs/screenshots/web.gif" width="300"></a> | Builds and runs. A page may not start a program, so the worker is compiled into the same wasm as the UI, as on iOS. `scripts/run-web.sh` builds it and opens it. |
 
 [macOS example](#run-the-macos-example) ·
-[Windows, Linux and FreeBSD examples](#build-the-same-worker-for-windows-linux-and-freebsd)
+[Windows, Linux, FreeBSD and browser examples](#build-the-same-worker-for-windows-linux-freebsd-and-the-browser)
 
 If you already have Xcode and Go installed, the example below builds a running
 app in about 5 minutes.
@@ -270,16 +270,19 @@ Press Cmd-R in Xcode. The icon appears in the menu bar, and spins while the
 worker has jobs in flight. Click the menu bar icon to see progress changes.
 Click the button on a row to restart that job.
 
-## Build the same worker for Windows, Linux and FreeBSD
+## Build the same worker for Windows, Linux, FreeBSD and the browser
 
 All of them can be built on your Mac, with no C toolchain: the worker is pure
-Go, and the frontend spawns it rather than loading a library.
+Go, and the frontend spawns it rather than loading a library.  The browser is
+the exception, since a page may not start a program - there the worker is
+compiled into the page's own wasm, and runs on a goroutine instead.
 
 | | | |
 |---|---|---|
 | [example/wpf-app](example/wpf-app) | Windows, WPF | `./scripts/run-windows.sh` |
 | [example/gtk-app](example/gtk-app) | Linux, GTK4 | `./scripts/run-linux.sh` |
 | [example/gtk-app](example/gtk-app) | FreeBSD, GTK4 - the same app, unchanged | `./scripts/run-freebsd.sh` |
+| [example/web-app](example/web-app) | A browser, in wasm - the worker is compiled in | `./scripts/run-web.sh` |
 
 To see the app running on three operating systems at once, `./scripts/setup.sh`
 installs what is needed to run them and builds everything, and

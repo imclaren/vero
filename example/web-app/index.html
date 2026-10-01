@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>vero</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font: 13px -apple-system, system-ui, sans-serif;
+    margin: 0; padding: 16px; width: 380px;
+  }
+  .row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  button { font: inherit; }
+  .name { white-space: nowrap; }
+  .phase { white-space: nowrap; opacity: 0.6; }
+  .bar {
+    flex: 1; height: 6px; min-width: 40px; border-radius: 3px;
+    background: rgba(128, 128, 128, 0.3); overflow: hidden;
+  }
+  .fill { height: 100%; width: 0; background: #3478f6; transition: width 0.2s; }
+</style>
+</head>
+<body>
+<div id="jobs"></div>
+<script src="wasm_exec.js"></script>
+<script>
+  const go = new Go();
+  WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject)
+    .then(r => go.run(r.instance));
+</script>
+</body>
+</html>
