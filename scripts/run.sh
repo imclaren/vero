@@ -5,6 +5,8 @@
 #   ./scripts/run.sh                               # every time after
 #
 # macOS runs natively, Linux in a container shown over VNC, and Windows in a VM.
+# FreeBSD has a script of its own, scripts/run-freebsd.sh, because its VM takes
+# a few minutes to set itself up the first time.
 # On a fresh clone it runs scripts/setup.sh for you first.
 set -e
 
