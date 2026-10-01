@@ -26,10 +26,28 @@ command -v go >/dev/null 2>&1 || {
     exit 1
 }
 
-# Docker runs the Linux example; qemu runs the Windows and FreeBSD ones.
-# Nothing here is needed to *build*: the worker supervises itself, so every
-# target but macOS is a plain Go cross-compile with no C toolchain at all.
-for pair in colima:colima docker:docker qemu-system-aarch64:qemu; do
+# Xcode, for the macOS and iOS examples.  Not installed here: it comes from
+# the App Store, and a 15GB download should be someone's decision.
+xcrun --sdk macosx --show-sdk-path >/dev/null 2>&1 || {
+    echo "Xcode is missing: install it from the App Store, then run" >&2
+    echo "  sudo xcode-select -s /Applications/Xcode.app" >&2
+    echo "The macOS and iOS examples need it; the rest of this will work." >&2
+}
+
+# What each example needs to *run*, which is not the same as what it needs to
+# build: the worker supervises itself, so every target but macOS is a plain Go
+# cross-compile with no C toolchain at all.
+#
+#   colima, docker        Linux, in a container
+#   qemu                  Windows, FreeBSD, OpenBSD, NetBSD and Plan 9, in VMs
+#   dotnet                building the WPF application for Windows
+#   wasmtime              running the WASI worker, and its test
+#
+# Not here: Xcode, which macOS and iOS need and which comes from the App
+# Store, and the Android SDK, which is 5GB and has scripts/setup-android.sh
+# to itself.
+for pair in colima:colima docker:docker qemu-system-aarch64:qemu \
+            dotnet:dotnet wasmtime:wasmtime; do
     cmd=${pair%%:*}; formula=${pair#*:}
     command -v "$cmd" >/dev/null 2>&1 && continue
     echo "    installing $formula"
