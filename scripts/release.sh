@@ -80,7 +80,8 @@ for t in windows/amd64 windows/arm64 \
          linux/amd64 linux/arm64 \
          freebsd/amd64 freebsd/arm64 \
          openbsd/amd64 openbsd/arm64 \
-         netbsd/amd64 dragonfly/amd64 illumos/amd64; do
+         netbsd/amd64 dragonfly/amd64 illumos/amd64 \
+         solaris/amd64 aix/ppc64 plan9/amd64; do
     os=${t%/*}; arch=${t#*/}
     ext=""; format=tar.gz
     [ "$os" = windows ] && { ext=".exe"; format=zip; }

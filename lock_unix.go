@@ -1,4 +1,4 @@
-//go:build !windows
+//go:build !windows && !solaris && !aix && !plan9
 
 package vero
 

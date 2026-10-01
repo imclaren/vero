@@ -41,7 +41,10 @@ freebsd/amd64 freebsd/arm64
 openbsd/amd64 openbsd/arm64
 netbsd/amd64
 dragonfly/amd64
-illumos/amd64"}
+illumos/amd64
+solaris/amd64
+aix/ppc64
+plan9/amd64"}
 
 echo "the worker: no C toolchain needed for any of these"
 for t in $TARGETS; do

@@ -52,8 +52,13 @@ func (s *Supervisor) acquireLock() error {
 	}
 
 	path := lockPath(key)
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
+	f, err := openLockFile(path)
 	if err != nil {
+		// On Plan 9 the open is the lock, so this is where a second copy of
+		// an application finds out, rather than at lockFile below.
+		if errors.Is(err, ErrAlreadyRunning) {
+			return err
+		}
 		return fmt.Errorf("cannot open the worker lock: %w", err)
 	}
 	if err := lockFile(f); err != nil {
