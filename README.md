@@ -18,7 +18,7 @@ Run a Go binary embedded in a native macOS SwiftUI app. The Go binary and the Sw
 | **illumos** — amd64 | yes | — | As DragonFly: x86 only, and slow to emulate |
 | **Android** — arm64 | yes | — | No UI app written. The worker would ship in `jniLibs` and be started from `nativeLibraryDir`, with no JNI: Kotlin would write and read JSON, exactly as Python and C# do |
 | **Solaris, AIX, Plan 9** | yes | — | The worker builds but is untested.  Plan 9 can be run on a Mac, under qemu |
-| **iOS** | not yet | — | There is no way to run the worker without starting a process, which iOS forbids. |
+| **iOS** | no | — | There is no way to run the worker without starting a process, which iOS forbids. |
 | **wasm** | not yet | — | **What is missing:** a transport, not a compiler. Stub the lock - nothing else can hold it, so `lockFile` returning nil is correct - and the whole of vero compiles for `GOOS=js GOARCH=wasm`, `os/exec` included. It is at runtime that starting a process fails, because a browser has none. **The change:** the same `In`/`Out` hook iOS needs, with the pipes carrying envelopes over `postMessage`: the Go worker in a Web Worker, the frontend on the page, and no supervision, since there is no second process to lose. **To see it work:** `wasm_exec.js`, `python3 -m http.server`, and a page that sends one request and prints the reply |
 
 [macOS example](#run-the-macos-example) ·
