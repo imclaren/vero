@@ -263,18 +263,26 @@ Press Cmd-R in Xcode. The icon appears in the menu bar, and spins while the
 worker has jobs in flight. Click the menu bar icon to see progress changes.
 Click the button on a row to restart that job.
 
-## Build the same worker for Windows and Linux
+## Build the same worker for Windows, Linux and FreeBSD
 
-Both can be built on your Mac:
+All of them can be built on your Mac, with no C toolchain: the worker is pure
+Go, and the frontend spawns it rather than loading a library.
 
 | | |
 |---|---|
 | [example/wpf-app](example/wpf-app) | Windows, WPF |
 | [example/gtk-app](example/gtk-app) | Linux, GTK4 |
+| [example/gtk-app](example/gtk-app) | FreeBSD, GTK4 - the same app, unchanged |
 
-To see the app running on all three operating systems at once, `./scripts/setup.sh` installs the toolchains
-for every platform and builds everything, and `./scripts/run.sh` then opens the
-three examples together on your Mac.
+To see the app running on three operating systems at once, `./scripts/setup.sh`
+installs what is needed to run them and builds everything, and
+`./scripts/run.sh` then opens macOS, Linux and Windows together on your Mac.
+`./scripts/run-freebsd.sh` opens FreeBSD in a VM of its own.
+
+`./scripts/build-all.sh` goes wider than the examples: it builds a worker for
+thirteen targets across macOS, Windows, Linux, FreeBSD, OpenBSD, NetBSD,
+DragonFly and illumos. Anywhere Go produces an executable, vero runs - the Go
+API needs nothing else, and the Python and C# bindings need only the worker.
 
 ## Licence
 

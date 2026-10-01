@@ -14,30 +14,21 @@ git clone https://github.com/imclaren/vero && cd vero
 This builds the app above outside the repository, so what you end up with is
 yours to change. It drives the same worker as the macOS app.
 
-### 1. Install colima and Docker on your Mac
+### 1. Nothing to install
 
-`libvero.so` has to be compiled on Linux, so the next step builds it in a
-container. Everything else runs on your Mac.
-
-```bash
-brew install colima docker && colima start
-```
+The worker is pure Go, so it cross-compiles on your Mac, and there is no
+shared library to build on Linux at all. Docker only comes into it at the end,
+to *run* the example without a Linux machine.
 
 ### 2. Build the go worker
 
-The worker is [example/worker/main.go](../worker/main.go), and `libvero.so` is the C shim the
-app loads. Neither needs the repository cloned, but the library has to be
-compiled on Linux, so that part happens in a container:
+The worker is [example/worker/main.go](../worker/main.go), and it does not need
+the repository cloned:
 
 ```bash
 mkdir -p ~/vero-example/gtk-app && cd ~/vero-example/gtk-app
 go mod init gtk-app
 go get github.com/imclaren/vero
-
-docker run --rm -v "$PWD":/src -w /src \
-    -e GOCACHE=/tmp/gocache -e GOPATH=/tmp/go -e GOTOOLCHAIN=auto \
-    golang:1.24-bookworm \
-    sh -c 'CGO_ENABLED=1 go build -buildmode=c-shared -o libvero.so github.com/imclaren/vero/cshim'
 
 CGO_ENABLED=0 GOOS=linux GOARCH=arm64 \
     go build -o worker github.com/imclaren/vero/example/worker
@@ -54,6 +45,11 @@ curl -O $base/bindings/python/vero.py
 curl -O $base/example/gtk-app/main.py
 chmod +x main.py
 ```
+
+`vero.py` starts the worker with `VERO_HOST=1`, which makes it supervise a
+second copy of itself and answer on its standard input and output. Restarts,
+backoff and the single-worker lock are all in the worker, so the binding is
+only the conversation.
 
 ### 4. Run it on your Mac (in a container)
 

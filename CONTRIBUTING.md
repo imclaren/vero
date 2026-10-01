@@ -15,10 +15,10 @@ swift build                                     # the Swift package compiles
 The Go tests take about half a minute, because several of them start a real
 worker process and wait on it.
 
-The Python tests build the shared library and the example worker first, then
-drive them through ctypes, so what they exercise is the whole stack rather than
-the binding on its own. That means they need a working cgo toolchain, and they
-take a few seconds longer than they look like they should.
+The Python tests build the example worker first and drive it through a host -
+a worker run with `VERO_HOST=1`, supervising a second copy of itself - so what
+they exercise is the whole stack rather than the binding on its own. No cgo,
+and no shared library.
 
 There is no Swift test target: `swift build` is there to catch a package that
 no longer compiles.
@@ -28,12 +28,19 @@ should be quiet.
 
 ## Building for every platform
 
-`scripts/build-all.sh` builds macOS, Windows and Linux into `dist/`, skipping
-any target whose toolchain is missing rather than failing the run.
-`scripts/setup.sh` installs those toolchains, and `scripts/run.sh` opens the
-three examples at once - macOS natively, Linux in a container over VNC, and
-Windows in a VM.
+`scripts/build-all.sh` builds a worker for thirteen targets across seven
+operating systems into `dist/`, plus the C archive the Swift package links.
+Everything but that archive is a plain cross-compile: the worker supervises
+itself, so a frontend spawns it rather than loading a library, and no foreign
+C toolchain is involved.
 
-The three example apps are [example/menubar-app](example/menubar-app),
+`scripts/setup.sh` installs Docker and qemu - needed to *run* the examples,
+not to build them - and `scripts/run.sh` opens three of them at once: macOS
+natively, Linux in a container over VNC, and Windows in a VM.
+`scripts/run-freebsd.sh` does the same for FreeBSD, in a VM of its own.
+
+The example apps are [example/menubar-app](example/menubar-app),
 [example/wpf-app](example/wpf-app) and [example/gtk-app](example/gtk-app), all
-driving the same worker in [example/worker](example/worker).
+driving the same worker in [example/worker](example/worker). The GTK one runs
+unchanged on FreeBSD, because nothing in it is Linux-specific once the shared
+library is gone.

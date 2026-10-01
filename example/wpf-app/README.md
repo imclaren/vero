@@ -14,31 +14,26 @@ git clone https://github.com/imclaren/vero && cd vero
 This builds the app above outside the repository, so what you end up with is
 yours to change. It drives the same worker as the macOS app.
 
-### 1. Install the .NET SDK and a Windows ARM64 C compiler on your Mac
+### 1. Install the .NET SDK on your Mac
 
 ```bash
 curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 8.0
 export PATH="$HOME/.dotnet:$PATH"
-
-mkdir -p ~/toolchains && cd ~/toolchains
-curl -L "$(curl -s https://api.github.com/repos/mstorsjo/llvm-mingw/releases/latest \
-    | grep -o 'https://[^"]*ucrt-macos-universal.tar.xz')" | tar -xJ
-mv llvm-mingw-*-ucrt-macos-universal llvm-mingw
 ```
+
+That is the only toolchain needed. The worker is pure Go, so it
+cross-compiles here, and there is no C library to build for Windows at all.
 
 ### 2. Build the go worker
 
-The worker is [example/worker/main.go](../worker/main.go), and `vero.dll` is the C shim the app
-loads. Neither needs the repository cloned:
+The worker is [example/worker/main.go](../worker/main.go), and it does not need
+the repository cloned:
 
 ```bash
 mkdir -p ~/vero-example/wpf-app && cd ~/vero-example/wpf-app
 go mod init wpf-app
 go get github.com/imclaren/vero
 
-CGO_ENABLED=1 GOOS=windows GOARCH=arm64 \
-    CC=$HOME/toolchains/llvm-mingw/bin/aarch64-w64-mingw32-clang \
-    go build -buildmode=c-shared -o vero.dll github.com/imclaren/vero/cshim
 CGO_ENABLED=0 GOOS=windows GOARCH=arm64 \
     go build -o worker.exe github.com/imclaren/vero/example/worker
 ```
@@ -58,12 +53,17 @@ for f in VeroExample.csproj App.xaml App.xaml.cs MainWindow.xaml MainWindow.xaml
 done
 ```
 
+`Vero.cs` starts `worker.exe` with `VERO_HOST=1`, which makes it supervise a
+second copy of itself and answer on its standard input and output. Restarts,
+backoff and the single-worker lock are all in the worker, so the binding is
+only the conversation.
+
 ### 4. Build the exe
 
 ```bash
 dotnet publish -c Release -r win-arm64 --self-contained \
     -p:EnableWindowsTargeting=true -o out
-cp vero.dll worker.exe out/
+cp worker.exe out/
 ```
 
 ### 5. Run it on your Mac (on a virtual machine)
@@ -86,4 +86,10 @@ vero/scripts/run-windows.sh --payload out
 ```
 
 Windows opens in a window on your Mac. In it, copy the `vero` folder from the
-CD drive to `C:\`, and run `VeroExample.exe` inside it.
+CD drive to your home directory, and run `VeroExample.exe` inside it.
+
+## See also
+
+- [example/wpf-app](.) - this app, finished and runnable
+- [README](../../README.md) - the same worker with a macOS SwiftUI app
+- [example/gtk-app](../gtk-app) - the same worker with a Linux GTK4 app
