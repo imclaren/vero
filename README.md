@@ -4,15 +4,9 @@
 
 Run a Go binary embedded in a native macOS SwiftUI app. The Go binary and the SwiftUI app communicate over a pipe.  
 
-Use the same Go backend to communicate over a pipe with native frontends for:
-- macOS
-- Windows
-- Linux
-- *BSD (FreeBSD, OpenBSD, NetBSD, DragonFly and illumos)
-
 [![Go reference](https://pkg.go.dev/badge/github.com/imclaren/vero.svg)](https://pkg.go.dev/github.com/imclaren/vero)
 
-| Operating system | Builds on a Mac | The example running on it |
+| Operating system | Builds on a Mac | Working examples |
 |---|---|---|
 | **macOS** — arm64, amd64 | yes | <a href="#run-the-macos-example"><img src="docs/screenshots/macos.gif" width="340"></a><br><sub>SwiftUI, in the menu bar</sub> |
 | **Windows** — arm64, amd64, 386 | yes | <a href="example/wpf-app"><img src="docs/screenshots/windows.gif" width="340"></a><br><sub>WPF</sub> |
