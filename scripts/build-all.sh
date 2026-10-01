@@ -44,12 +44,16 @@ dragonfly/amd64
 illumos/amd64
 solaris/amd64
 aix/ppc64
-plan9/amd64"}
+plan9/amd64
+wasip1/wasm"}
 
 echo "the worker: no C toolchain needed for any of these"
 for t in $TARGETS; do
     os=${t%/*}; arch=${t#*/}
-    ext=""; [ "$os" = windows ] && ext=".exe"
+    ext=""
+    [ "$os" = windows ] && ext=".exe"
+    # A WASI runtime is handed a file to run, and expects it to say what it is.
+    [ "$os" = wasip1 ] && ext=".wasm"
     CGO_ENABLED=0 GOOS=$os GOARCH=$arch \
         go build -o "$DIST/worker-$os-$arch$ext" "$WORKER"
     echo "  worker-$os-$arch$ext"

@@ -81,10 +81,12 @@ for t in windows/amd64 windows/arm64 \
          freebsd/amd64 freebsd/arm64 \
          openbsd/amd64 openbsd/arm64 \
          netbsd/amd64 dragonfly/amd64 illumos/amd64 \
-         solaris/amd64 aix/ppc64 plan9/amd64; do
+         solaris/amd64 aix/ppc64 plan9/amd64 \
+         wasip1/wasm; do
     os=${t%/*}; arch=${t#*/}
     ext=""; format=tar.gz
     [ "$os" = windows ] && { ext=".exe"; format=zip; }
+    [ "$os" = wasip1 ] && ext=".wasm"
     n="vero-$VERSION-$os-$arch"
     if stage "$n" "worker-$os-$arch$ext" "worker$ext"; then
         archive "$n" "$format"
