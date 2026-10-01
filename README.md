@@ -8,28 +8,29 @@ Run a Go binary embedded in a native macOS SwiftUI app. The Go binary and the Sw
 
 | Operating system | Example | Needs on your Mac | Building on macOS |
 |---|:---:|---|---|
-| **macOS** — arm64, amd64 | <a href="#run-the-macos-example"><img src="docs/screenshots/macos.gif" width="300"></a> | Xcode, from the App Store | Builds and runs. SwiftUI, in the menu bar, built by running [`example/menubar-app/build.sh`](example/menubar-app/build.sh).<br><br>If you already have Xcode and Go installed, the [macOS example](#run-the-macos-example) below builds a running app in about 5 minutes. |
-| **Windows** — arm64, amd64, 386 | <a href="example/wpf-app"><img src="docs/screenshots/windows.gif" width="300"></a> | qemu and the .NET SDK, from [`setup.sh`](scripts/setup.sh), and a Windows 11 ARM64 ISO | Builds and runs. WPF, started in a Windows VM by running [`scripts/run-windows.sh`](scripts/run-windows.sh). |
-| **Linux** — 13 architectures | <a href="example/gtk-app"><img src="docs/screenshots/linux.gif" width="300"></a> | Docker and colima, from [`setup.sh`](scripts/setup.sh) | Builds and runs. GTK4, started in a Docker container by running [`scripts/run-linux.sh`](scripts/run-linux.sh). |
-| **FreeBSD** — amd64, arm64 | <a href="example/gtk-app"><img src="docs/screenshots/freebsd.gif" width="300"></a> | qemu, from [`setup.sh`](scripts/setup.sh) | Builds and runs. GTK4, the same app as Linux, started in a VM by running [`scripts/run-freebsd.sh`](scripts/run-freebsd.sh). |
+| **macOS** — arm64, amd64 | <a href="#run-the-macos-example"><img src="docs/screenshots/macos.gif" width="300"></a> | Xcode, from the App Store; [`setup-macos.sh`](scripts/setup-macos.sh) checks | Builds and runs. SwiftUI, in the menu bar, built by running [`example/menubar-app/build.sh`](example/menubar-app/build.sh).<br><br>If you already have Xcode and Go installed, the [macOS example](#run-the-macos-example) below builds a running app in about 5 minutes. |
+| **Windows** — arm64, amd64, 386 | <a href="example/wpf-app"><img src="docs/screenshots/windows.gif" width="300"></a> | qemu, the .NET SDK and a Windows 11 ARM64 ISO, from [`setup-windows.sh`](scripts/setup-windows.sh) | Builds and runs. WPF, started in a Windows VM by running [`scripts/run-windows.sh`](scripts/run-windows.sh). |
+| **Linux** — 13 architectures | <a href="example/gtk-app"><img src="docs/screenshots/linux.gif" width="300"></a> | Docker and colima, from [`setup-linux.sh`](scripts/setup-linux.sh) | Builds and runs. GTK4, started in a Docker container by running [`scripts/run-linux.sh`](scripts/run-linux.sh). |
+| **FreeBSD** — amd64, arm64 | <a href="example/gtk-app"><img src="docs/screenshots/freebsd.gif" width="300"></a> | qemu, from [`setup-freebsd.sh`](scripts/setup-freebsd.sh) | Builds and runs. GTK4, the same app as Linux, started in a VM by running [`scripts/run-freebsd.sh`](scripts/run-freebsd.sh). |
 | **OpenBSD** — 6 architectures | — | — | Builds; no script to run included here. The GTK4 app should run unchanged. OpenBSD publishes an installer rather than a ready-made disk image, so a script would need an unattended install driven by an `auto_install` response file to build and display the UI. |
 | **NetBSD** — 4 architectures | — | — | Builds; no script to run included here. As OpenBSD, but easier: NetBSD does publish a bootable arm64 image, so a script would download it, enable `sshd`, and install GTK4 with `pkgin`. |
 | **DragonFly** — amd64 | — | — | Builds; no script to run included here. DragonFly runs on x86 only. An x86 VM is emulated rather than virtualised on an Apple Silicon Mac, which would take minutes-per-boot. |
 | **illumos** — amd64 | — | — | Builds; no script to run included here. As DragonFly: x86 only, and slow to emulate. |
 | **Android** — arm64 | <a href="example/android-app"><img src="docs/screenshots/android.gif" width="300"></a> | the Android SDK, a JDK and Kotlin, from [`setup-android.sh`](scripts/setup-android.sh) | Builds and runs in the emulator, built and started by running [`scripts/run-android.sh`](scripts/run-android.sh). |
-| **Plan 9** — amd64, 386 | <a href="scripts/run-plan9.sh"><img src="docs/screenshots/plan9.png" width="300"></a> | qemu, from [`setup.sh`](scripts/setup.sh) | Builds, and the tests pass on 9front under qemu: [`scripts/run-plan9.sh`](scripts/run-plan9.sh) boots it and runs them. No frontend - Plan 9 draws through libdraw, and we have not built a UI using libdraw at this stage. |
+| **Plan 9** — amd64, 386 | <a href="scripts/run-plan9.sh"><img src="docs/screenshots/plan9.png" width="300"></a> | qemu, from [`setup-plan9.sh`](scripts/setup-plan9.sh) | Builds, and the tests pass on 9front under qemu: [`scripts/run-plan9.sh`](scripts/run-plan9.sh) boots it and runs them. No frontend - Plan 9 draws through libdraw, and we have not built a UI using libdraw at this stage. |
 | **Solaris** — amd64, **AIX** — ppc64 | — | — | Builds but does not run. Solaris needs an Oracle licence to download and runs on x86, which this Mac emulates rather than virtualises; AIX needs IBM hardware. |
-| **iOS** | <a href="example/ios-app"><img src="docs/screenshots/ios.gif" width="300"></a> | Xcode, from the App Store | Builds and runs in the Simulator, not on a phone. An app may not start a program on iOS, so the worker is compiled into the app and runs on a goroutine. Built and launched by running [`scripts/run-ios.sh`](scripts/run-ios.sh). |
+| **iOS** | <a href="example/ios-app"><img src="docs/screenshots/ios.gif" width="300"></a> | Xcode and a Simulator runtime, from [`setup-ios.sh`](scripts/setup-ios.sh) | Builds and runs in the Simulator, not on a phone. An app may not start a program on iOS, so the worker is compiled into the app and runs on a goroutine. Built and launched by running [`scripts/run-ios.sh`](scripts/run-ios.sh). |
 | **wasm** — browser (`js/wasm`) | <a href="example/web-app"><img src="docs/screenshots/web.gif" width="300"></a> | a browser | Builds and runs. A page may not start a program, so the worker is compiled into the same wasm as the UI, as on iOS. Built and opened by running [`scripts/run-web.sh`](scripts/run-web.sh). |
-| **wasm** — WASI (`wasip1/wasm`) | — | wasmtime, from [`setup.sh`](scripts/setup.sh) | Builds and runs. [`scripts/build-all.sh`](scripts/build-all.sh) produces `worker-wasip1-wasm.wasm`, which a supervisor starts with `wasmtime` like any other worker - so the worker runs on a machine with no Go on it. WASI has no screen, so there is no window: the frontend is whatever program started the runtime. It answers one request at a time, because a read on standard input stops every other goroutine in the module. |
+| **wasm** — WASI (`wasip1/wasm`) | — | wasmtime, from [`setup-wasm.sh`](scripts/setup-wasm.sh) | Builds and runs. [`scripts/build-all.sh`](scripts/build-all.sh) produces `worker-wasip1-wasm.wasm`, which a supervisor starts with `wasmtime` like any other worker - so the worker runs on a machine with no Go on it. WASI has no screen, so there is no window: the frontend is whatever program started the runtime. It answers one request at a time, because a read on standard input stops every other goroutine in the module. |
 
 Go is needed for all of them, and nothing else is: the worker is pure Go, and
 every frontend starts it rather than linking it. The column above is what the
 *example* for that platform needs on top of that.
-[`./scripts/setup.sh`](scripts/setup.sh) installs all of it except Xcode and
-the Android SDK, and builds everything;
-[`./scripts/setup-android.sh`](scripts/setup-android.sh) does Android, which
-is 5GB on its own. Each example then has its own script, and
+Each platform has its own install script, listed above, and
+[`./scripts/setup.sh`](scripts/setup.sh) runs the lot and then builds
+everything. Only two things are not installed for you: Xcode, which comes
+from the App Store, and a Windows ISO, which Microsoft will not serve to a
+script. Each example then has its own script, and
 [`./scripts/run.sh`](scripts/run.sh) opens macOS, Linux and Windows side by
 side.
 

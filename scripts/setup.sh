@@ -1,68 +1,72 @@
 #!/bin/sh
-# Installs what is needed to run the examples for every platform on a
-# Mac, then builds it.
+# Installs what every example needs, then builds them.
 #
-#   ./scripts/setup.sh
+#   ./scripts/setup.sh              everything except Android
+#   ./scripts/setup.sh --all        Android as well (about 5GB more)
+#   ./scripts/setup.sh --no-build   install only
+#
+# There is one of these per platform, and this runs them: each is small, and
+# you can run a single one if you only care about a single example.
+#
+#   scripts/setup-macos.sh      Go and Xcode              (checks only)
+#   scripts/setup-ios.sh        Xcode, a Simulator        (checks, downloads a runtime)
+#   scripts/setup-linux.sh      colima, docker
+#   scripts/setup-windows.sh    qemu, the .NET SDK, an ISO you fetch yourself
+#   scripts/setup-freebsd.sh    qemu
+#   scripts/setup-netbsd.sh     qemu
+#   scripts/setup-openbsd.sh    qemu
+#   scripts/setup-plan9.sh      qemu
+#   scripts/setup-wasm.sh       wasmtime, node
+#   scripts/setup-android.sh    the Android SDK, a JDK, Kotlin
 #
 # Safe to re-run: anything already present is left alone.
 set -e
 
 ROOT=$(cd "$(dirname "$0")" && pwd)/..
 cd "$ROOT"
+ALL=no
+BUILD=yes
+while [ $# -gt 0 ]; do
+    case $1 in
+        --all)      ALL=yes; shift ;;
+        --no-build) BUILD=no; shift ;;
+        *) echo "unknown option: $1" >&2; exit 2 ;;
+    esac
+done
 
 command -v brew >/dev/null 2>&1 || {
     echo "Homebrew is needed: https://brew.sh" >&2; exit 1; }
 
-echo "==> toolchains"
-# Only what is actually missing.  Re-installing a working formula can leave it
-# unlinked, and then the command it provides disappears from the PATH.
-# Go is deliberately not in this list.  Installing a second one shadows
-# whatever is already on the PATH, and the Go version decides the minimum macOS
-# the archive supports - 1.27 stamps darwin/arm64 objects macOS 13, which
-# silently drops macOS 12 users.  Bring your own.
-command -v go >/dev/null 2>&1 || {
-    echo "Go is missing: https://go.dev/dl - not installing one, because the" >&2
-    echo "version decides the minimum macOS your build supports." >&2
-    exit 1
-}
+# macOS first: it is the only one that can stop the rest being worth doing,
+# because without Go there is no worker for any of them.
+sh "$ROOT/scripts/setup-macos.sh" || exit 1
 
-# Xcode, for the macOS and iOS examples.  Not installed here: it comes from
-# the App Store, and a 15GB download should be someone's decision.
-xcrun --sdk macosx --show-sdk-path >/dev/null 2>&1 || {
-    echo "Xcode is missing: install it from the App Store, then run" >&2
-    echo "  sudo xcode-select -s /Applications/Xcode.app" >&2
-    echo "The macOS and iOS examples need it; the rest of this will work." >&2
-}
-
-# What each example needs to *run*, which is not the same as what it needs to
-# build: the worker supervises itself, so every target but macOS is a plain Go
-# cross-compile with no C toolchain at all.
-#
-#   colima, docker        Linux, in a container
-#   qemu                  Windows, FreeBSD, OpenBSD, NetBSD and Plan 9, in VMs
-#   dotnet                building the WPF application for Windows
-#   wasmtime              running the WASI worker, and its test
-#
-# Not here: Xcode, which macOS and iOS need and which comes from the App
-# Store, and the Android SDK, which is 5GB and has scripts/setup-android.sh
-# to itself.
-for pair in colima:colima docker:docker qemu-system-aarch64:qemu \
-            dotnet:dotnet wasmtime:wasmtime; do
-    cmd=${pair%%:*}; formula=${pair#*:}
-    command -v "$cmd" >/dev/null 2>&1 && continue
-    echo "    installing $formula"
-    brew install "$formula" >/dev/null 2>&1 || true
-    command -v "$cmd" >/dev/null 2>&1 ||
-        brew link --overwrite "$formula" >/dev/null 2>&1 || true
-    command -v "$cmd" >/dev/null 2>&1 ||
-        { echo "    $formula installed but $cmd is not on the PATH" >&2; }
+FAILED=""
+for os in ios linux windows freebsd netbsd openbsd plan9 wasm; do
+    echo
+    echo "==> $os"
+    sh "$ROOT/scripts/setup-$os.sh" || FAILED="$FAILED $os"
 done
 
-# colima can report "running" while the docker socket is not reachable.
-docker info >/dev/null 2>&1 || { echo "==> starting colima"; colima start; }
+if [ "$ALL" = yes ]; then
+    echo
+    echo "==> android"
+    sh "$ROOT/scripts/setup-android.sh" || FAILED="$FAILED android"
+else
+    echo
+    echo "==> android: skipped, about 5GB.  scripts/setup-android.sh does it."
+fi
 
-echo "==> building"
-"$ROOT/scripts/build-all.sh"
+# colima can report "running" while the docker socket is not reachable.
+docker info >/dev/null 2>&1 || { echo; echo "==> starting colima"; colima start; }
+
+if [ "$BUILD" = yes ]; then
+    echo
+    echo "==> building"
+    "$ROOT/scripts/build-all.sh"
+fi
+
+[ -n "$FAILED" ] && { echo; echo "these did not finish:$FAILED"; }
 
 cat <<'TXT'
 
@@ -71,14 +75,11 @@ run the examples with:
   ./scripts/run-linux.sh      Linux on its own, in a container
   ./scripts/run-windows.sh    Windows on its own, in a VM
   ./scripts/run-freebsd.sh    FreeBSD on its own, in a VM
+  ./scripts/run-netbsd.sh     NetBSD on its own, in a VM
+  ./scripts/run-openbsd.sh    OpenBSD on its own, in a VM
   ./scripts/run-web.sh        a browser, with the worker compiled in
-  ./scripts/run-ios.sh        the iOS Simulator - needs Xcode
-  ./scripts/run-android.sh    the Android emulator - run setup-android.sh first
+  ./scripts/run-ios.sh        the iOS Simulator
+  ./scripts/run-android.sh    the Android emulator
   ./scripts/run-plan9.sh      vero's tests on 9front, in a VM
-
-The Windows VM needs a Windows 11 ARM64 ISO the first time:
-  ./scripts/run-windows.sh --iso ~/Downloads/win11.iso --install
-
-Android needs about 5GB of SDK, so it has a setup script of its own:
-  ./scripts/setup-android.sh
 TXT
+exit 0
