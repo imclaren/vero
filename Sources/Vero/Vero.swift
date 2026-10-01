@@ -64,6 +64,23 @@ public final class Vero {
     ///
     /// Returns as soon as the launch is under way. Until the worker is up,
     /// requests throw ``VeroError/notRunning``.
+
+    /// A worker compiled into this application, rather than one started
+    /// beside it.
+    ///
+    /// iOS is why this exists: an application there may not start a program,
+    /// so there is nothing to spawn. The archive carries the worker instead -
+    /// Go's `vero.ServeInProcess` registers it - and vero runs it on a
+    /// goroutine joined to this process by a pipe in memory. Everything above
+    /// that pipe is unchanged: the same requests, replies and events.
+    ///
+    /// Restarting goes away with the process boundary. A worker on a
+    /// goroutine dies when the application does, and there is nothing left to
+    /// restart it into.
+    public convenience init(compiledInWorker arguments: [String] = []) throws {
+        try self.init(workerPath: "", arguments: arguments)
+    }
+
     public init(workerPath: String, arguments: [String] = []) throws {
         let argsJSON = arguments.isEmpty
             ? ""

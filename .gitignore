@@ -16,3 +16,4 @@ example/wpf-app/bin/
 example/wpf-app/obj/
 example/web-app/main.wasm
 example/web-app/wasm_exec.js
+example/ios-app/.build/

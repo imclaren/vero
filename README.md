@@ -18,12 +18,12 @@ Run a Go binary embedded in a native macOS SwiftUI app. The Go binary and the Sw
 | **illumos** — amd64 | yes | — | Builds; no script to run included here.  As DragonFly: x86 only, and slow to emulate |
 | **Android** — arm64 | yes | — | Builds; no script to run included here.  No UI app written. The worker would ship in `jniLibs` and be started from `nativeLibraryDir`, with no JNI: Kotlin would write and read JSON, exactly as Python and C# do |
 | **Solaris, AIX, Plan 9** | yes | — | Builds; not run. Nothing the worker needs is missing here. No example frontend covers these three, so the GUI would be yours to write. |
-| **iOS** | the Go side does | — | Builds; not run. An app may not start a program on iOS, so the worker is compiled into the app instead, on a goroutine of its own, talking over a pipe in memory. The Swift half is unwritten. |
+| **iOS** | yes | <a href="example/ios-app"><img src="docs/screenshots/ios.gif" width="300"></a> | Builds and runs in the Simulator, not on a phone. An app may not start a program on iOS, so the worker is compiled into the app and runs on a goroutine. `scripts/run-ios.sh` builds and launches it. |
 | **wasm** — WASI (`wasip1/wasm`) | yes | — | Builds and runs, without a GUI. A release ships `worker-wasip1-wasm.wasm`, which `wasmtime` runs; the frontend is whatever starts it. One request at a time: WASI has no threads. |
 | **wasm** — browser (`js/wasm`) | yes | <a href="example/web-app"><img src="docs/screenshots/web.gif" width="300"></a> | Builds and runs. A page may not start a program, so the worker is compiled into the same wasm as the UI, as on iOS. `scripts/run-web.sh` builds it and opens it. |
 
 [macOS example](#run-the-macos-example) ·
-[Windows, Linux, FreeBSD and browser examples](#build-the-same-worker-for-windows-linux-freebsd-and-the-browser)
+[Windows, Linux, FreeBSD, iOS and browser examples](#build-the-same-worker-for-windows-linux-freebsd-ios-and-the-browser)
 
 If you already have Xcode and Go installed, the example below builds a running
 app in about 5 minutes.
@@ -270,18 +270,19 @@ Press Cmd-R in Xcode. The icon appears in the menu bar, and spins while the
 worker has jobs in flight. Click the menu bar icon to see progress changes.
 Click the button on a row to restart that job.
 
-## Build the same worker for Windows, Linux, FreeBSD and the browser
+## Build the same worker for Windows, Linux, FreeBSD, iOS and the browser
 
 All of them can be built on your Mac, with no C toolchain: the worker is pure
-Go, and the frontend spawns it rather than loading a library.  The browser is
-the exception, since a page may not start a program - there the worker is
-compiled into the page's own wasm, and runs on a goroutine instead.
+Go, and the frontend spawns it rather than loading a library.  iOS and the
+browser are the exceptions, since neither may start a program - there the
+worker is compiled into the application itself, and runs on a goroutine.
 
 | | | |
 |---|---|---|
 | [example/wpf-app](example/wpf-app) | Windows, WPF | `./scripts/run-windows.sh` |
 | [example/gtk-app](example/gtk-app) | Linux, GTK4 | `./scripts/run-linux.sh` |
 | [example/gtk-app](example/gtk-app) | FreeBSD, GTK4 - the same app, unchanged | `./scripts/run-freebsd.sh` |
+| [example/ios-app](example/ios-app) | iOS, SwiftUI - the worker is compiled in | `./scripts/run-ios.sh` |
 | [example/web-app](example/web-app) | A browser, in wasm - the worker is compiled in | `./scripts/run-web.sh` |
 
 To see the app running on three operating systems at once, `./scripts/setup.sh`

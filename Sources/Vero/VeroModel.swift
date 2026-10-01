@@ -47,6 +47,7 @@ public final class VeroModel<State: Decodable>: ObservableObject {
 
     private var forwarding: AnyCancellable?
 
+#if !os(iOS) && !os(tvOS) && !os(watchOS) && !os(visionOS)
     /// Prepares the worker shipped in the application bundle, launches it, and
     /// subscribes to what it pushes.
     ///
@@ -70,11 +71,22 @@ public final class VeroModel<State: Decodable>: ObservableObject {
             problem = error.localizedDescription
         }
     }
+#endif
 
     /// As above, for a worker that is already somewhere on disk.
     public init(workerPath: String, arguments: [String] = []) {
         do {
             adopt(try VeroClient(workerPath: workerPath, arguments: arguments))
+        } catch {
+            problem = error.localizedDescription
+        }
+    }
+
+    /// A worker compiled into this application - see
+    /// ``Vero/init(compiledInWorker:)``, which iOS needs.
+    public init(compiledInWorker arguments: [String] = []) {
+        do {
+            adopt(try VeroClient(compiledInWorker: arguments))
         } catch {
             problem = error.localizedDescription
         }

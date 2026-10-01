@@ -1,6 +1,18 @@
 import Foundation
 import CryptoKit
 
+// A worker shipped beside the application, which the platforms left out
+// below cannot have: they may not start a program at all, so there is no
+// Process to start one with.  They compile the worker in instead - see
+// Vero.init(compiledInWorker:).
+#if !os(iOS) && !os(tvOS) && !os(watchOS) && !os(visionOS)
+
+// Everything here starts a worker that was shipped beside the application,
+// which the platforms below cannot do: there is no Process to start one with,
+// because an application may not start a program at all.  They compile the
+// worker in instead - see Vero.init(compiledInWorker:).
+#if !os(iOS) && !os(tvOS) && !os(watchOS) && !os(visionOS)
+
 /// Where the worker actually runs from.
 ///
 /// An application ships its worker inside its own bundle, which is read-only
@@ -326,3 +338,7 @@ public enum VeroWorkerBundleError: Error, LocalizedError {
         }
     }
 }
+
+#endif
+
+#endif

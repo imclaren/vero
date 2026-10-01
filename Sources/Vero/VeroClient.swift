@@ -75,6 +75,14 @@ public final class VeroClient: ObservableObject {
         watchStatus()
     }
 
+    /// A worker compiled into this application - see
+    /// ``Vero/init(compiledInWorker:)``, which iOS needs.
+    public init(compiledInWorker arguments: [String] = []) throws {
+        self.link = try Vero(compiledInWorker: arguments)
+        watchStatus()
+    }
+
+#if !os(iOS) && !os(tvOS) && !os(watchOS) && !os(visionOS)
     /// Prepares the worker shipped in the application bundle, then launches it.
     ///
     /// A bundle is read-only and signed, so a worker that updates itself
@@ -106,6 +114,7 @@ public final class VeroClient: ObservableObject {
     /// startup: the supervisor restarts a worker that died, but cannot tell
     /// that the file itself is the problem.
     public private(set) var bundle: VeroWorkerBundle?
+#endif
 
     deinit {
         for w in watchers { w.cancel() }
@@ -217,6 +226,11 @@ public final class VeroClient: ObservableObject {
         _ limit: Int = 3,
         giveUp: (@MainActor () -> Void)? = nil
     ) {
+#if os(iOS) || os(tvOS) || os(watchOS) || os(visionOS)
+        // A compiled-in worker has no shipped copy to restore, and cannot
+        // restart in the first place: it dies with the application.
+        return
+#else
         guard let bundle else { return }
         watchers.append(Task { [weak self] in
             // The count when the shipped worker was put back, or zero while it
@@ -246,6 +260,7 @@ public final class VeroClient: ObservableObject {
                 }
             }
         })
+#endif
     }
 
     /// Sends a typed request, tracked and retried like any other.
