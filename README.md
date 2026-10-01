@@ -16,7 +16,7 @@ Run a Go binary embedded in a native macOS SwiftUI app. The Go binary and the Sw
 | **NetBSD** — 4 architectures | yes | — | Builds; no script to run included here.  As OpenBSD, but easier: NetBSD does publish a bootable arm64 image, so a script would download it, enable `sshd`, and install GTK4 with `pkgin`. |
 | **DragonFly** — amd64 | yes | — | Builds; no script to run included here.  DragonFly runs on x86 only. An x86 VM is emulated rather than virtualised on an Apple Silicon Mac, which would take minutes-per-boot |
 | **illumos** — amd64 | yes | — | Builds; no script to run included here.  As DragonFly: x86 only, and slow to emulate |
-| **Android** — arm64 | yes | — | Builds; no script to run included here.  No UI app written. The worker would ship in `jniLibs` and be started from `nativeLibraryDir`, with no JNI: Kotlin would write and read JSON, exactly as Python and C# do |
+| **Android** — arm64 | yes | <a href="example/android-app"><img src="docs/screenshots/android.gif" width="300"></a> | Builds and runs in the emulator. The worker ships as `lib/arm64-v8a/libworker.so`, the only place Android starts an executable from. No NDK and no JNI: Kotlin writes and reads JSON. |
 | **Solaris, AIX, Plan 9** | yes | — | Builds; not run. Nothing the worker needs is missing here. No example frontend covers these three, so the GUI would be yours to write. |
 | **iOS** | yes | <a href="example/ios-app"><img src="docs/screenshots/ios.gif" width="300"></a> | Builds and runs in the Simulator, not on a phone. An app may not start a program on iOS, so the worker is compiled into the app and runs on a goroutine. `scripts/run-ios.sh` builds and launches it. |
 | **wasm** — WASI (`wasip1/wasm`) | yes | — | Builds and runs, without a GUI. A release ships `worker-wasip1-wasm.wasm`, which `wasmtime` runs; the frontend is whatever starts it. One request at a time: WASI has no threads. |
@@ -282,6 +282,7 @@ worker is compiled into the application itself, and runs on a goroutine.
 | [example/wpf-app](example/wpf-app) | Windows, WPF | `./scripts/run-windows.sh` |
 | [example/gtk-app](example/gtk-app) | Linux, GTK4 | `./scripts/run-linux.sh` |
 | [example/gtk-app](example/gtk-app) | FreeBSD, GTK4 - the same app, unchanged | `./scripts/run-freebsd.sh` |
+| [example/android-app](example/android-app) | Android, Kotlin | `./scripts/run-android.sh` |
 | [example/ios-app](example/ios-app) | iOS, SwiftUI - the worker is compiled in | `./scripts/run-ios.sh` |
 | [example/web-app](example/web-app) | A browser, in wasm - the worker is compiled in | `./scripts/run-web.sh` |
 
@@ -293,8 +294,8 @@ installs what is needed to run them and builds everything, and
 `./scripts/build-all.sh` goes wider than the examples: it builds a worker for
 seventeen targets across macOS, Windows, Linux, FreeBSD, OpenBSD, NetBSD,
 DragonFly, illumos, Solaris, AIX, Plan 9 and WASI. Anywhere Go produces an
-executable, vero runs - the Go API needs nothing else, and the Python and C#
-bindings need only the worker.
+executable, vero runs - the Go API needs nothing else, and the Python, C# and
+Kotlin bindings need only the worker.
 
 ## Licence
 
