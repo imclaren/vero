@@ -16,6 +16,8 @@
 #   scripts/setup-netbsd.sh     qemu
 #   scripts/setup-openbsd.sh    qemu
 #   scripts/setup-plan9.sh      qemu
+#   scripts/setup-dragonfly.sh  qemu
+#   scripts/setup-illumos.sh    qemu
 #   scripts/setup-wasm.sh       wasmtime, node
 #   scripts/setup-android.sh    the Android SDK, a JDK, Kotlin
 #
@@ -42,7 +44,7 @@ command -v brew >/dev/null 2>&1 || {
 sh "$ROOT/scripts/setup-macos.sh" || exit 1
 
 FAILED=""
-for os in ios linux windows freebsd netbsd openbsd plan9 wasm; do
+for os in ios linux windows freebsd netbsd openbsd dragonfly illumos plan9 wasm; do
     echo
     echo "==> $os"
     sh "$ROOT/scripts/setup-$os.sh" || FAILED="$FAILED $os"
@@ -80,6 +82,8 @@ run the examples with:
   ./scripts/run-web.sh        a browser, with the worker compiled in
   ./scripts/run-ios.sh        the iOS Simulator
   ./scripts/run-android.sh    the Android emulator
+  ./scripts/run-dragonfly.sh  DragonFly on its own, in a VM
+  ./scripts/run-illumos.sh    illumos on its own, in a VM
   ./scripts/run-plan9.sh      vero's tests on 9front, in a VM
 TXT
 exit 0
