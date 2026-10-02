@@ -2,7 +2,7 @@
 
 **Go backend with native cross-platform GUI frontends.  Build on macOS, run anywhere Go runs.**
 
-Run a Go binary embedded in a native macOS SwiftUI app. The Go binary and the SwiftUI app communicate over a pipe.  
+Run a Go binary embedded in a native (e.g. macOS SwiftUI) app. The Go binary and the native (e.g. SwiftUI) app communicate over a pipe.  
 
 [![Go reference](https://pkg.go.dev/badge/github.com/imclaren/vero.svg)](https://pkg.go.dev/github.com/imclaren/vero)
 
