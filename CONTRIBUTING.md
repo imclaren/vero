@@ -73,6 +73,7 @@ The example apps all drive the same worker in
 | [example/android-app](example/android-app) | Android, Kotlin |
 | [example/ios-app](example/ios-app) | iOS, SwiftUI, with the worker compiled in |
 | [example/web-app](example/web-app) | a browser, in wasm, with the worker compiled in |
+| [example/wasi-app](example/wasi-app) | a terminal, driving a worker that is a `.wasm` file |
 
 The GTK one runs unchanged on FreeBSD, because nothing in it is
 Linux-specific once the shared library is gone. The last two compile the
