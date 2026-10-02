@@ -6,7 +6,7 @@ Run a Go binary embedded in a native macOS SwiftUI app. The Go binary and the Sw
 
 [![Go reference](https://pkg.go.dev/badge/github.com/imclaren/vero.svg)](https://pkg.go.dev/github.com/imclaren/vero)
 
-| Operating system | Example | Needs on your Mac to build | Build and run on your Mac |
+| Operating system | Example | Needs on your Mac to build and run | Build and run on your Mac |
 |---|:---:|---|---|
 | **macOS** — **`darwin/amd64`**, **`darwin/arm64`** | <a href="#run-the-macos-example"><img src="docs/screenshots/macos.gif" width="300"></a> | Xcode, from the App Store. Run [`setup-macos.sh`](scripts/setup-macos.sh) to check that Xcode has been installed | Builds and runs. SwiftUI, in the menu bar, built by running [`example/menubar-app/build.sh`](example/menubar-app/build.sh).<br><br>If you already have Xcode and Go installed, the [macOS example](#run-the-macos-example) below builds a running app in about 5 minutes. |
 | **Windows** — `windows/386`, **`windows/amd64`**, **`windows/arm64`** | <a href="example/wpf-app"><img src="docs/screenshots/windows.gif" width="300"></a> | qemu, the .NET SDK and a Windows 11 ARM64 ISO, which can be installed by running [`setup-windows.sh`](scripts/setup-windows.sh) | Builds and runs. WPF, started in a Windows VM by running [`scripts/run-windows.sh`](scripts/run-windows.sh). |
