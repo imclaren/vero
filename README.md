@@ -25,7 +25,7 @@ Run a Go binary embedded in a native macOS SwiftUI app. The Go binary and the Sw
 | **AIX** — **`aix/ppc64`** | — | — | Builds but does not run. AIX needs IBM hardware, and there is no public image to boot. |
 
 In **bold**, the 21 targets [`./scripts/build-all.sh`](scripts/build-all.sh)
-ships. The other 26 build the same way, one at a time:
+ship. The other 26 build the same way:
 `TARGETS=plan9/386 ./scripts/build-all.sh`.
 
 † needs a C toolchain: an NDK for the three Androids that are not `arm64`,
