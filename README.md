@@ -31,20 +31,19 @@ Microsoft will not serve to a script.
 [`./scripts/run.sh`](scripts/run.sh) will then build and open macOS, Linux
 and Windows side by side.
 
-All targets in **bold** (e.g. `darwin/arm64`) are built by running
-[`./scripts/build-all.sh`](scripts/build-all.sh). To build any other targets,
-specify them when building: `TARGETS=plan9/386 ./scripts/build-all.sh`.
+All targets in **bold** (e.g. `darwin/arm64`) are what a release ships, and
+[`./scripts/build-all.sh`](scripts/build-all.sh) builds eighteen of them into
+`dist/`. The three it leaves out - `android/arm64`, `ios/arm64` and `js/wasm`
+- are the ones that are not a worker on their own, and each example builds
+its own. To build any other target, name it:
+`TARGETS=plan9/386 ./scripts/build-all.sh`.
 
 † targets need a C toolchain: either an NDK for the three Androids that are
 not `arm64`, or the Simulator SDK for `ios/amd64`. The other 43 targets only
 need Go.
 
-[`./scripts/build-all.sh`](scripts/build-all.sh) builds the worker for
-eighteen of the targets named above in one go, into `dist/`. The three it
-leaves out are the ones that are not a worker on its own - `android/arm64`,
-`ios/arm64` and `js/wasm` - and each example builds its own. Anywhere Go
-produces an executable, vero runs: the Go API needs nothing else, and the
-Python, C# and Kotlin bindings need only the worker.
+Anywhere Go produces an executable, vero runs: the Go API needs nothing else,
+and the Python, C# and Kotlin bindings need only the worker.
 
 ## Run the macOS example
 
