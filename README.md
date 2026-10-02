@@ -24,6 +24,13 @@ Run a Go binary embedded in a native (e.g. macOS SwiftUI) app. The Go binary and
 | **Solaris** — **`solaris/amd64`** | — | — | Builds by running [`scripts/build-all.sh`](scripts/build-all.sh), and does not run. Solaris needs an Oracle licence to download, and runs on x86, which this Mac emulates rather than virtualises. |
 | **AIX** — **`aix/ppc64`** | — | — | Builds by running [`scripts/build-all.sh`](scripts/build-all.sh), and does not run. AIX needs IBM hardware, and there is no public image to boot. |
 
+[`./scripts/setup.sh`](scripts/setup.sh) installs the build prerequisites for
+all the examples. Only two things are not installed for you using this
+script: Xcode, which comes from the App Store, and a Windows ISO, which
+Microsoft will not serve to a script.
+[`./scripts/run.sh`](scripts/run.sh) will then build and open macOS, Linux
+and Windows side by side.
+
 All targets in **bold** (e.g. `darwin/arm64`) are built by running
 [`./scripts/build-all.sh`](scripts/build-all.sh). To build any other targets,
 specify them when building: `TARGETS=plan9/386 ./scripts/build-all.sh`.
@@ -31,13 +38,6 @@ specify them when building: `TARGETS=plan9/386 ./scripts/build-all.sh`.
 † targets need a C toolchain: either an NDK for the three Androids that are
 not `arm64`, or the Simulator SDK for `ios/amd64`. The other 43 targets only
 need Go.
-
-[`./scripts/setup.sh`](scripts/setup.sh) installs the build prerequisites for
-all the examples. Only two things are not installed for you using this
-script: Xcode, which comes from the App Store, and a Windows ISO, which
-Microsoft will not serve to a script.
-[`./scripts/run.sh`](scripts/run.sh) will then build and open macOS, Linux
-and Windows side by side.
 
 [`./scripts/build-all.sh`](scripts/build-all.sh) builds the worker for
 eighteen of the targets named above in one go, into `dist/`. The three it
