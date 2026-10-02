@@ -24,8 +24,7 @@ Run a Go binary embedded in a native (e.g. macOS SwiftUI) app. The Go binary and
 | **Solaris** — **`solaris/amd64`** | — | — | Builds by running [`scripts/build-all.sh`](scripts/build-all.sh), and does not run. Solaris needs an Oracle licence to download, and runs on x86, which this Mac emulates rather than virtualises. |
 | **AIX** — **`aix/ppc64`** | — | — | Builds by running [`scripts/build-all.sh`](scripts/build-all.sh), and does not run. AIX needs IBM hardware, and there is no public image to boot. |
 
-In **bold**, the 21 targets [`./scripts/build-all.sh`](scripts/build-all.sh)
-ship. The other 26 build the same way:
+**Bold** is what a release ships. To build any of the others:
 `TARGETS=plan9/386 ./scripts/build-all.sh`.
 
 † needs a C toolchain: an NDK for the three Androids that are not `arm64`,
