@@ -42,7 +42,7 @@ All targets in **bold** (e.g. `darwin/arm64`), other than `android/arm64`,
 [`android/arm64`](example/android-app/build.sh),
 [`ios/arm64`](example/ios-app/build.sh) and
 [`js/wasm`](example/web-app/build.sh) have their own build scripts because
-they do not build a standalone worker. To build any other targets, specify
+they do not build a standalone worker. To build targets not in bold, specify
 them when building: `TARGETS=plan9/386 ./scripts/build-all.sh`.
 
 † targets need a C toolchain: either an NDK for the three Androids that are
