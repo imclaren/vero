@@ -20,3 +20,4 @@ example/ios-app/.build/
 example/android-app/.build/
 .android-emulator.log
 example/wasi-app/.build/
+.DS_Store
