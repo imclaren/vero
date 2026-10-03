@@ -41,7 +41,7 @@ cd example/menubar-app && ./build.sh
 Look for the icon in the menu bar. The source is available at
 [example/menubar-app](example/menubar-app).
 
-## Create a vero macOS app in 5 minutes
+## Create a vero macOS app
 
 ### 1. Build the go worker
 
