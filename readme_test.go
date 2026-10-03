@@ -24,8 +24,9 @@ func TestTheReadmeNamesEveryTarget(t *testing.T) {
 		t.Fatalf("reading the README: %v", err)
 	}
 	// Only the table at the top: the tutorial below it says `go build` a lot,
-	// and a target named in passing there is not the same promise.
-	table, _, _ := strings.Cut(string(readme), "## Run the macOS example")
+	// and a target named in passing there is not the same promise.  The table
+	// ends where the first section heading begins, whatever it is called.
+	table, _, _ := strings.Cut(string(readme), "\n## ")
 
 	named := map[string]bool{}
 	for _, m := range regexp.MustCompile("`([a-z0-9]+/[a-z0-9]+)`").FindAllStringSubmatch(table, -1) {
