@@ -28,7 +28,7 @@ Run a Go binary embedded in a native (e.g. macOS SwiftUI) app. The Go binary and
 | **Solaris** — **`solaris/amd64`** | — | — | Builds by running [`scripts/build-all.sh`](scripts/build-all.sh), and does not run. Solaris needs an Oracle licence to download, and runs on x86, which this Mac emulates rather than virtualises. |
 | **AIX** — **`aix/ppc64`** | — | — | Builds by running [`scripts/build-all.sh`](scripts/build-all.sh), and does not run. AIX needs IBM hardware, and there is no public image to boot. |
 
-## Build and run just the macOS example
+## Build and run the macOS example
 
 The example is a menu bar app driving the Go worker (main.go below):
 
@@ -41,7 +41,7 @@ cd example/menubar-app && ./build.sh
 Look for the icon in the menu bar. The source is available at
 [example/menubar-app](example/menubar-app).
 
-## Create a vero macOS app on your Mac
+## Create a vero macOS app
 
 ### 1. Build the go worker
 
