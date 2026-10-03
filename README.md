@@ -24,32 +24,7 @@ Run a Go binary embedded in a native (e.g. macOS SwiftUI) app. The Go binary and
 | **Solaris** — **`solaris/amd64`** | — | — | Builds by running [`scripts/build-all.sh`](scripts/build-all.sh), and does not run. Solaris needs an Oracle licence to download, and runs on x86, which this Mac emulates rather than virtualises. |
 | **AIX** — **`aix/ppc64`** | — | — | Builds by running [`scripts/build-all.sh`](scripts/build-all.sh), and does not run. AIX needs IBM hardware, and there is no public image to boot. |
 
-## Mac build and run instructions
-
-[`./scripts/setup.sh`](scripts/setup.sh) installs the build prerequisites for
-all platforms. Only two things are not installed for you using this script:
-Xcode, which comes from the App Store, and a Windows ISO, which Microsoft
-will not serve to a script - download it from
-[https://www.microsoft.com/en-us/software-download/windows11arm64](https://www.microsoft.com/en-us/software-download/windows11arm64)
-and put it in `~/vm/vero-windows/`.
-
-[`./scripts/run.sh`](scripts/run.sh) then builds and opens the example on macOS (natively), and Linux
-and Windows (by showing the app in VMs) side by side.
-
-All targets in **bold** (e.g. `darwin/arm64`), other than `android/arm64`,
-`ios/arm64` and `js/wasm`, can be built by running
-[`./scripts/build-all.sh`](scripts/build-all.sh).
-[`android/arm64`](example/android-app/build.sh),
-[`ios/arm64`](example/ios-app/build.sh) and
-[`js/wasm`](example/web-app/build.sh) have their own build scripts because
-they do not build a standalone worker. To build targets not in bold, specify
-them when building: `TARGETS=plan9/386 ./scripts/build-all.sh`.
-
-† targets need a C toolchain: either an NDK for the three Androids that are
-not `arm64`, or the Simulator SDK for `ios/amd64`. The other 43 targets only
-need Go.
-
-## Run the macOS example
+## Build and run just the macOS example 
 
 The example is a menu bar app driving the Go worker (main.go below):
 
@@ -290,6 +265,31 @@ Delete the `ContentView.swift` and `<YourApp>App.swift` that Xcode generated:
 Press Cmd-R in Xcode. The icon appears in the menu bar, and spins while the
 worker has jobs in flight. Click the menu bar icon to see progress changes.
 Click the button on a row to restart that job.
+
+## Instructions to build and tun the example on the Mac for all platforms 
+
+[`./scripts/setup.sh`](scripts/setup.sh) installs the build prerequisites for
+all platforms. Only two things are not installed for you using this script:
+Xcode, which comes from the App Store, and a Windows ISO, which Microsoft
+will not serve to a script - download it from
+[https://www.microsoft.com/en-us/software-download/windows11arm64](https://www.microsoft.com/en-us/software-download/windows11arm64)
+and put it in `~/vm/vero-windows/`.
+
+[`./scripts/run.sh`](scripts/run.sh) then builds and opens the example on macOS (natively), and Linux
+and Windows (by showing the app in VMs) side by side.
+
+All targets in **bold** (e.g. `darwin/arm64`), other than `android/arm64`,
+`ios/arm64` and `js/wasm`, can be built by running
+[`./scripts/build-all.sh`](scripts/build-all.sh).
+[`android/arm64`](example/android-app/build.sh),
+[`ios/arm64`](example/ios-app/build.sh) and
+[`js/wasm`](example/web-app/build.sh) have their own build scripts because
+they do not build a standalone worker. To build targets not in bold, specify
+them when building: `TARGETS=plan9/386 ./scripts/build-all.sh`.
+
+† targets need a C toolchain: either an NDK for the three Androids that are
+not `arm64`, or the Simulator SDK for `ios/amd64`. The other 43 targets only
+need Go.
 
 ## Licence
 
