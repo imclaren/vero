@@ -6,13 +6,13 @@ Run a Go binary embedded in a native (e.g. macOS SwiftUI) app. The Go binary and
 
 [![Go reference](https://pkg.go.dev/badge/github.com/imclaren/vero.svg)](https://pkg.go.dev/github.com/imclaren/vero)
 
-[Build and run the macOS example](#build-and-run-just-the-macos-example) ·
-[Create a vero macOS app](#create-a-vero-macos-app-on-your-mac) ·
+[Build and run the macOS example](#build-and-run-the-macos-example) ·
+[Create a vero macOS app](#create-a-vero-macos-app) ·
 [Build and run the example on all platforms using your Mac](#build-and-run-the-example-on-all-platforms-using-your-mac)
 
 | Operating system | Example | Required on your Mac to build and run | Build and run on your Mac |
 |---|:---:|---|---|
-| **macOS** — **`darwin/amd64`**, **`darwin/arm64`** | <a href="#build-and-run-just-the-macos-example"><img src="docs/screenshots/macos.gif" width="300"></a> | Xcode, from the App Store. Run [`setup-macos.sh`](scripts/setup-macos.sh) to check that Xcode has been installed | Builds and runs. SwiftUI, in the menu bar, built by running [`example/menubar-app/build.sh`](example/menubar-app/build.sh).<br><br>If you already have Xcode and Go installed, the [macOS example](#build-and-run-just-the-macos-example) below builds a running app in about 5 minutes. |
+| **macOS** — **`darwin/amd64`**, **`darwin/arm64`** | <a href="#build-and-run-the-macos-example"><img src="docs/screenshots/macos.gif" width="300"></a> | Xcode, from the App Store. Run [`setup-macos.sh`](scripts/setup-macos.sh) to check that Xcode has been installed | Builds and runs. SwiftUI, in the menu bar, built by running [`example/menubar-app/build.sh`](example/menubar-app/build.sh).<br><br>If you already have Xcode and Go installed, the [macOS example](#build-and-run-the-macos-example) below builds a running app in about 5 minutes. |
 | **Windows** — `windows/386`, **`windows/amd64`**, **`windows/arm64`** | <a href="example/wpf-app"><img src="docs/screenshots/windows.gif" width="300"></a> | qemu, the .NET SDK and a Windows 11 ARM64 ISO, which can be installed by running [`setup-windows.sh`](scripts/setup-windows.sh) | Builds and runs. WPF, started in a Windows VM by running [`scripts/run-windows.sh`](scripts/run-windows.sh). |
 | **Linux** — `linux/386`, **`linux/amd64`**, `linux/arm`, **`linux/arm64`**, `linux/loong64`, `linux/mips`, `linux/mips64`, `linux/mips64le`, `linux/mipsle`, `linux/ppc64`, `linux/ppc64le`, `linux/riscv64`, `linux/s390x` | <a href="example/gtk-app"><img src="docs/screenshots/linux.gif" width="300"></a> | Docker and colima, which can be installed by running [`setup-linux.sh`](scripts/setup-linux.sh) | Builds and runs. GTK4, started in a Docker container by running [`scripts/run-linux.sh`](scripts/run-linux.sh). |
 | **FreeBSD** — `freebsd/386`, **`freebsd/amd64`**, `freebsd/arm`, **`freebsd/arm64`** | <a href="example/gtk-app"><img src="docs/screenshots/freebsd.gif" width="300"></a> | qemu, which can be installed by running [`setup-freebsd.sh`](scripts/setup-freebsd.sh) | Builds and runs. GTK4, the same app as Linux, NetBSD and OpenBSD, started in a VM by running [`scripts/run-freebsd.sh`](scripts/run-freebsd.sh). |
