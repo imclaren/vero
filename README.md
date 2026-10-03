@@ -31,7 +31,7 @@ all the examples. Only two things are not installed for you using this
 script: Xcode, which comes from the App Store, and a Windows ISO, which
 Microsoft will not serve to a script.
 
-[`./scripts/run.sh`](scripts/run.sh) will then build and open macOS, Linux
+[`./scripts/run.sh`](scripts/run.sh) then builds and opens macOS, Linux
 and Windows side by side.
 
 All targets in **bold** (e.g. `darwin/arm64`), other than `android/arm64`,
