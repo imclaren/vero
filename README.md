@@ -24,10 +24,13 @@ Run a Go binary embedded in a native (e.g. macOS SwiftUI) app. The Go binary and
 | **Solaris** — **`solaris/amd64`** | — | — | Builds by running [`scripts/build-all.sh`](scripts/build-all.sh), and does not run. Solaris needs an Oracle licence to download, and runs on x86, which this Mac emulates rather than virtualises. |
 | **AIX** — **`aix/ppc64`** | — | — | Builds by running [`scripts/build-all.sh`](scripts/build-all.sh), and does not run. AIX needs IBM hardware, and there is no public image to boot. |
 
+## Mac build and run instructions
+
 [`./scripts/setup.sh`](scripts/setup.sh) installs the build prerequisites for
 all the examples. Only two things are not installed for you using this
 script: Xcode, which comes from the App Store, and a Windows ISO, which
 Microsoft will not serve to a script.
+
 [`./scripts/run.sh`](scripts/run.sh) will then build and open macOS, Linux
 and Windows side by side.
 
