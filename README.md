@@ -31,12 +31,14 @@ Microsoft will not serve to a script.
 [`./scripts/run.sh`](scripts/run.sh) will then build and open macOS, Linux
 and Windows side by side.
 
-All targets in **bold** (e.g. `darwin/arm64`) are built by running
-[`./scripts/build-all.sh`](scripts/build-all.sh), into `dist/`. Three of them
-are built by their own example instead - `android/arm64`, `ios/arm64` and
-`js/wasm` - because they are not a worker on their own. To build any other
-targets, specify them when building:
-`TARGETS=plan9/386 ./scripts/build-all.sh`.
+All targets in **bold** (e.g. `darwin/arm64`), other than `android/arm64`,
+`ios/arm64` and `js/wasm`, are built by running
+[`./scripts/build-all.sh`](scripts/build-all.sh), into `dist/`.
+[`android/arm64`](example/android-app/build.sh),
+[`ios/arm64`](example/ios-app/build.sh) and
+[`js/wasm`](example/web-app/build.sh) have their own build scripts because
+they do not build a standalone worker. To build any other targets, specify
+them when building: `TARGETS=plan9/386 ./scripts/build-all.sh`.
 
 † targets need a C toolchain: either an NDK for the three Androids that are
 not `arm64`, or the Simulator SDK for `ios/amd64`. The other 43 targets only
