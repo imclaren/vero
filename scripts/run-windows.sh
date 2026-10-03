@@ -7,7 +7,8 @@
 #   scripts/run-windows.sh --headless                              # no window; QMP on the socket
 #   scripts/run-windows.sh --payload out                           # your own build, not the example
 #
-# Needs: brew install qemu, and a Windows 11 ARM64 ISO from Microsoft.
+# Needs: brew install qemu, and a Windows 11 ARM64 ISO from Microsoft:
+#   https://www.microsoft.com/en-us/software-download/windows11arm64
 # Run scripts/build-all.sh first - the disc is made from dist/.
 set -e
 
@@ -100,7 +101,10 @@ set -- \
     -qmp unix:"$QMP",server,nowait
 
 if [ "$INSTALL" = yes ]; then
-    [ -n "$ISO" ] || { echo "--install needs --iso windows.iso" >&2; exit 2; }
+    [ -n "$ISO" ] || {
+        echo "--install needs --iso windows.iso, a Windows 11 ARM64 ISO from" >&2
+        echo "  https://www.microsoft.com/en-us/software-download/windows11arm64" >&2
+        exit 2; }
     # The answer file installs Windows without anyone sitting in front of it.
     rm -f "$VM/unattend.iso"
     hdiutil makehybrid -iso -joliet -o "$VM/unattend.iso" "$ROOT/.windows/unattend" -quiet

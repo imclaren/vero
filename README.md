@@ -27,9 +27,11 @@ Run a Go binary embedded in a native (e.g. macOS SwiftUI) app. The Go binary and
 ## Mac build and run instructions
 
 [`./scripts/setup.sh`](scripts/setup.sh) installs the build prerequisites for
-all the examples. Only two things are not installed for you using this
-script: Xcode, which comes from the App Store, and a Windows ISO, which
-Microsoft will not serve to a script.
+all platforms. Only two things are not installed for you using this script:
+Xcode, which comes from the App Store, and a Windows ISO, which Microsoft
+will not serve to a script - download it from
+[https://www.microsoft.com/en-us/software-download/windows11arm64](https://www.microsoft.com/en-us/software-download/windows11arm64)
+and put it in `~/vm/vero-windows/`.
 
 [`./scripts/run.sh`](scripts/run.sh) then builds and opens macOS, Linux
 and Windows side by side.
