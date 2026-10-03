@@ -6,7 +6,7 @@ Run a Go binary embedded in a native (e.g. macOS SwiftUI) app. The Go binary and
 
 [![Go reference](https://pkg.go.dev/badge/github.com/imclaren/vero.svg)](https://pkg.go.dev/github.com/imclaren/vero)
 
-[Build and run the macOS example in about 2 minutes](#build-and-run-the-macos-example-in-about-2-minutes) ·
+[Build and run the macOS example](#build-and-run-the-macos-example) ·
 [Create a vero macOS app in about 5 minutes](#create-a-vero-macos-app-in-about-5-minutes) ·
 [Build and run the example on all platforms using your Mac](#build-and-run-the-example-on-all-platforms-using-your-mac)
 
