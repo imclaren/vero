@@ -6,10 +6,9 @@ Run a Go binary embedded in a native (e.g. macOS SwiftUI) app. The Go binary and
 
 [![Go reference](https://pkg.go.dev/badge/github.com/imclaren/vero.svg)](https://pkg.go.dev/github.com/imclaren/vero)
 
-[Build and run just the macOS example](#build-and-run-just-the-macos-example) ·
-[Create a vero macOS app on your Mac](#create-a-vero-macos-app-on-your-mac) ·
-[Build and run the example on all platforms using your Mac](#build-and-run-the-example-on-all-platforms-using-your-mac) ·
-[Licence](#licence)
+[Build and run the macOS example](#build-and-run-just-the-macos-example) ·
+[Create a vero macOS app](#create-a-vero-macos-app-on-your-mac) ·
+[Build and run the example on all platforms using your Mac](#build-and-run-the-example-on-all-platforms-using-your-mac)
 
 | Operating system | Example | Required on your Mac to build and run | Build and run on your Mac |
 |---|:---:|---|---|
