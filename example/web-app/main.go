@@ -143,7 +143,7 @@ func working(s *Status) {
 // serve is ../worker/main.go, reading and writing the pipes it is given
 // instead of standard input and output.
 func serve(in io.Reader, out io.Writer) error {
-	w := vero.NewWorker(vero.WorkerOptions{In: in, Out: out, Version: "0.12.0"})
+	w := vero.NewWorker(vero.WorkerOptions{In: in, Out: out, Version: "0.13.0"})
 
 	state := vero.NewState(w, Status{
 		Jobs: []Job{
