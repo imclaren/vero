@@ -226,6 +226,11 @@ struct RestartJob: NamedRequest {
 
 @main
 struct ExampleApp: App {
+    // One copy at a time. A second one - opened from Downloads while the one
+    // in Applications is running, say - would be refused the worker and sit
+    // there with nothing to show, so it brings the first forward and quits.
+    init() { VeroSingleCopy.yieldToRunningCopy() }
+
     // The worker, the last state it pushed, and the reason it could not start
     // if it did not: everything a view needs to draw, created once, here.
     @StateObject private var vero = VeroModel<Status>(

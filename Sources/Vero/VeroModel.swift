@@ -42,6 +42,15 @@ public final class VeroModel<State: Decodable>: ObservableObject {
     /// a worker that is talking again is a worker that is working.
     @Published public private(set) var problem: String?
 
+    /// True when the worker was not started because another copy of this
+    /// application already has it.
+    ///
+    /// That is ``problem`` too, in words, but it is not a fault and should
+    /// not be shown as one: the other copy is working, and this one has
+    /// nothing to do. On macOS, hand over to it with
+    /// `VeroSingleCopy.yieldToRunningCopy()`.
+    @Published public private(set) var isAlreadyRunning = false
+
     /// The worker underneath, or nil if it could not be started.
     public private(set) var worker: VeroClient?
 
@@ -68,7 +77,7 @@ public final class VeroModel<State: Decodable>: ObservableObject {
                 arguments: arguments)
             adopt(worker)
         } catch {
-            problem = error.localizedDescription
+            failed(error)
         }
     }
 #endif
@@ -78,7 +87,7 @@ public final class VeroModel<State: Decodable>: ObservableObject {
         do {
             adopt(try VeroClient(workerPath: workerPath, arguments: arguments))
         } catch {
-            problem = error.localizedDescription
+            failed(error)
         }
     }
 
@@ -88,8 +97,15 @@ public final class VeroModel<State: Decodable>: ObservableObject {
         do {
             adopt(try VeroClient(compiledInWorker: arguments))
         } catch {
-            problem = error.localizedDescription
+            failed(error)
         }
+    }
+
+    /// The worker could not be started: why, and whether it is only that
+    /// another copy has it.
+    private func failed(_ error: Error) {
+        if case VeroError.alreadyRunning = error { isAlreadyRunning = true }
+        problem = error.localizedDescription
     }
 
     private func adopt(_ worker: VeroClient) {
