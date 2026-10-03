@@ -7,7 +7,7 @@ Run a Go binary embedded in a native (e.g. macOS SwiftUI) app. The Go binary and
 [![Go reference](https://pkg.go.dev/badge/github.com/imclaren/vero.svg)](https://pkg.go.dev/github.com/imclaren/vero)
 
 [Build and run the macOS example](#build-and-run-the-macos-example) ·
-[Create a vero macOS app](#create-a-vero-macos-app) ·
+[Create a vero macOS app in 5 minutes](#create-a-vero-macos-app-in-5-minutes) ·
 [Build and run the example on all platforms using your Mac](#build-and-run-the-example-on-all-platforms-using-your-mac)
 
 | Operating system | Example | Required on your Mac to build and run | Build and run on your Mac |
@@ -41,7 +41,7 @@ cd example/menubar-app && ./build.sh
 Look for the icon in the menu bar. The source is available at
 [example/menubar-app](example/menubar-app).
 
-## Create a vero macOS app
+## Create a vero macOS app in 5 minutes
 
 ### 1. Build the go worker
 
