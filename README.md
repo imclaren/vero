@@ -38,7 +38,7 @@ and Windows (by showing the app in VMs) side by side.
 
 All targets in **bold** (e.g. `darwin/arm64`), other than `android/arm64`,
 `ios/arm64` and `js/wasm`, can be built by running
-[`./scripts/build-all.sh`](scripts/build-all.sh), into `dist/`.
+[`./scripts/build-all.sh`](scripts/build-all.sh).
 [`android/arm64`](example/android-app/build.sh),
 [`ios/arm64`](example/ios-app/build.sh) and
 [`js/wasm`](example/web-app/build.sh) have their own build scripts because
