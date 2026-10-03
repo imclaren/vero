@@ -44,9 +44,6 @@ them when building: `TARGETS=plan9/386 ./scripts/build-all.sh`.
 not `arm64`, or the Simulator SDK for `ios/amd64`. The other 43 targets only
 need Go.
 
-Anywhere Go produces an executable, vero runs: the Go API needs nothing else,
-and the Python, C# and Kotlin bindings need only the worker.
-
 ## Run the macOS example
 
 The example is a menu bar app driving the Go worker (main.go below):
