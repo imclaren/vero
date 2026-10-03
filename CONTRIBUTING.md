@@ -20,7 +20,7 @@ scripts/run-ios.sh --test                                   # in the iOS Simulat
 GOOS=js GOARCH=wasm go test -exec="$(go env GOROOT)/lib/wasm/go_js_wasm_exec" \
     -run InThisProcess .                                    # in node
 go test -run Wasm .                                         # under wasmtime, if installed
-scripts/run-plan9.sh                                        # on 9front, in a VM
+scripts/run-plan9.sh --test                                 # on 9front, in a VM
 ```
 
 The Plan 9 one takes a few minutes: it is x86, so an Apple Silicon Mac
@@ -74,6 +74,7 @@ The example apps all drive the same worker in
 | [example/ios-app](example/ios-app) | iOS, SwiftUI, with the worker compiled in |
 | [example/web-app](example/web-app) | a browser, in wasm, with the worker compiled in |
 | [example/wasi-app](example/wasi-app) | a terminal, driving a worker that is a `.wasm` file |
+| [example/plan9-app](example/plan9-app) | Plan 9, libdraw, in a rio window - Go on both sides |
 
 The GTK one runs unchanged on FreeBSD, because nothing in it is
 Linux-specific once the shared library is gone. The last two compile the

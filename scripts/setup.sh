@@ -84,6 +84,6 @@ run the examples with:
   ./scripts/run-android.sh    the Android emulator
   ./scripts/run-dragonfly.sh  DragonFly on its own, in a VM
   ./scripts/run-illumos.sh    illumos on its own, in a VM
-  ./scripts/run-plan9.sh      vero's tests on 9front, in a VM
+  ./scripts/run-plan9.sh      Plan 9 on its own, in a VM (--test for the test suite)
 TXT
 exit 0
