@@ -266,7 +266,7 @@ Press Cmd-R in Xcode. The icon appears in the menu bar, and spins while the
 worker has jobs in flight. Click the menu bar icon to see progress changes.
 Click the button on a row to restart that job.
 
-## Instructions to build and tun the example on the Mac for all platforms 
+## Build and run the example on all platforms using your Mac
 
 [`./scripts/setup.sh`](scripts/setup.sh) installs the build prerequisites for
 all platforms. Only two things are not installed for you using this script:
