@@ -33,8 +33,8 @@ will not serve to a script - download it from
 [https://www.microsoft.com/en-us/software-download/windows11arm64](https://www.microsoft.com/en-us/software-download/windows11arm64)
 and put it in `~/vm/vero-windows/`.
 
-[`./scripts/run.sh`](scripts/run.sh) then builds and opens macOS, Linux
-and Windows side by side.
+[`./scripts/run.sh`](scripts/run.sh) then builds and opens the example on macOS (natively), and Linux
+and Windows (by showing the app in VMs) side by side.
 
 All targets in **bold** (e.g. `darwin/arm64`), other than `android/arm64`,
 `ios/arm64` and `js/wasm`, are built by running
