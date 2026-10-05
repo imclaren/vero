@@ -9,10 +9,15 @@
 #   path/to/vero/scripts/package-windows.sh --name myapp --version 1.2.3 \
 #       --app windows --exe myapp.exe --worker ./cmd/worker --worker-name myapp-worker.exe \
 #       --icon icon.png --publisher "Your Name or Company" [--url https://example.com] \
-#       [--id myapp] [--startup "Open myapp when I sign in"] [--out dist/packages]
+#       [--id myapp] [--startup "Open myapp when I sign in"] [--webview2] [--out dist/packages]
 #
 #   --app DIR      the WPF project's folder; dotnet publish builds it
 #   --startup TEXT offers, ticked, to open the app at sign-in, as TEXT
+#   --webview2     for an app that shows web pages with Microsoft Edge
+#                  WebView2: the installer installs it where it's missing.
+#                  Windows 11 has it, and so does most of Windows 10; for
+#                  the rest, Microsoft's own small bootstrapper goes inside
+#                  the installer, and downloads WebView2 when it runs.
 #
 # Each installs for the person running it, with no administrator needed,
 # in %LOCALAPPDATA%\Programs\NAME: an update replaces it, closing the copy
@@ -27,7 +32,7 @@ VERO=$(cd "$(dirname "$0")/.." && pwd)
 ROOT=$PWD
 [ -f "$ROOT/go.mod" ] || { echo "run this from beside your app's go.mod" >&2; exit 2; }
 
-NAME="" VERSION="" APP="" EXE="" WORKER="" WORKER_NAME="" ICON="" PUBLISHER="" URL="" ID="" STARTUP=""
+NAME="" VERSION="" APP="" EXE="" WORKER="" WORKER_NAME="" ICON="" PUBLISHER="" URL="" ID="" STARTUP="" WEBVIEW2=""
 OUT="$ROOT/dist/packages"
 while [ $# -gt 0 ]; do
     case $1 in
@@ -35,6 +40,7 @@ while [ $# -gt 0 ]; do
         --worker) WORKER=$2 ;; --worker-name) WORKER_NAME=$2 ;; --icon) ICON=$2 ;;
         --publisher) PUBLISHER=$2 ;; --url) URL=$2 ;; --id) ID=$2 ;; --startup) STARTUP=$2 ;; --out) OUT=$2 ;;
         --ldflags) LDEXTRA=$2 ;;
+        --webview2) WEBVIEW2=yes; shift; continue ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
     shift 2
@@ -58,6 +64,12 @@ DIST="$ROOT/dist"
 WORKER=$WORKER CSHIM=none WPF_APP=none TARGETS="windows/amd64 windows/arm64" \
     LDFLAGS="-s -w -X main.version=$VERSION ${LDEXTRA:-}" "$VERO/scripts/build-all.sh" >/dev/null
 python3 "$VERO/scripts/lib/ico.py" "$ICON" "$STAGE/app.ico"
+if [ -n "$WEBVIEW2" ]; then
+    # Microsoft's Evergreen bootstrapper, which Microsoft lets apps ship:
+    # https://learn.microsoft.com/microsoft-edge/webview2/concepts/distribution
+    echo "fetching the WebView2 bootstrapper"
+    curl -fsSL -o "$STAGE/MicrosoftEdgeWebview2Setup.exe" "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
+fi
 
 for arch in x64 arm64; do
     goarch=$([ $arch = x64 ] && echo amd64 || echo arm64)
@@ -69,6 +81,7 @@ for arch in x64 arm64; do
         -DPUBLISHER="$PUBLISHER" -DURL="$URL" -DID="$ID" -DICON="$STAGE/app.ico" -DSRC="$STAGE/$arch" \
         -DOUT="$OUT/$NAME-$VERSION-$arch-setup.exe"
     [ -n "$STARTUP" ] && set -- "$@" -DSTARTUP="$STARTUP"
+    [ -n "$WEBVIEW2" ] && set -- "$@" -DWEBVIEW2="$STAGE/MicrosoftEdgeWebview2Setup.exe"
     makensis "$@" "$VERO/scripts/lib/installer.nsi"
     echo "built $OUT/$NAME-$VERSION-$arch-setup.exe"
 done
