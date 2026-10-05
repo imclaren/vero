@@ -9,7 +9,7 @@ Run a Go binary embedded in a native (e.g. macOS SwiftUI) app. The Go binary and
 [Build and run the macOS example](#build-and-run-the-macos-example) ·
 [Create a vero macOS app](#create-a-vero-macos-app) ·
 [Build and run the example on all platforms using your Mac](#build-and-run-the-example-on-all-platforms-using-your-mac) ·
-[Creating app installers for your platform](#creating-app-installers-for-your-platform)
+[Creating app installers for Linux and Windows](#creating-app-installers-for-linux-and-windows)
 
 | Operating system | Example | Required on your Mac to build and run | Build and run on your Mac |
 |---|:---:|---|---|
@@ -301,11 +301,15 @@ them when building: `TARGETS=plan9/386 ./scripts/build-all.sh`.
 not `arm64`, or the Simulator SDK for `ios/amd64`. The other 43 targets only
 need Go.
 
-## Creating app installers for your platform
+## Creating app installers for Linux and Windows
 
-The scripts above build and run vero's example. Four of them would also work on
-an app that you create that uses vero. Run each one on a Mac from your go app's
-folder.
+The scripts above build and run vero's example. Four of them also work on
+an app of your own that uses vero. Run each one on a Mac from your app's
+folder (the one with its `go.mod`).
+
+Steps 2 and 3 need Docker (`brew install colima docker && colima start`),
+and step 4 needs `brew install makensis dotnet`. The installers are written
+to `dist/packages/`.
 
 The commands below assume your app will be laid out like this:
 
@@ -318,7 +322,7 @@ myapp/
   icon.png           a square icon, 512 or 1024 pixels
 ```
 
-**1. Build your worker for the platforms you list in dist** 
+**1. Build your worker for the platforms you list, into `dist/`.**
 
 ```bash
 WORKER=./cmd/worker CSHIM=none WPF_APP=none LDFLAGS="-X main.version=1.2.3" \
@@ -351,9 +355,13 @@ path/to/vero/scripts/package-windows.sh --name myapp --version 1.2.3 \
 Each script's header lists all of its options, such as `--homepage`,
 `--recommends` or `--startup` (offer to open the app at sign-in).
 
+Pass anything you build into your worker with `--ldflags`, such as an API
+key, from a file outside your repository.
+
 The Windows installers are not signed, because signing needs your
-code-signing certificate. You will see warnings until you sign them (with
-`signtool` on Windows, or `osslsigncode` on a Mac).
+code-signing certificate. Until you sign them (with `signtool` on Windows,
+or `osslsigncode` on a Mac), Windows SmartScreen warns people who download
+them.
 
 ## Licence
 
