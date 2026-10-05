@@ -303,15 +303,11 @@ need Go.
 
 ## Build, try out and package your own app from your Mac
 
-The scripts above build and run vero's example. Four of them also work on
-an app of your own that uses vero, so that you can build it for other
-platforms, see it running on Linux, and make installers that people can
-download, all without leaving your Mac. Run each one from your app's
-folder (the one with its `go.mod`); it uses your worker and your front
-ends, not the example's.
+The scripts above build and run vero's example. Four of them would also work on
+an app that you create that uses vero. Run each one on a Mac from your go app's
+folder.
 
-The commands below assume an app laid out like this, with names you would
-change to your own:
+The commands below assume your app will be laid out like this:
 
 ```
 myapp/
@@ -369,16 +365,9 @@ path/to/vero/scripts/package-windows.sh --name myapp --version 1.2.3 \
 Each script's header lists all of its options, such as `--homepage`,
 `--recommends` or `--startup` (offer to open the app at sign-in).
 
-The scripts contain no names, email addresses, keys or certificates.
-Everything that identifies you or your app is what you pass on the command
-line, including anything you build into your worker with `--ldflags` (an
-API key, say), so keep those in a file outside your repository rather than
-in a script you commit.
-
-The Windows installers are not signed, because signing needs a
-code-signing certificate of your own. Until you sign them (with
-`signtool` on Windows, or `osslsigncode` on a Mac), Windows SmartScreen
-warns people who download them.
+The Windows installers are not signed, because signing needs your
+code-signing certificate. You will see warnings until you sign them (with
+`signtool` on Windows, or `osslsigncode` on a Mac).
 
 ## Licence
 
