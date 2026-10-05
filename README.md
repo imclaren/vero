@@ -8,7 +8,8 @@ Run a Go binary embedded in a native (e.g. macOS SwiftUI) app. The Go binary and
 
 [Build and run the macOS example](#build-and-run-the-macos-example) ·
 [Create a vero macOS app](#create-a-vero-macos-app) ·
-[Build and run the example on all platforms using your Mac](#build-and-run-the-example-on-all-platforms-using-your-mac)
+[Build and run the example on all platforms using your Mac](#build-and-run-the-example-on-all-platforms-using-your-mac) ·
+[Creating app installers for your platform](#creating-app-installers-for-your-platform)
 
 | Operating system | Example | Required on your Mac to build and run | Build and run on your Mac |
 |---|:---:|---|---|
@@ -299,7 +300,6 @@ them when building: `TARGETS=plan9/386 ./scripts/build-all.sh`.
 † targets need a C toolchain: either an NDK for the three Androids that are
 not `arm64`, or the Simulator SDK for `ios/amd64`. The other 43 targets only
 need Go.
-
 
 ## Creating app installers for your platform
 
