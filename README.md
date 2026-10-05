@@ -301,7 +301,7 @@ not `arm64`, or the Simulator SDK for `ios/amd64`. The other 43 targets only
 need Go.
 
 
-## Build, try out and package your own app from your Mac
+## Creating app installers for your platform
 
 The scripts above build and run vero's example. Four of them would also work on
 an app that you create that uses vero. Run each one on a Mac from your go app's
@@ -318,30 +318,21 @@ myapp/
   icon.png           a square icon, 512 or 1024 pixels
 ```
 
-**1. Build your worker for other platforms.** Cross-compiles
-`cmd/worker` for the platforms you list into `dist/`, with your version
-built in. `CSHIM=none` and `WPF_APP=none` skip the two things only the
-example needs.
+**1. Build your worker for the platforms you list in dist** 
 
 ```bash
 WORKER=./cmd/worker CSHIM=none WPF_APP=none LDFLAGS="-X main.version=1.2.3" \
     TARGETS="windows/amd64 linux/amd64" path/to/vero/scripts/build-all.sh
 ```
 
-**2. See your Linux app running.** Builds your worker for Linux and runs
-your GTK app in a Linux container, and opens it in Screen Sharing so you
-can use it. `--shot out.png` takes a screenshot instead. Needs Docker
-(`brew install colima docker && colima start`).
+**2. See your Linux app running.**
 
 ```bash
 path/to/vero/scripts/run-linux.sh --app linux --entry myapp.py \
     --worker ./cmd/worker --worker-name myapp-worker
 ```
 
-**3. Make Linux installers.** Produces `.deb` packages for Debian and
-Ubuntu, for Intel and ARM computers, in `dist/packages/`. Installing one
-puts your app in the applications menu and `myapp` on the command line.
-Needs Docker.
+**3. Make Linux installers.**
 
 ```bash
 path/to/vero/scripts/package-linux.sh --name myapp --version 1.2.3 \
@@ -349,12 +340,7 @@ path/to/vero/scripts/package-linux.sh --name myapp --version 1.2.3 \
     --icon icon.png --summary "One line about it" --maintainer "Your Name <you@example.com>"
 ```
 
-**4. Make Windows installers.** Produces `myapp-1.2.3-x64-setup.exe` and
-`myapp-1.2.3-arm64-setup.exe` in `dist/packages/`. Each installs your app
-for the person running it, with no administrator password, adds it to the
-Start menu and to Windows' list of installed apps, and closes a running
-copy before replacing it, so the same installer also updates. Needs
-`brew install makensis dotnet`.
+**4. Make Windows installers.**
 
 ```bash
 path/to/vero/scripts/package-windows.sh --name myapp --version 1.2.3 \
