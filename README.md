@@ -296,6 +296,37 @@ All targets in **bold** (e.g. `darwin/arm64`), other than `android/arm64`,
 they do not build a standalone worker. To build targets not in bold, specify
 them when building: `TARGETS=plan9/386 ./scripts/build-all.sh`.
 
+### Your own app: building, running and installers
+
+The scripts work from your own project too, run from beside its `go.mod`:
+
+```bash
+# Your worker, for the platforms you ship, with its version built in.
+WORKER=./cmd/worker CSHIM=none WPF_APP=none LDFLAGS="-X main.version=1.2.3" \
+    TARGETS="windows/amd64 linux/amd64" path/to/vero/scripts/build-all.sh
+
+# Your GTK app, in a container, over Screen Sharing (or --shot out.png).
+path/to/vero/scripts/run-linux.sh --app linux --entry myapp.py \
+    --worker ./cmd/worker --worker-name myapp-worker
+
+# Installers: .deb files for Debian and Ubuntu, amd64 and arm64.
+path/to/vero/scripts/package-linux.sh --name myapp --version 1.2.3 \
+    --app linux --entry myapp.py --worker ./cmd/worker --worker-name myapp-worker \
+    --icon icon.png --summary "One line about it" --maintainer "You <you@example.com>"
+
+# Installers: Windows, x64 and ARM64, for the person installing them, with
+# no administrator needed (NSIS: brew install makensis dotnet).
+path/to/vero/scripts/package-windows.sh --name myapp --version 1.2.3 \
+    --app windows --exe myapp.exe --worker ./cmd/worker --worker-name myapp-worker.exe \
+    --icon icon.png --publisher "You"
+```
+
+Each script's header lists every option. They name nobody: the maintainer,
+publisher, homepage and anything built into your worker (`--ldflags`) are
+what you pass. The Windows installers are not signed, since a code-signing
+certificate is yours alone; sign them with `signtool` or `osslsigncode`
+before you publish them, or SmartScreen warns about them.
+
 † targets need a C toolchain: either an NDK for the three Androids that are
 not `arm64`, or the Simulator SDK for `ios/amd64`. The other 43 targets only
 need Go.

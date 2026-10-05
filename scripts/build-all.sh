@@ -9,6 +9,15 @@
 #
 # The exception is macOS, where the Swift package links the Go archive into
 # the application, and cgo builds that here natively.
+#
+# From your own project, beside its go.mod:
+#
+#   WORKER=./cmd/worker CSHIM=none WPF_APP=none LDFLAGS="-s -w -X main.version=1.2.3" \
+#       TARGETS="windows/amd64 linux/amd64" path/to/vero/scripts/build-all.sh
+#
+# CSHIM=none leaves out the macOS archive (an app that spawns its worker has
+# no use for it), WPF_APP=none the WPF example, and LDFLAGS is handed to
+# every worker's go build: its version, say.
 set -e
 
 # Work from the module we are in, so this script also works copied into
@@ -55,7 +64,7 @@ for t in $TARGETS; do
     # A WASI runtime is handed a file to run, and expects it to say what it is.
     [ "$os" = wasip1 ] && ext=".wasm"
     CGO_ENABLED=0 GOOS=$os GOARCH=$arch \
-        go build -o "$DIST/worker-$os-$arch$ext" "$WORKER"
+        go build -ldflags "${LDFLAGS:-}" -o "$DIST/worker-$os-$arch$ext" "$WORKER"
     echo "  worker-$os-$arch$ext"
 done
 if [ -f "$DIST/worker-darwin-arm64" ] && [ -f "$DIST/worker-darwin-amd64" ]; then
@@ -64,28 +73,33 @@ if [ -f "$DIST/worker-darwin-arm64" ] && [ -f "$DIST/worker-darwin-amd64" ]; the
     echo "  worker-macos-universal"
 fi
 
-echo "macOS: a universal C archive for Swift to link"
-# The Go version decides the minimum macOS this archive supports, whatever
-# MACOSX_DEPLOYMENT_TARGET says: go1.27 stamps darwin/arm64 objects macOS 13,
-# and an application targeting 12 then fails to link against them.  Pinned
-# here so a release cannot quietly drop macOS 12 users because of whichever Go
-# happened to be on the PATH.
-export GOTOOLCHAIN=${MACOS_GOTOOLCHAIN:-go1.26.0}
-export MACOSX_DEPLOYMENT_TARGET=${MACOSX_DEPLOYMENT_TARGET:-11.0}
-CGO_ENABLED=1 GOARCH=arm64 \
-    go build -buildmode=c-archive -o "$DIST/libvero-arm64.a" "$CSHIM"
-CGO_ENABLED=1 GOARCH=amd64 CC="clang -arch x86_64 -mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET" \
-    go build -buildmode=c-archive -o "$DIST/libvero-amd64.a" "$CSHIM"
-lipo -create "$DIST/libvero-arm64.a" "$DIST/libvero-amd64.a" -output "$DIST/libvero.a"
-echo "  libvero.a ($(lipo -info "$DIST/libvero.a" | sed 's/.*are: //'))"
+if [ "$CSHIM" != none ]; then
+    echo "macOS: a universal C archive for Swift to link"
+    # The Go version decides the minimum macOS this archive supports, whatever
+    # MACOSX_DEPLOYMENT_TARGET says: go1.27 stamps darwin/arm64 objects macOS 13,
+    # and an application targeting 12 then fails to link against them.  Pinned
+    # here so a release cannot quietly drop macOS 12 users because of whichever Go
+    # happened to be on the PATH.
+    export GOTOOLCHAIN=${MACOS_GOTOOLCHAIN:-go1.26.0}
+    export MACOSX_DEPLOYMENT_TARGET=${MACOSX_DEPLOYMENT_TARGET:-11.0}
+    CGO_ENABLED=1 GOARCH=arm64 \
+        go build -buildmode=c-archive -o "$DIST/libvero-arm64.a" "$CSHIM"
+    CGO_ENABLED=1 GOARCH=amd64 CC="clang -arch x86_64 -mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET" \
+        go build -buildmode=c-archive -o "$DIST/libvero-amd64.a" "$CSHIM"
+    lipo -create "$DIST/libvero-arm64.a" "$DIST/libvero-amd64.a" -output "$DIST/libvero.a"
+    echo "  libvero.a ($(lipo -info "$DIST/libvero.a" | sed 's/.*are: //'))"
 
-unset GOTOOLCHAIN
+    unset GOTOOLCHAIN
+fi
 
-echo "Windows: the WPF example, published for win-arm64"
+WPF_APP=${WPF_APP:-$ROOT/example/wpf-app}
+[ "$WPF_APP" != none ] && echo "Windows: the WPF example, published for win-arm64"
 DOTNET=$(command -v dotnet 2>/dev/null || true)
 [ -z "$DOTNET" ] && [ -x "$HOME/.dotnet/dotnet" ] && DOTNET="$HOME/.dotnet/dotnet"
-if [ -n "$DOTNET" ] && [ -d "$ROOT/example/wpf-app" ]; then
-    ( cd "$ROOT/example/wpf-app" && "$DOTNET" publish -c Release -r win-arm64 \
+if [ "$WPF_APP" = none ]; then
+    :
+elif [ -n "$DOTNET" ] && [ -d "$WPF_APP" ]; then
+    ( cd "$WPF_APP" && "$DOTNET" publish -c Release -r win-arm64 \
         --self-contained -p:EnableWindowsTargeting=true -o "$DIST/wpf-arm64" -v quiet ) >/dev/null
     echo "  wpf-arm64/VeroExample.exe"
 else
