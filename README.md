@@ -296,40 +296,89 @@ All targets in **bold** (e.g. `darwin/arm64`), other than `android/arm64`,
 they do not build a standalone worker. To build targets not in bold, specify
 them when building: `TARGETS=plan9/386 ./scripts/build-all.sh`.
 
-### Your own app: building, running and installers
-
-The scripts work from your own project too, run from beside its `go.mod`:
-
-```bash
-# Your worker, for the platforms you ship, with its version built in.
-WORKER=./cmd/worker CSHIM=none WPF_APP=none LDFLAGS="-X main.version=1.2.3" \
-    TARGETS="windows/amd64 linux/amd64" path/to/vero/scripts/build-all.sh
-
-# Your GTK app, in a container, over Screen Sharing (or --shot out.png).
-path/to/vero/scripts/run-linux.sh --app linux --entry myapp.py \
-    --worker ./cmd/worker --worker-name myapp-worker
-
-# Installers: .deb files for Debian and Ubuntu, amd64 and arm64.
-path/to/vero/scripts/package-linux.sh --name myapp --version 1.2.3 \
-    --app linux --entry myapp.py --worker ./cmd/worker --worker-name myapp-worker \
-    --icon icon.png --summary "One line about it" --maintainer "You <you@example.com>"
-
-# Installers: Windows, x64 and ARM64, for the person installing them, with
-# no administrator needed (NSIS: brew install makensis dotnet).
-path/to/vero/scripts/package-windows.sh --name myapp --version 1.2.3 \
-    --app windows --exe myapp.exe --worker ./cmd/worker --worker-name myapp-worker.exe \
-    --icon icon.png --publisher "You"
-```
-
-Each script's header lists every option. They name nobody: the maintainer,
-publisher, homepage and anything built into your worker (`--ldflags`) are
-what you pass. The Windows installers are not signed, since a code-signing
-certificate is yours alone; sign them with `signtool` or `osslsigncode`
-before you publish them, or SmartScreen warns about them.
-
 † targets need a C toolchain: either an NDK for the three Androids that are
 not `arm64`, or the Simulator SDK for `ios/amd64`. The other 43 targets only
 need Go.
+
+
+## Build, try out and package your own app from your Mac
+
+The scripts above build and run vero's example. Four of them also work on
+an app of your own that uses vero, so that you can build it for other
+platforms, see it running on Linux, and make installers that people can
+download, all without leaving your Mac. Run each one from your app's
+folder (the one with its `go.mod`); it uses your worker and your front
+ends, not the example's.
+
+The commands below assume an app laid out like this, with names you would
+change to your own:
+
+```
+myapp/
+  go.mod
+  cmd/worker/        your worker (its main package sets `var version`)
+  linux/myapp.py     your GTK front end, with vero.py beside it
+  windows/           your WPF front end (a .csproj)
+  icon.png           a square icon, 512 or 1024 pixels
+```
+
+**1. Build your worker for other platforms.** Cross-compiles
+`cmd/worker` for the platforms you list into `dist/`, with your version
+built in. `CSHIM=none` and `WPF_APP=none` skip the two things only the
+example needs.
+
+```bash
+WORKER=./cmd/worker CSHIM=none WPF_APP=none LDFLAGS="-X main.version=1.2.3" \
+    TARGETS="windows/amd64 linux/amd64" path/to/vero/scripts/build-all.sh
+```
+
+**2. See your Linux app running.** Builds your worker for Linux and runs
+your GTK app in a Linux container, and opens it in Screen Sharing so you
+can use it. `--shot out.png` takes a screenshot instead. Needs Docker
+(`brew install colima docker && colima start`).
+
+```bash
+path/to/vero/scripts/run-linux.sh --app linux --entry myapp.py \
+    --worker ./cmd/worker --worker-name myapp-worker
+```
+
+**3. Make Linux installers.** Produces `.deb` packages for Debian and
+Ubuntu, for Intel and ARM computers, in `dist/packages/`. Installing one
+puts your app in the applications menu and `myapp` on the command line.
+Needs Docker.
+
+```bash
+path/to/vero/scripts/package-linux.sh --name myapp --version 1.2.3 \
+    --app linux --entry myapp.py --worker ./cmd/worker --worker-name myapp-worker \
+    --icon icon.png --summary "One line about it" --maintainer "Your Name <you@example.com>"
+```
+
+**4. Make Windows installers.** Produces `myapp-1.2.3-x64-setup.exe` and
+`myapp-1.2.3-arm64-setup.exe` in `dist/packages/`. Each installs your app
+for the person running it, with no administrator password, adds it to the
+Start menu and to Windows' list of installed apps, and closes a running
+copy before replacing it, so the same installer also updates. Needs
+`brew install makensis dotnet`.
+
+```bash
+path/to/vero/scripts/package-windows.sh --name myapp --version 1.2.3 \
+    --app windows --exe myapp.exe --worker ./cmd/worker --worker-name myapp-worker.exe \
+    --icon icon.png --publisher "Your Name or Company"
+```
+
+Each script's header lists all of its options, such as `--homepage`,
+`--recommends` or `--startup` (offer to open the app at sign-in).
+
+The scripts contain no names, email addresses, keys or certificates.
+Everything that identifies you or your app is what you pass on the command
+line, including anything you build into your worker with `--ldflags` (an
+API key, say), so keep those in a file outside your repository rather than
+in a script you commit.
+
+The Windows installers are not signed, because signing needs a
+code-signing certificate of your own. Until you sign them (with
+`signtool` on Windows, or `osslsigncode` on a Mac), Windows SmartScreen
+warns people who download them.
 
 ## Licence
 
