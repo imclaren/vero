@@ -307,10 +307,6 @@ The scripts above build and run vero's example. Four of them also work on
 an app of your own that uses vero. Run each one on a Mac from your app's
 folder (the one with its `go.mod`).
 
-Steps 2 and 3 need Docker (`brew install colima docker && colima start`),
-and step 4 needs `brew install makensis dotnet`. The installers are written
-to `dist/packages/`.
-
 The commands below assume your app will be laid out like this:
 
 ```
@@ -355,8 +351,8 @@ path/to/vero/scripts/package-windows.sh --name myapp --version 1.2.3 \
 Each script's header lists all of its options, such as `--homepage`,
 `--recommends` or `--startup` (offer to open the app at sign-in).
 
-Pass anything you build into your worker with `--ldflags`, such as an API
-key, from a file outside your repository.
+Add flags to your worker by using `--ldflags`, to add API
+keys from a file outside your repository for example.
 
 The Windows installers are not signed, because signing needs your
 code-signing certificate. Until you sign them (with `signtool` on Windows,
