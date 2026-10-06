@@ -48,8 +48,8 @@ func (t *tomlFile) get(section, key string) string {
 // app's basics - when there is none.
 func (t *tomlFile) write(app *App, add string) error {
 	if t.text == "" {
-		t.text = "# vero-app.toml describes this app to vero's packaging: see vero's README,\n" +
-			"# \"Creating app installers\". Paths are relative to this file.\n\n" +
+		t.text = "# vero-app.toml describes this app to vero's packaging: see vero's\n" +
+			"# PACKAGING.md, \"Creating app installers\". Paths are relative to this file.\n\n" +
 			"name = \"" + app.Name + "\"\n" +
 			"display_name = \"" + app.Display + "\"\n" +
 			"id = \"" + app.ID + "\"\n" +

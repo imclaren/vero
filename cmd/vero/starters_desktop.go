@@ -21,7 +21,6 @@ const gtkToml = `# The GTK front end, which vero add wrote: Linux, the BSDs and 
 [gtk]
 folder = "gtk"
 entry = "main.py"
-include = ["vero.py"]
 categories = "Utility;"
 
 [gtk.deb]

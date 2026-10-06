@@ -2,12 +2,80 @@
 
 [Back to vero's README](README.md)
 
-This guide has two parts. [Taking your app to more
+Start with [a worked example](#a-worked-example), which takes a small app
+from macOS to an install page in a few commands. The rest of the guide has
+two parts. [Taking your app to more
 platforms](#taking-your-app-to-more-platforms) adds front ends for the
 systems you want; skip it if your app already runs everywhere you want it
 to. [Creating app installers](#creating-app-installers) then builds the
 installers for every system your app has, and the website people install
 and update from.
+
+## A worked example
+
+The whole journey in a few minutes, on your Mac: a small app that runs on
+macOS gains front ends for Linux and Windows, gets packaged, and gets an
+install page. vero's example worker stands in for your app's. The rest of
+this guide explains each step and the options.
+
+**1. Install vero's tools,** and fetch vero itself for its packaging script.
+Go puts the tools in `$(go env GOPATH)/bin`, which needs to be on your
+`PATH`.
+
+```bash
+go install github.com/imclaren/vero/cmd/vero@latest
+go install github.com/imclaren/vero/cmd/vero-repo@latest
+go install github.com/imclaren/vero/kit/cmd/vero-site@latest
+git clone https://github.com/imclaren/vero ~/vero
+```
+
+**2. Make the app:** a Go module with a worker and an icon.
+
+```bash
+mkdir hello && cd hello
+go mod init example.com/hello
+mkdir -p cmd/worker && cp ~/vero/example/worker/main.go cmd/worker/
+cp ~/vero/example/icon.png .
+go get github.com/imclaren/vero@latest
+```
+
+**3. Add front ends for macOS, Linux and Windows.** `vero add` reads the
+worker and writes a starter app for each, which shows the worker's state
+and has a button for each request. It also writes `vero-app.toml`, which
+describes the app to the packaging, and `PORTING.md`, a checklist for your
+own app.
+
+```bash
+vero add desktop
+```
+
+Open `vero-app.toml` and fill in `summary` and `description`: one line
+about the app, and a few more.
+
+**4. Make a signing key, then build the installers.** The key signs every
+release, so that people's systems trust your updates. This builds the
+Debian packages and the Mac disk image; leave out `--targets` to build
+everything your Mac has the tools for.
+
+```bash
+vero-repo key --dir ~/vero-keys/hello --name "Your Name" --email you@example.com
+~/vero/scripts/package.sh --app vero-app.toml --version 1.0.0 --targets deb,macos
+```
+
+**5. Build the install site, and look at it.** `vero-repo build` makes
+`dist/site` and checks it. `vero-site` serves it.
+
+```bash
+vero-repo build --app vero-app.toml --key ~/vero-keys/hello --url http://localhost:8080
+vero-site -dir dist/site -addr localhost:8080
+```
+
+Open <http://localhost:8080>. The page shows the install commands for the
+visitor's system, and `/download?for=mac` hands out the disk image.
+
+**6. Release an update.** Change the app, then run steps 4 and 5 again
+with `--version 1.0.1`, skipping `vero-repo key`. On a real server,
+upload `dist/site` and use its address as `--url`.
 
 ## Taking your app to more platforms
 
@@ -206,10 +274,12 @@ network.
 **2. Make a signing key, once.**
 
 ```bash
-vero-repo key --name "Your Name or Company" --email you@example.com
+vero-repo key --dir ~/vero-keys/myapp --name "Your Name or Company" --email you@example.com
 ```
 
-This makes a folder in `~/.config/vero-repo`. Its `private.asc` signs every
+This makes the folder you name with `--dir`. Without `--dir`, it's a
+folder named after you in `~/Library/Application Support/vero-repo` on a
+Mac, or `~/.config/vero-repo` on Linux. Its `private.asc` signs every
 release, so that people's systems can tell your updates are really yours;
 `signify.sec` signs the OpenBSD packages; `sparkle.sec` signs Mac updates;
 and `android.keystore`, made the first time an Android app is built, signs
@@ -239,7 +309,7 @@ API keys from a file outside your repository.
 **4. Build the site.**
 
 ```bash
-vero-repo build --app vero-app.toml --key ~/.config/vero-repo/your-name-or-company \
+vero-repo build --app vero-app.toml --key ~/vero-keys/myapp \
     --url https://example.com/myapp
 ```
 

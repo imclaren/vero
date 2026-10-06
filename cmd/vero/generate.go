@@ -111,7 +111,7 @@ func writePorting(app *App, added []string) error {
 		s := starters[p]
 		fmt.Fprintf(&b, "- **%s** in `%s/`: %s\n", p, s.folder, s.note)
 	}
-	b.WriteString("\nEach folder has a README saying how to build and run it. `vero-app.toml` now lists them, so `scripts/package.sh` and `vero-repo build` package them (see vero's README, \"Creating app installers\").\n\n")
+	b.WriteString("\nEach folder has a README saying how to build and run it. `vero-app.toml` now lists them, so `scripts/package.sh` and `vero-repo build` package them (see vero's PACKAGING.md, \"Creating app installers\").\n\n")
 	limited := false
 	for _, p := range added {
 		limited = limited || starters[p].limited
