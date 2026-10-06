@@ -105,6 +105,24 @@ func TestSparkleKeys(t *testing.T) {
 	if err := importSparkle(dir, file); err == nil {
 		t.Fatal("a Sparkle key was replaced")
 	}
+
+	// The same expanded key followed by its public key, as older Sparkle
+	// kept them in the keychain; and one whose halves don't match.
+	pub := priv.Public().(ed25519.PublicKey)
+	both := base64.StdEncoding.EncodeToString(append(append([]byte{}, h[:]...), pub...))
+	dir96 := t.TempDir()
+	os.WriteFile(filepath.Join(dir96, "old.key"), []byte(both), 0o600)
+	if err := importSparkle(dir96, filepath.Join(dir96, "old.key")); err != nil {
+		t.Fatal(err)
+	}
+	if k96, err := (&signer{dir: dir96}).sparkle(); err != nil || !bytes.Equal(k96.sign(data), ed25519.Sign(priv, data)) {
+		t.Fatalf("a 96-byte key signs differently from its seed: %v", err)
+	}
+	_, other, _ := ed25519.GenerateKey(rand.Reader)
+	bad := base64.StdEncoding.EncodeToString(append(append([]byte{}, h[:]...), other.Public().(ed25519.PublicKey)...))
+	if _, err := parseSparkleKey(bad); err == nil {
+		t.Fatal("a 96-byte key with someone else's public half was taken")
+	}
 	// The scalar made from a seed is what the expanded key holds.
 	if _, err := edwards25519.NewScalar().SetBytesWithClamping(h[:32]); err != nil {
 		t.Fatal(err)

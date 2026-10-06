@@ -736,7 +736,8 @@ func (k *sparkleKey) sign(data []byte) []byte {
 
 // parseSparkleKey reads a Sparkle private key as base64: a 32-byte seed,
 // as vero and Sparkle's generate_keys -x keep one; a seed and its public
-// key; or an expanded key, as older Sparkle kept them.
+// key; or an expanded key, alone or followed by its public key, as older
+// Sparkle kept them.
 func parseSparkleKey(text string) (*sparkleKey, error) {
 	raw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(text))
 	if err != nil {
@@ -756,8 +757,20 @@ func parseSparkleKey(text string) (*sparkleKey, error) {
 		}
 		pub := (&edwards25519.Point{}).ScalarBaseMult(s).Bytes()
 		return &sparkleKey{expanded: raw, public: pub}, nil
+	case 96:
+		// An expanded key followed by its public key, as older Sparkle kept
+		// them in the keychain: the public key has to be the private key's.
+		s, err := edwards25519.NewScalar().SetBytesWithClamping(raw[:32])
+		if err != nil {
+			return nil, err
+		}
+		pub := (&edwards25519.Point{}).ScalarBaseMult(s).Bytes()
+		if !bytes.Equal(pub, raw[64:]) {
+			return nil, errors.New("this Sparkle key's public half doesn't match its private half")
+		}
+		return &sparkleKey{expanded: raw[:64], public: pub}, nil
 	}
-	return nil, fmt.Errorf("a Sparkle private key is 32 or 64 bytes, not %d", len(raw))
+	return nil, fmt.Errorf("a Sparkle private key is 32, 64 or 96 bytes, not %d", len(raw))
 }
 
 // PublicBase64 is SUPublicEDKey: what an app's Info.plist says.
