@@ -9,7 +9,8 @@ Run a Go binary embedded in a native (e.g. macOS SwiftUI) app. The Go binary and
 [Build and run the macOS example](#build-and-run-the-macos-example) ·
 [Create a vero macOS app](#create-a-vero-macos-app) ·
 [Build and run the example on all platforms using your Mac](#build-and-run-the-example-on-all-platforms-using-your-mac) ·
-[Creating app installers](#creating-app-installers)
+[Creating app installers](#creating-app-installers) ·
+[Taking your app to more platforms](#taking-your-app-to-more-platforms)
 
 | Operating system | Example | Required on your Mac to build and run | Build and run on your Mac |
 |---|:---:|---|---|
@@ -503,6 +504,102 @@ installers with [`package-windows.sh`](scripts/package-windows.sh).
 own, from flags rather than `vero-app.toml`. Each script's header lists
 its options. [`run-linux.sh`](scripts/run-linux.sh) shows your Linux app
 running before you package it.
+
+## Taking your app to more platforms
+
+An app written for one system - a Mac menu bar app, say - can run on the
+others with a worker it already has. `vero add` writes a starter front end
+for each system you ask for, wired to your worker, and vero's `kit`
+packages do the few things a worker does one system's way. Then the
+installers above package all of them.
+
+### 1. Move what is one system's onto vero's packages
+
+The `kit` module, `github.com/imclaren/vero/kit`, holds what a worker needs
+from the system it runs on, with one API for all of them. It is a module of
+its own, so that vero's library keeps no dependencies; `go get
+github.com/imclaren/vero/kit` brings it in.
+
+| Package | What it does | Where |
+|---|---|---|
+| `kit/keychain` | Keeps sign-ins and other secrets | The login keychain on macOS, the Credential Manager on Windows, the Secret Service on Linux and the BSDs, and a file only this user can read elsewhere |
+| `kit/autostart` | Opens the app at sign-in | A LaunchAgent on macOS (from an app bundle, `SMAppService` from Swift is better), the Run key on Windows, an autostart `.desktop` file on Linux and the BSDs |
+| `kit/notify` | Shows a notification from the worker | The desktop's notification service on Linux and the BSDs, a toast on Windows; on macOS and iOS notifications come from the app, so keep what is new in the state and let the front end notify |
+| `kit/update` | Says whether a newer version is on your site | Reads the `latest.json` and the Sparkle appcast that `vero-repo build` writes |
+| `kit/tools` | Finds helper programs the app ships, such as ffmpeg | Wherever the app is installed on each system, or a folder you name |
+| `kit/site` | Serves your install site from your own Go server | For an app with a server already, or one whose downloads are for people who have signed in (`site.Private`); the site is plain files, so this is optional |
+
+Each builds for every system vero does, without cgo.
+
+### 2. Add the front ends
+
+In your app's folder, the one with its `go.mod`:
+
+```bash
+go install github.com/imclaren/vero/cmd/vero@latest
+vero add                 # the desktop: macOS, GTK (Linux, the BSDs, illumos) and WPF (Windows)
+vero add mobile          # Android and iOS
+vero add all             # everything vero has a front end for
+vero add all --except plan9,wasi
+vero add windows android # any mix of groups and systems
+```
+
+It reads your worker - the state it pushes and the requests it handles -
+and writes a starter for each system: a window that shows every field of
+the state and a control for every request, so that it runs against your
+worker as it is. Each starter's README says how to build and run it, with
+vero's binding for that language copied beside it. Front ends you already
+have are left alone, and each new one is added to `vero-app.toml` (made
+if you have none), so that the installers above build them.
+
+The starters are a first draft to make your own, not a design: the GTK one
+is Python, the Windows one C#, the macOS and iOS ones SwiftUI, the Android
+one Kotlin, the browser, WASI and Plan 9 ones Go. The shapes of your state
+and requests are written out in each language, for the window you build
+next.
+
+### 3. Work through PORTING.md
+
+`vero add` also writes `PORTING.md`: what in your worker needs attention
+on the new systems, found by reading its code. cgo, which stops the worker
+being cross-compiled from one Mac; programs it starts, which have to be
+shipped for each system and which iOS and a browser forbid; listening on a
+port, which the worker cannot do inside an app on iOS or in a browser;
+secrets, sign-in items and notifications done one system's way, with the
+`kit` package to use instead. Each with the files and lines.
+
+On iOS and in a browser the worker runs inside the app, since neither
+lets an app start a program. For those two, give your worker a `Serve(in
+io.Reader, out io.Writer) error` in a package the front end can import -
+the body of its `main`, with `vero.WorkerOptions{In: in, Out: out}` - and
+point the starters at it where they say.
+
+### 4. Ship helper programs for each system
+
+A worker that runs a program it ships - ffmpeg, say - needs a build of it
+for each system and architecture, and finds it with `kit/tools`, which
+looks wherever the app is installed. (How the installers carry them is
+coming.)
+
+### 5. Release as usual
+
+`scripts/package.sh --app vero-app.toml --version X`, then `vero-repo
+build`, then upload the site: see [Creating app
+installers](#creating-app-installers). The new systems' packages and
+instructions are in the same site.
+
+### From SwiftUI to the others
+
+For a front end of your own, the same ideas in each toolkit:
+
+| SwiftUI | GTK 4 (Python) | WPF (C#) |
+|---|---|---|
+| `WindowGroup`, `MenuBarExtra` | `Gtk.ApplicationWindow`; a status icon needs an extension on GNOME, so a window is the usual choice | `Window`; a tray icon with `NotifyIcon` from Windows Forms |
+| `List`, `ForEach` | `Gtk.ListBox` with a row per item, or `Gtk.ListView` for many | `ListBox` or `ItemsControl` with an `ItemTemplate` |
+| `NavigationSplitView` | `Gtk.Paned` with a sidebar `Gtk.ListBox` | a `Grid` with a `GridSplitter` |
+| `.sheet`, `.alert` | `Gtk.Dialog`, `Gtk.AlertDialog` | a `Window` shown with `ShowDialog`, `MessageBox` |
+| `@StateObject` model fed by events | `run_in_thread` from `vero.py` with `GLib.idle_add` | `await foreach` over `VeroClient.Events()` and `Dispatcher.Invoke` |
+| a `WKWebView` | `WebKit.WebView` from WebKitGTK 6 | `WebView2` |
 
 ## Licence
 
