@@ -33,10 +33,20 @@ type App struct {
 	Worker Worker `toml:"worker"`
 	GTK    *GTK   `toml:"gtk"`
 	WPF    *WPF   `toml:"wpf"`
+	MacOS  *MacOS `toml:"macos"`
+	// The front ends that aren't installed from a package manager.
+	Web     *Web     `toml:"web"`
+	Android *Android `toml:"android"`
+	IOS     *IOS     `toml:"ios"`
+	WASI    *WASI    `toml:"wasi"`
+	Plan9   *Plan9   `toml:"plan9"`
 	Needs  Needs  `toml:"needs"`
 
 	// dir is the folder the file is in, which its paths are relative to.
 	dir string
+	// Build is a Mac app's CFBundleVersion, which Sparkle compares: the
+	// version unless package is given --build.
+	Build string `toml:"-"`
 }
 
 // Worker is the app's Go worker.
@@ -45,6 +55,9 @@ type Worker struct {
 	// which gains .exe on Windows.
 	Package string `toml:"package"`
 	Name    string `toml:"name"`
+	// CGO builds the Mac worker with cgo - for the keychain, say - for
+	// both architectures, with Xcode's clang. Elsewhere it's built without.
+	CGO bool `toml:"cgo"`
 }
 
 // GTK is the front end for Linux and the other Unixes.
@@ -160,6 +173,11 @@ type Deb struct {
 type WPF struct {
 	Folder string `toml:"folder"`
 	Exe    string `toml:"exe"`
+	// WingetID is the app's identifier in winget, as Publisher.App; made
+	// from the publisher's and the app's names unless it says.
+	WingetID string `toml:"winget_id"`
+	// MSIX is the package for the Microsoft Store, made only when asked.
+	MSIX MSIXConfig `toml:"msix"`
 }
 
 // Needs are what the app asks of the system it runs on.
@@ -218,6 +236,21 @@ func (a *App) check(path string) error {
 	if a.GTK != nil && (a.GTK.Folder == "" || a.GTK.Entry == "") {
 		return problem("[gtk] needs folder and entry")
 	}
+	if m := a.MacOS; m != nil && (m.Folder == "" || (m.Product == "") == (m.Project == "" || m.Scheme == "")) {
+		return problem("[macos] needs folder, and either product (SwiftPM) or project and scheme (Xcode)")
+	}
+	switch {
+	case a.Web != nil && (a.Web.Folder == "" || len(a.Web.Files) == 0):
+		return problem("[web] needs folder and files")
+	case a.Android != nil && (a.Android.Folder == "" || a.Android.APK == ""):
+		return problem("[android] needs folder and apk")
+	case a.IOS != nil && a.IOS.Folder == "":
+		return problem("[ios] needs folder")
+	case a.WASI != nil && (a.WASI.Frontend == "" || a.WASI.Worker == ""):
+		return problem("[wasi] needs frontend and worker")
+	case a.Plan9 != nil && a.Plan9.Frontend == "":
+		return problem("[plan9] needs frontend")
+	}
 	if a.WPF != nil && (a.WPF.Folder == "" || a.WPF.Exe == "") {
 		return problem("[wpf] needs folder and exe")
 	}
@@ -254,4 +287,25 @@ func (a *App) ModuleRoot() (string, error) {
 		}
 		dir = up
 	}
+}
+
+// buildNumber is the Mac app's CFBundleVersion.
+func (a *App) buildNumber() string {
+	if a.Build != "" {
+		return a.Build
+	}
+	return a.Version
+}
+
+// MSIXConfig is the MSIX package, for the Microsoft Store.
+type MSIXConfig struct {
+	// Build makes one whenever the Windows installers are made; --targets
+	// msix makes one either way.
+	Build bool `toml:"build"`
+	// The identity Partner Center gives the app when you reserve its name:
+	// Package/Identity/Name, and Publisher, as "CN=...", and the publisher
+	// name it shows.
+	IdentityName  string `toml:"identity_name"`
+	Publisher     string `toml:"publisher"`
+	PublisherName string `toml:"publisher_name"`
 }

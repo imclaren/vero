@@ -64,7 +64,12 @@ func makeKey(dir, name, email string) error {
 	}
 	// OpenBSD's packages are signed with signify, which has keys of its
 	// own: one is made now, beside the OpenPGP key.
-	_, err = (&signer{dir: dir}).signify()
+	if _, err = (&signer{dir: dir}).signify(); err != nil {
+		return err
+	}
+	// So does a Mac app's Sparkle, which checks updates with a key of its
+	// own: its public half goes in the app.
+	_, err = (&signer{dir: dir}).sparkle()
 	return err
 }
 

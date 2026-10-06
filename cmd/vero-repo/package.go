@@ -19,10 +19,12 @@ func packageCommand(args []string) error {
 	fset := flag.NewFlagSet("package", flag.ExitOnError)
 	appPath := fset.String("app", "vero-app.toml", "the app's vero-app.toml")
 	version := fset.String("version", "", "the version to build; the file's when not given")
-	targets := fset.String("targets", "", "comma separated: deb, rpm, flatpak, windows, freebsd, dragonfly, netbsd, illumos, openbsd; linux for deb and rpm, bsd for the BSDs and illumos (default: all the app has)")
+	targets := fset.String("targets", "", "comma separated: deb, rpm, flatpak, macos, windows, web, android, ios, wasi, plan9, freebsd, dragonfly, netbsd, illumos, openbsd; linux for deb and rpm, bsd for the BSDs and illumos (default: all the app has)")
 	out := fset.String("out", "dist/packages", "where the installers go")
 	ldflags := fset.String("ldflags", "", "more of the worker's build flags: what your app builds into it")
 	vero := fset.String("vero", "", "vero's folder (default: found from this program's source)")
+	buildNum := fset.String("build", "", "a Mac app's CFBundleVersion, when it numbers its builds apart from its versions")
+	keyDir := fset.String("key", "", "the signing key's folder, which keeps the Android app's keystore")
 	fset.Parse(args)
 	a, err := LoadApp(*appPath)
 	if err != nil {
@@ -34,6 +36,7 @@ func packageCommand(args []string) error {
 	if a.Version == "" {
 		return errors.New("which version? give --version, or version in vero-app.toml")
 	}
+	a.Build = *buildNum
 	root, err := a.ModuleRoot()
 	if err != nil {
 		return err
@@ -152,6 +155,31 @@ func packageCommand(args []string) error {
 			return err
 		}
 		if err := packageUnix(a, sys, w, outDir); err != nil {
+			return err
+		}
+		did = true
+	}
+	others := []struct {
+		target string
+		on     bool
+		make   func() error
+	}{
+		{"web", a.Web != nil, func() error { return packageWeb(a, outDir) }},
+		{"android", a.Android != nil, func() error { return packageAndroid(a, outDir, *keyDir) }},
+		{"ios", a.IOS != nil, func() error { return packageIOS(a, outDir) }},
+		{"wasi", a.WASI != nil, func() error { return packageWASI(a, root, outDir, *ldflags, dir) }},
+		{"plan9", a.Plan9 != nil, func() error { return packagePlan9(a, root, worker, outDir, *ldflags, dir) }},
+	}
+	for _, o := range others {
+		if o.on && (all || want[o.target]) {
+			if err := o.make(); err != nil {
+				return err
+			}
+			did = true
+		}
+	}
+	if a.MacOS != nil && (all || want["macos"]) {
+		if err := packageMac(a, root, worker, outDir, *ldflags, dir); err != nil {
 			return err
 		}
 		did = true
