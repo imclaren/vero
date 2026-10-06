@@ -681,6 +681,7 @@ github.com/imclaren/vero/kit` brings it in.
 | `kit/update` | Says whether a newer version is on your site | Reads the `latest.json` and the Sparkle appcast that `vero-repo build` writes |
 | `kit/tools` | Finds helper programs the app ships, such as ffmpeg | Wherever the app is installed on each system, or a folder you name |
 | `kit/site` | Serves your install site from your own Go server, with `/download?for=mac` (or `windows`, `linux`, `pkg` and so on) sending each visitor to their installer | For an app with a server already, or one whose downloads are for people who have signed in (`site.Private`); the site is plain files, so this is optional |
+| `kit/cmd/vero-site` | Serves your install site on its own, with an HTTPS certificate from Let's Encrypt | For an app without a web server: `vero-site -dir /srv/myapp -domain downloads.example.com` |
 
 Each builds for every system vero does, without cgo.
 
