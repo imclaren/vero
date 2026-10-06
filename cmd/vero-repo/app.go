@@ -40,7 +40,7 @@ type App struct {
 	IOS     *IOS     `toml:"ios"`
 	WASI    *WASI    `toml:"wasi"`
 	Plan9   *Plan9   `toml:"plan9"`
-	Needs  Needs  `toml:"needs"`
+	Needs   Needs    `toml:"needs"`
 
 	// dir is the folder the file is in, which its paths are relative to.
 	dir string

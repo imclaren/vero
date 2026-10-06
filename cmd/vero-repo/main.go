@@ -19,6 +19,8 @@
 package main
 
 import (
+	"crypto/ed25519"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -39,6 +41,8 @@ func main() {
 		err = packageCommand(os.Args[2:])
 	case "build":
 		err = buildCommand(os.Args[2:])
+	case "check":
+		err = checkCommand(os.Args[2:])
 	case "deb":
 		// What scripts/package-linux.sh builds its .deb with: a folder laid
 		// out for dpkg-deb, made into a .deb in Go.
@@ -59,6 +63,7 @@ func usage() {
 	fmt.Fprint(os.Stderr, `usage:
   vero-repo key --name "Your Name or Company" --email you@example.com [--dir DIR]
   vero-repo key --dir DIR --import-sparkle FILE
+  vero-repo check --app vero-app.toml --url https://example.com/myapp [--key DIR] [dist/site]
   vero-repo package --app vero-app.toml --version 1.2.3 [--targets deb,rpm,flatpak,macos,windows,freebsd,dragonfly,netbsd,illumos,openbsd] [--out dist/packages]
   vero-repo build --app vero-app.toml --key DIR --url https://example.com/myapp [--packages dist/packages] [--out dist/site] [--keep 3] [--no-page]
 `)
@@ -132,8 +137,25 @@ func buildCommand(args []string) error {
 	tgz, _ := filepath.Glob(filepath.Join(*packages, "*.tgz"))
 	in.unix = append(unix, tgz...)
 	in.noPage = *noPage
+	// What the site offered before, which this release mustn't go back from.
+	var previous *Latest
+	if data, err := os.ReadFile(filepath.Join(*out, "latest.json")); err == nil {
+		previous = &Latest{}
+		if json.Unmarshal(data, previous) != nil {
+			previous = nil
+		}
+	}
 	latest, err := build(*out, in, *keep, *url, a, s, *keyDir)
 	if err != nil {
+		return err
+	}
+	var sparkle ed25519.PublicKey
+	if _, err := os.Stat(filepath.Join(*out, "macos")); err == nil {
+		if k, err := s.sparkle(); err == nil {
+			sparkle = k.public
+		}
+	}
+	if err := checkSite(*out, *url, a, sparkle, previous); err != nil {
 		return err
 	}
 	fmt.Printf("built %s: %s %s\n", *out, a.Name, latest.Version)
