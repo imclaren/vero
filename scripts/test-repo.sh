@@ -9,11 +9,21 @@
 #   scripts/test-repo.sh                          # Debian's apt
 #   scripts/test-repo.sh --image ubuntu:24.04     # another apt system
 #   scripts/test-repo.sh --image fedora:latest    # dnf, which checks every signature
+#   scripts/test-repo.sh --image opensuse/tumbleweed  # zypper, the same
 #   scripts/test-repo.sh --flatpak                # Flatpak, from the .flatpakref
 #   scripts/test-repo.sh --image archlinux        # the AUR recipe, with makepkg
+#   scripts/test-repo.sh --vm freebsd             # pkg, in vero's FreeBSD VM
+#   scripts/test-repo.sh --vm netbsd              # pkgin, in vero's NetBSD VM
+#   scripts/test-repo.sh --vm openbsd             # pkg_add, in vero's OpenBSD VM
+#   scripts/test-repo.sh --vm dragonfly           # pkg, in vero's DragonFly VM
+#   scripts/test-repo.sh --vm illumos             # pkgin, with pkgsrc, in vero's OpenIndiana VM
 #   [--port 8642]
 #
-# Needs Docker and colima, as package-linux.sh does. Everything it makes
+# A VM test starts the system's VM with its run script (scripts/run-*.sh
+# --shell), which makes it the first time, and stops it at the end; the
+# system's own packages - GTK and Python - come from its usual mirrors.
+#
+# The container tests need Docker and colima. Everything it makes
 # is in ~/.cache/vero, the key included, so nothing in it is anyone's. The
 # Flatpak test keeps GNOME's runtime, which it downloads from Flathub the
 # first time, in a Docker volume called vero-test-flatpak; remove it with
@@ -21,16 +31,17 @@
 set -e
 VERO=$(cd "$(dirname "$0")/.." && pwd)
 . "$VERO/scripts/lib/docker.sh"
-IMAGE=debian:bookworm PORT=8642 FLATPAK=""
+IMAGE=debian:bookworm PORT=8642 FLATPAK="" VMSYS=""
 while [ $# -gt 0 ]; do
     case $1 in
         --image) IMAGE=$2; shift ;; --port) PORT=$2; shift ;;
         --flatpak) FLATPAK=yes ;;
+        --vm) VMSYS=$2; shift ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
     shift
 done
-vero_docker
+[ -n "$VMSYS" ] || vero_docker
 CACHE="$HOME/.cache/vero"
 KEY="$CACHE/example-key" SITE="$CACHE/example-site" PACKAGES="$CACHE/example-packages"
 # The container reaches this Mac by this name: colima and Docker Desktop
@@ -48,7 +59,43 @@ rm -rf "$SITE"
 GTK="import gi; gi.require_version('Gtk', '4.0'); from gi.repository import Gtk"
 
 # What to build, and how to install, check and update, on this system.
-if [ -n "$FLATPAK" ]; then
+if [ -n "$VMSYS" ]; then
+    # A VM reaches this Mac at 10.0.2.2, as qemu's own network has it.
+    URL="http://10.0.2.2:$PORT"
+    TARGETS=$VMSYS
+    VMDIR="$HOME/vm/vero-$VMSYS"
+    case $VMSYS in
+        freebsd) SSH_PORT=2222 PREFIX=/usr/local PY=python3
+            INSTALL="fetch -q -o - $URL/install.sh | sh"
+            UPDATE="pkg upgrade -y > /dev/null" ;;
+        netbsd) SSH_PORT=2223 PREFIX=/usr/pkg PY=python3.12
+            # pkgin, which the install page says to add if it's missing.
+            SETUP="[ -x /usr/pkg/bin/pkgin ] || PKG_PATH=https://cdn.netbsd.org/pub/pkgsrc/packages/NetBSD/\$(uname -p)/\$(uname -r | cut -d. -f1-2)/All /usr/sbin/pkg_add pkgin"
+            INSTALL="ftp -V -o - $URL/install.sh | sh"
+            UPDATE="pkgin -y -f upgrade > /dev/null" ;;
+        openbsd) SSH_PORT=2224 PREFIX=/usr/local PY=python3
+            # Python crashes importing GTK 4 on OpenBSD 7.9 for ARM, with
+            # or without a display, whatever imports it: so here, GTK is
+            # checked for, not started.
+            GTK="import os; assert os.path.exists('/usr/local/lib/girepository-1.0/Gtk-4.0.typelib')"
+            INSTALL="ftp -V -o - $URL/install.sh | sh"
+            UPDATE="PKG_PATH=$URL/openbsd/%a/:installpath pkg_add -u vero-example" ;;
+        dragonfly) SSH_PORT=2225 PREFIX=/usr/local PY=python3.11
+            INSTALL="fetch -q -o - $URL/install.sh | sh"
+            UPDATE="pkg upgrade -y > /dev/null" ;;
+        illumos) SSH_PORT=2226 PREFIX=/opt/local PY=/opt/local/bin/python3.12
+            # pkgsrc, as pkgsrc.smartos.org says to add it to OpenIndiana.
+            SETUP="[ -x /opt/local/bin/pkgin ] || { cd /tmp && curl -fsSLO https://pkgsrc.smartos.org/packages/SmartOS/bootstrap/bootstrap-trunk-x86_64-20260811.tar.gz &&
+                [ \$(/bin/digest -a sha1 bootstrap-trunk-x86_64-20260811.tar.gz) = e5e620ade4b45695aa385aea25227e94f49f078f ] &&
+                gtar -zxpf bootstrap-trunk-x86_64-20260811.tar.gz -C / && /opt/local/bin/pkgin -y update > /dev/null; }"
+            INSTALL="PATH=/opt/local/bin:/opt/local/sbin:\$PATH; curl -fsSL $URL/install.sh | sh"
+            UPDATE="/opt/local/bin/pkgin -y -f upgrade > /dev/null" ;;
+        *) echo "unknown VM: $VMSYS (freebsd, dragonfly, netbsd, openbsd or illumos)" >&2; exit 2 ;;
+    esac
+    : "${SETUP:=true}"
+    WORKER="$PREFIX/lib/vero-example/worker -version"
+    CHECK="PATH=$PREFIX/bin:\$PATH; command -v vero-example && ls $PREFIX/share/applications/dev.vero.example.desktop $PREFIX/lib/vero-example/vero.py && $PY -c \"$GTK\""
+elif [ -n "$FLATPAK" ]; then
     IMAGE=debian:trixie TARGETS=flatpak
     # The volume keeps GNOME's runtime between runs; the example, and
     # the remote its .flatpakref added, go, so that it's installed afresh.
@@ -78,6 +125,11 @@ else
                 useradd -m builder && echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder"
             INSTALL="su builder -c 'rm -rf ~/pkg && mkdir ~/pkg && cd ~/pkg && curl -fsSLO $URL/aur/PKGBUILD && makepkg -si --noconfirm > /dev/null 2>&1'"
             UPDATE="$INSTALL" ;;
+        opensuse*)
+            TARGETS=rpm
+            SETUP="zypper -n -q install curl gzip > /dev/null"
+            CHECK="$CHECK && rpm -qi vero-example | grep -A1 '^Signature' | grep -q RSA"
+            UPDATE="zypper -n -q refresh > /dev/null && zypper -n -q update > /dev/null" ;;
         fedora*)
             TARGETS=rpm
             SETUP="dnf install -y -q curl > /dev/null"
@@ -99,9 +151,23 @@ release() {
     (cd "$VERO" && scripts/package.sh --app example/vero-app.toml --version "$1" --targets "$TARGETS" --out "$PACKAGES")
     "$REPO" build --app "$VERO/example/vero-app.toml" --packages "$PACKAGES" --key "$KEY" --url "$URL" --out "$SITE"
 }
-in_container() { docker exec "$NAME" sh -c "$1"; }
+if [ -n "$VMSYS" ]; then
+    SSH="ssh -i $VMDIR/key -p $SSH_PORT -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o IdentitiesOnly=yes root@127.0.0.1"
+    in_container() { $SSH "$1"; }
+else
+    in_container() { docker exec "$NAME" sh -c "$1"; }
+fi
 cleanup() {
-    docker rm -f "$NAME" >/dev/null 2>&1 || true
+    if [ -n "$VMSYS" ]; then
+        if [ -f "$VMDIR/qemu.pid" ]; then
+            $SSH 'PATH=/sbin:/usr/sbin:$PATH; poweroff 2>/dev/null || shutdown -p now' >/dev/null 2>&1 || true
+            sleep 15
+            kill "$(cat "$VMDIR/qemu.pid")" 2>/dev/null || true
+            rm -f "$VMDIR/qemu.pid"
+        fi
+    else
+        docker rm -f "$NAME" >/dev/null 2>&1 || true
+    fi
     [ -n "$SERVER" ] && kill "$SERVER" 2>/dev/null || true
 }
 trap cleanup EXIT
@@ -111,9 +177,14 @@ release 1.0.0
 go build -o "$CACHE/bin/serve" "$VERO/scripts/lib/serve.go"
 "$CACHE/bin/serve" "$SITE" "$PORT" &
 SERVER=$!
-docker rm -f "$NAME" >/dev/null 2>&1 || true
-# shellcheck disable=SC2086
-docker run -d --name "$NAME" $RUN --add-host=host.docker.internal:host-gateway "$IMAGE" sleep infinity >/dev/null
+if [ -n "$VMSYS" ]; then
+    "$VERO/scripts/run-$VMSYS.sh" --shell --no-open >/dev/null
+    IMAGE="the $VMSYS VM"
+else
+    docker rm -f "$NAME" >/dev/null 2>&1 || true
+    # shellcheck disable=SC2086
+    docker run -d --name "$NAME" $RUN --add-host=host.docker.internal:host-gateway "$IMAGE" sleep infinity >/dev/null
+fi
 
 echo "== installing it as the site says, in $IMAGE${FLATPAK:+, with Flatpak}"
 in_container "$SETUP"

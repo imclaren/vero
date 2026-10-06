@@ -100,14 +100,13 @@ func rpmFile(name string) *regexp.Regexp {
 
 // buildRPM makes site/rpm a repository that dnf and zypper install and
 // update from: the new rpms beside those there already, the newest keep
-// of each architecture, each signed by s, with repodata made by
-// createrepo_c in vero's tools container and repomd.xml signed by s. It
-// returns the newest rpm of each architecture.
-func buildRPM(site string, newRPMs []string, keep int, url string, a *App, s *signer, t *tools) (map[string]Download, error) {
+// of each architecture, each signed by s, with repodata listing them and
+// repomd.xml signed by s - all in Go. It returns the newest rpm of each
+// architecture.
+func buildRPM(site string, newRPMs []string, keep int, url string, a *App, s *signer) (map[string]Download, error) {
 	root := filepath.Join(site, "rpm")
 	dir := filepath.Join(root, "packages")
 	match := rpmFile(a.Name)
-	var added []string
 	for _, rpm := range newRPMs {
 		if !match.MatchString(filepath.Base(rpm)) {
 			continue
@@ -116,7 +115,9 @@ func buildRPM(site string, newRPMs []string, keep int, url string, a *App, s *si
 		if err := copyFile(rpm, dest); err != nil {
 			return nil, err
 		}
-		added = append(added, dest)
+		if err := signRPM(dest, s); err != nil {
+			return nil, err
+		}
 	}
 	entries, err := os.ReadDir(dir)
 	if err != nil && !os.IsNotExist(err) {
@@ -145,22 +146,7 @@ func buildRPM(site string, newRPMs []string, keep int, url string, a *App, s *si
 		}
 		newest[arch] = Download{Version: strings.ReplaceAll(version[files[0]], "~", "-"), URL: "rpm/packages/" + files[0]}
 	}
-	// Sign what's new, then index everything.
-	var sign []string
-	for _, f := range added {
-		if _, err := os.Stat(f); err == nil {
-			sign = append(sign, f)
-		}
-	}
-	script := t.importKey
-	if len(sign) > 0 {
-		// rpmsign warns that it can't find a terminal, which it doesn't
-		// need: what it says is shown only if it fails.
-		script += fmt.Sprintf("rpmsign --define '_gpg_name %s' --addsign %s >/tmp/rpmsign 2>&1 || { cat /tmp/rpmsign >&2; exit 1; }\n",
-			s.fingerprint(), shellQuote(sign...))
-	}
-	script += fmt.Sprintf("createrepo_c --quiet --update --general-compress-type=gz %s\n", shellQuote(root))
-	if err := t.run(script, root); err != nil {
+	if err := writeRepodata(root); err != nil {
 		return nil, fmt.Errorf("making the rpm repository: %w", err)
 	}
 	repomd, err := os.ReadFile(filepath.Join(root, "repodata", "repomd.xml"))

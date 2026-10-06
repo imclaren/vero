@@ -5,20 +5,21 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 )
 
-// packageCommand builds an app's installers with vero's scripts:
-// package-linux.sh for a GTK front end, package-windows.sh for a WPF one.
+// packageCommand builds an app's installers: in Go, from a GTK front end,
+// a .deb and an rpm for Linux and a package for each Unix the app names;
+// a Flatpak, in vero's tools container, when asked for; and from a WPF
+// front end, the Windows installers, with package-windows.sh.
 func packageCommand(args []string) error {
 	fset := flag.NewFlagSet("package", flag.ExitOnError)
 	appPath := fset.String("app", "vero-app.toml", "the app's vero-app.toml")
 	version := fset.String("version", "", "the version to build; the file's when not given")
-	targets := fset.String("targets", "", "deb, rpm, flatpak, windows, or linux for the first three, comma separated (default: all the app's front ends have)")
+	targets := fset.String("targets", "", "comma separated: deb, rpm, flatpak, windows, freebsd, dragonfly, netbsd, illumos, openbsd; linux for deb and rpm, bsd for the BSDs and illumos (default: all the app has)")
 	out := fset.String("out", "dist/packages", "where the installers go")
 	ldflags := fset.String("ldflags", "", "more of the worker's build flags: what your app builds into it")
 	vero := fset.String("vero", "", "vero's folder (default: found from this program's source)")
@@ -33,9 +34,6 @@ func packageCommand(args []string) error {
 	if a.Version == "" {
 		return errors.New("which version? give --version, or version in vero-app.toml")
 	}
-	if *vero == "" {
-		return errors.New("--vero is needed; scripts/package.sh gives it")
-	}
 	root, err := a.ModuleRoot()
 	if err != nil {
 		return err
@@ -49,6 +47,9 @@ func packageCommand(args []string) error {
 	if err != nil {
 		return err
 	}
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		return err
+	}
 	want := map[string]bool{}
 	for _, t := range strings.Split(*targets, ",") {
 		if t = strings.TrimSpace(t); t != "" {
@@ -56,45 +57,109 @@ func packageCommand(args []string) error {
 		}
 	}
 	all := len(want) == 0
-	linux := func(kind string) bool { return a.GTK != nil && (all || want["linux"] || want[kind]) }
+	gtk := func(kind string) bool {
+		if a.GTK == nil {
+			return false
+		}
+		switch kind {
+		case "deb", "rpm":
+			return all || want["linux"] || want[kind]
+		case "flatpak":
+			return want["flatpak"] || a.GTK.Flatpak.Build && (all || want["linux"])
+		}
+		return a.GTK.enabled(kind) && (all || want["bsd"] || want[kind]) || want[kind]
+	}
+	for t := range want {
+		if s := system(t); s != nil && a.GTK != nil && !a.GTK.enabled(t) {
+			return fmt.Errorf("--targets %s: vero-app.toml has no [gtk.%s], which says what the app needs there", t, t)
+		}
+	}
+
+	// Each worker once, for every package that needs it.
+	home, _ := os.UserHomeDir()
+	if err := os.MkdirAll(filepath.Join(home, ".cache"), 0o755); err != nil {
+		return err
+	}
+	dir, err := os.MkdirTemp(filepath.Join(home, ".cache"), "vero-workers.")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(dir)
+	workers := map[string]map[string]string{} // by GOOS, then GOARCH
+	needWorkers := func(goos string, goarches ...string) (map[string]string, error) {
+		if workers[goos] == nil {
+			workers[goos] = map[string]string{}
+		}
+		for _, goarch := range goarches {
+			if workers[goos][goarch] != "" {
+				continue
+			}
+			w, err := buildWorker(a, root, worker, goos, goarch, *ldflags, dir)
+			if err != nil {
+				return nil, err
+			}
+			workers[goos][goarch] = w
+		}
+		return workers[goos], nil
+	}
+	linuxGoarches := []string{"amd64", "arm64"}
 	did := false
-	if linux("deb") {
-		if err := packageLinux(a, *vero, root, worker, outDir, *ldflags); err != nil {
+	if gtk("deb") {
+		w, err := needWorkers("linux", linuxGoarches...)
+		if err != nil {
+			return err
+		}
+		if err := packageDeb(a, w, outDir); err != nil {
 			return err
 		}
 		did = true
 	}
-	if linux("rpm") || linux("flatpak") {
-		// The worker for each architecture, built once for both.
-		home, _ := os.UserHomeDir()
-		dir, err := os.MkdirTemp(filepath.Join(home, ".cache"), "vero-workers.")
+	if gtk("rpm") {
+		w, err := needWorkers("linux", linuxGoarches...)
 		if err != nil {
 			return err
 		}
-		defer os.RemoveAll(dir)
-		workers := map[string]string{}
-		for _, arch := range linuxArches {
-			if workers[arch.goarch], err = buildWorker(a, root, worker, arch.goarch, *ldflags, dir); err != nil {
-				return err
-			}
+		if err := packageRPM(a, w, outDir); err != nil {
+			return err
 		}
-		if linux("rpm") {
-			if err := packageRPM(a, workers, outDir); err != nil {
-				return err
-			}
+		did = true
+	}
+	if gtk("flatpak") {
+		w, err := needWorkers("linux", linuxGoarches...)
+		if err != nil {
+			return err
 		}
-		if linux("flatpak") {
-			t, err := newTools("")
-			if err != nil {
-				return err
-			}
-			if err := packageFlatpak(a, workers, outDir, t); err != nil {
-				return err
-			}
+		t, err := newTools("")
+		if err != nil {
+			return err
+		}
+		if err := packageFlatpak(a, w, outDir, t); err != nil {
+			return err
+		}
+		did = true
+	}
+	for i := range unixSystems {
+		sys := &unixSystems[i]
+		if !gtk(sys.name) {
+			continue
+		}
+		var goarches []string
+		for _, arch := range sys.arches {
+			goarches = append(goarches, arch.goarch)
+		}
+		w, err := needWorkers(sys.goos, goarches...)
+		if err != nil {
+			return err
+		}
+		if err := packageUnix(a, sys, w, outDir); err != nil {
+			return err
 		}
 		did = true
 	}
 	if a.WPF != nil && (all || want["windows"]) {
+		if *vero == "" {
+			return errors.New("--vero is needed for Windows; scripts/package.sh gives it")
+		}
 		if err := packageWindows(a, *vero, root, worker, outDir, *ldflags); err != nil {
 			return err
 		}
@@ -104,75 +169,6 @@ func packageCommand(args []string) error {
 		return errors.New("nothing to package: the app has no front end for those targets")
 	}
 	return nil
-}
-
-func packageLinux(a *App, vero, root, worker, out, ldflags string) error {
-	// The app's folder as it's installed: its own files, what it includes
-	// beside them, and nothing a run left behind.
-	home, _ := os.UserHomeDir()
-	if err := os.MkdirAll(filepath.Join(home, ".cache"), 0o755); err != nil {
-		return err
-	}
-	stage, err := os.MkdirTemp(filepath.Join(home, ".cache"), "vero-app.")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(stage)
-	app := filepath.Join(stage, "app")
-	src := a.Path(a.GTK.Folder)
-	err = filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, _ := filepath.Rel(src, path)
-		if d.IsDir() {
-			if d.Name() == "__pycache__" {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if d.Name() == a.Worker.Name || strings.HasSuffix(d.Name(), ".pyc") {
-			return nil
-		}
-		return copyFile(path, filepath.Join(app, rel))
-	})
-	if err != nil {
-		return err
-	}
-	for _, inc := range a.GTK.Include {
-		if err := copyFile(a.Path(inc), filepath.Join(app, filepath.Base(inc))); err != nil {
-			return err
-		}
-	}
-	metainfo := filepath.Join(stage, a.ID+".metainfo.xml")
-	if err := os.WriteFile(metainfo, appStream(a), 0o644); err != nil {
-		return err
-	}
-	args := []string{
-		"--name", a.Name, "--display-name", a.DisplayName, "--version", a.Version,
-		"--app", app, "--entry", a.GTK.Entry, "--worker", worker, "--worker-name", a.Worker.Name,
-		"--icon", a.Path(a.Icon), "--summary", a.Summary, "--description", strings.TrimSpace(a.Description),
-		"--maintainer", a.Publisher, "--id", a.ID, "--metainfo", metainfo, "--out", out,
-	}
-	if a.Homepage != "" {
-		args = append(args, "--homepage", a.Homepage)
-	}
-	if a.GTK.Deb.Depends != "" {
-		args = append(args, "--depends", a.GTK.Deb.Depends)
-	}
-	if a.GTK.Deb.Recommends != "" {
-		args = append(args, "--recommends", a.GTK.Deb.Recommends)
-	}
-	if a.GTK.Categories != "" {
-		args = append(args, "--categories", a.GTK.Categories)
-	}
-	if a.GTK.Deb.Section != "" {
-		args = append(args, "--section", a.GTK.Deb.Section)
-	}
-	if ldflags != "" {
-		args = append(args, "--ldflags", ldflags)
-	}
-	return run(root, filepath.Join(vero, "scripts", "package-linux.sh"), args)
 }
 
 func packageWindows(a *App, vero, root, worker, out, ldflags string) error {

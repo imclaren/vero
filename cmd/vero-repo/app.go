@@ -61,6 +61,51 @@ type GTK struct {
 	RPM     RPM     `toml:"rpm"`
 	Arch    Arch    `toml:"arch"`
 	Flatpak Flatpak `toml:"flatpak"`
+	// Python is the command the app is started with: python3 unless it
+	// says otherwise, which a system's own section can say for it.
+	Python string `toml:"python"`
+	// FreeBSD and DragonFly are what the app needs from their packages;
+	// NetBSD and Illumos from pkgsrc's; OpenBSD from its own. A system is
+	// packaged for when its section is here.
+	FreeBSD   *BSDPkg  `toml:"freebsd"`
+	DragonFly *BSDPkg  `toml:"dragonfly"`
+	NetBSD    *Pkgsrc  `toml:"netbsd"`
+	Illumos   *Pkgsrc  `toml:"illumos"`
+	OpenBSD   *OpenBSD `toml:"openbsd"`
+}
+
+// BSDPkg is what a FreeBSD or DragonFly package depends on: each package
+// by name, with the port it comes from ("x11-toolkits/gtk40"), which pkg
+// needs as well.
+type BSDPkg struct {
+	Deps   map[string]string `toml:"deps"`
+	Python string            `toml:"python"`
+}
+
+// Pkgsrc is what a pkgsrc package, for NetBSD or illumos, depends on:
+// patterns pkg_add matches, such as "gtk4-[0-9]*".
+type Pkgsrc struct {
+	Depends []string `toml:"depends"`
+	Python  string   `toml:"python"`
+}
+
+// OpenBSD is what an OpenBSD package depends on: each as pkg_add names
+// it, with the port it comes from, as "x11/gtk+4:gtk+4-*".
+type OpenBSD struct {
+	Depends []string `toml:"depends"`
+	Python  string   `toml:"python"`
+}
+
+// python is the command the app is started with on a system whose own
+// section says system, or "".
+func (g *GTK) python(system string) string {
+	if system != "" {
+		return system
+	}
+	if g.Python != "" {
+		return g.Python
+	}
+	return "python3"
 }
 
 // RPM is what an rpm depends on: packages, comma separated, each with a
@@ -78,6 +123,10 @@ type Arch struct {
 // Flatpak is the runtime a Flatpak runs on, from Flathub: GNOME's, which
 // has GTK 4, WebKitGTK, Python and PyGObject, unless it says otherwise.
 type Flatpak struct {
+	// Build makes a Flatpak whenever the Linux packages are made. It's
+	// off unless asked for, since Flatpak needs Docker; --targets flatpak
+	// makes one either way.
+	Build          bool   `toml:"build"`
 	Runtime        string `toml:"runtime"`
 	RuntimeVersion string `toml:"runtime_version"`
 }

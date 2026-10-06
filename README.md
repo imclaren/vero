@@ -307,29 +307,32 @@ vero builds your app's installers, and the website your users install
 them from and get updates from. You describe your app once, in a file
 called `vero-app.toml`. vero then makes the installers, and a folder of
 plain files to put on any web host. It holds a page telling people how to
-install your app on their system, signed repositories that Linux systems
+install your app on their system, signed repositories that their systems
 update from, and the Windows installers.
 
-At the moment this covers Linux and Windows:
+At the moment this covers:
 
 - Debian and Ubuntu, from an apt repository.
 - Fedora and openSUSE, from an rpm repository.
-- Any Linux with Flatpak, from a Flatpak repository.
 - Arch Linux, from a recipe for the Arch User Repository (AUR).
+- FreeBSD and DragonFly, from a pkg repository.
+- NetBSD and illumos, from a pkgsrc repository, which pkgin uses.
+- OpenBSD, from a folder of signed packages that pkg_add uses.
+- Any Linux with Flatpak, from a Flatpak repository, if you ask for one.
 - Windows, from an installer.
 
-macOS, the BSDs and illumos are coming next, in the same way.
+macOS is coming next, in the same way.
 
 You need these on your Mac:
 
-- Go, which builds the worker and vero's packaging tool, `vero-repo`.
-- Docker and colima, for the Linux packages and repositories. Run
-  [`setup-linux.sh`](scripts/setup-linux.sh) to install them. The first
-  time it's needed, `vero-repo` makes a small container of the tools that
-  have no Go equivalent: Flatpak's, and those that make the rpm
-  repository.
+- Go. vero makes every package and repository in Go, with its packaging
+  tool, `vero-repo`, so nothing else is needed for them.
 - `makensis` and `dotnet`, for the Windows installers:
   `brew install makensis dotnet`.
+- Docker and colima, only if you want a Flatpak. Run
+  [`setup-linux.sh`](scripts/setup-linux.sh) to install them. The first
+  time it's needed, `vero-repo` makes a small container with Flatpak's
+  tools, which have no Go equivalent.
 
 ### Try it on the example
 
@@ -350,16 +353,24 @@ next time, start from `vero-repo build`.
 
 [`scripts/test-repo.sh`](scripts/test-repo.sh) checks all of it for real.
 It builds the example's site, serves it from your Mac, and installs the
-example from it in a clean container, as the site tells people to. Then it
+example from it on a clean system, as the site tells people to. Then it
 releases version 1.0.1 and checks that the system's own updates bring it.
-It tries Debian unless you say otherwise:
+It tries Debian, in a container, unless you say otherwise:
 
 ```bash
 scripts/test-repo.sh --image ubuntu:24.04
 scripts/test-repo.sh --image fedora:latest
+scripts/test-repo.sh --image opensuse/tumbleweed
 scripts/test-repo.sh --image archlinux
 scripts/test-repo.sh --flatpak
+scripts/test-repo.sh --vm freebsd
+scripts/test-repo.sh --vm netbsd
+scripts/test-repo.sh --vm openbsd
 ```
+
+The containers need Docker and colima. A `--vm` test uses the system's VM,
+which its `run-*.sh` script makes the first time; that downloads the
+system and its GTK, a few gigabytes.
 
 ### Your own app
 
@@ -371,6 +382,13 @@ change it to describe your app. The comments in it explain each setting.
 Paths in it are relative to the file. Your worker's main package needs a
 `var version`, which the build sets.
 
+Each system names its packages differently, so `vero-app.toml` says what
+your app needs from each, in its own section: `[gtk.deb]`, `[gtk.rpm]`,
+`[gtk.arch]`, `[gtk.freebsd]` and so on. Leave out the sections of the
+BSDs and illumos you don't want; a system is packaged for only when its
+section is there. `[needs]` says what the app asks of the system, such as
+the network.
+
 **2. Make a signing key, once.**
 
 ```bash
@@ -378,8 +396,9 @@ vero-repo key --name "Your Name or Company" --email you@example.com
 ```
 
 This makes a folder in `~/.config/vero-repo`. Its `private.asc` signs every
-release, so that people's systems can tell your updates are really yours.
-Back it up, keep it out of your repository, and never publish it. Its
+release, so that people's systems can tell your updates are really yours,
+and its `signify.sec` signs the OpenBSD packages. Back the folder up, keep
+it out of your repository, and never publish those two files. Its
 `key.asc` is the public half, which your site publishes.
 
 **3. Build the installers.**
@@ -389,21 +408,20 @@ path/to/vero/scripts/package.sh --app vero-app.toml --version 1.2.3
 ```
 
 This builds them into `dist/packages`, each for both x86_64 and ARM64
-processors:
+processors where the system has both: a `.deb` and an `.rpm`, a package
+for each BSD and illumos your file has a section for, and a Windows
+installer.
 
-- a `.deb` and an `.rpm`;
-- a Flatpak, which `vero-repo build` puts in the Flatpak repository;
-- a Windows installer.
+Use `--targets` to build only some of them: `deb`, `rpm`, `freebsd`,
+`dragonfly`, `netbsd`, `illumos`, `openbsd`, `windows`, `linux` for the
+`.deb` and `.rpm`, or `bsd` for the BSDs and illumos. Use `--ldflags` to
+build more into your worker, such as API keys from a file outside your
+repository.
 
-Use `--targets` to build only some of them: `deb`, `rpm`, `flatpak`,
-`windows`, or `linux` for the first three. Use `--ldflags` to build more
-into your worker, such as API keys from a file outside your repository.
-
-Each Linux system names its packages differently, so `vero-app.toml` says
-what your app needs from each: `[gtk.deb]`, `[gtk.rpm]` and `[gtk.arch]`.
-The Flatpak needs nothing from the system, because it runs on GNOME's
-runtime from Flathub, which has GTK 4, Python and WebKitGTK.
-`[needs]` says what the Flatpak may reach, such as the network.
+**A Flatpak, if you want one.** Add `--targets flatpak`, or set `build =
+true` in `[gtk.flatpak]`. It needs Docker, and nothing from the system it
+runs on, because it runs on GNOME's runtime from Flathub, which has GTK 4,
+Python and WebKitGTK.
 
 **4. Build the site.**
 
@@ -413,7 +431,7 @@ vero-repo build --app vero-app.toml --key ~/.config/vero-repo/your-name-or-compa
 ```
 
 This builds the site into `dist/site`. `--url` is where the site will be,
-because the commands on its page and its repository need to know.
+because the commands on its page and its repositories need to know.
 
 **5. Put it online.** Upload the contents of `dist/site` to any static web
 host, so that they appear at the `--url` you gave. Then send people to
@@ -421,9 +439,10 @@ that address, where the page shows the commands for their system first.
 
 **6. Release an update.** Change your version, then repeat steps 3 to 5,
 building into the same `dist/site`. vero keeps the three newest versions
-of each installer; use `--keep` to change that. People using Debian,
-Ubuntu, Fedora, openSUSE or Flatpak get the update with their usual
-updates. On Arch, they build the recipe again. Your app can read
+of each installer; use `--keep` to change that. People get the update
+with their usual updates: apt, dnf, zypper, pkg, pkgin and Flatpak find it
+by themselves, and OpenBSD's `pkg_add -u` does with the folder the page
+says to give it. On Arch, they build the recipe again. Your app can read
 `latest.json` from the site to tell Windows users that a new version is
 out.
 
@@ -446,13 +465,18 @@ Do the same after each release.
 ```
 dist/site/
   index.html     how to install, on each system
-  install.sh     installs in one command on Debian, Ubuntu, Fedora, openSUSE, or with Flatpak
+  install.sh     installs in one command, on every system but Windows
   key.asc        your public key
   apt/           the Debian and Ubuntu repository, signed
   rpm/           the Fedora and openSUSE repository, signed, and the .repo file that adds it
-  flatpak/       the Flatpak repository, signed; the .flatpakref that installs from it in one
-                 click; and the newest Flatpaks as single files
   aur/           the Arch recipe, PKGBUILD and .SRCINFO
+  freebsd/       the FreeBSD repository for each processor, signed; its .conf; key.pem
+  dragonfly/     the same, for DragonFly
+  netbsd/        the NetBSD pkgsrc repository for each processor
+  illumos/       the illumos pkgsrc repository
+  openbsd/       the OpenBSD packages for each processor, signed, and the key that checks them
+  flatpak/       if you made one: the Flatpak repository, signed; the .flatpakref that installs
+                 from it in one click; and the newest Flatpaks as single files
   windows/       the Windows installers
   latest.json    the newest version, and where each installer is
 ```
@@ -462,16 +486,22 @@ serve exactly as they are.
 
 ### Notes
 
+The pkgsrc packages, for NetBSD and illumos, aren't signed: pkgsrc's own
+signing needs a set-up on each computer that installs them, so your site's
+HTTPS vouches for them instead. Everything else that installs from your
+site checks your signature.
+
 The Windows installers aren't signed, because signing needs your own
 code-signing certificate. Until you sign them, with `signtool` on Windows
 or `osslsigncode` on a Mac, Windows SmartScreen warns people who download
 them. The site's page tells them how to get past the warning.
 
-`scripts/package.sh` runs [`package-linux.sh`](scripts/package-linux.sh)
-and [`package-windows.sh`](scripts/package-windows.sh), which you can also
-run on their own. Each script's header lists its options.
-[`run-linux.sh`](scripts/run-linux.sh) shows your Linux app running before
-you package it.
+`scripts/package.sh` runs `vero-repo package`, which builds the Windows
+installers with [`package-windows.sh`](scripts/package-windows.sh).
+[`package-linux.sh`](scripts/package-linux.sh) builds `.deb` files on its
+own, from flags rather than `vero-app.toml`. Each script's header lists
+its options. [`run-linux.sh`](scripts/run-linux.sh) shows your Linux app
+running before you package it.
 
 ## Licence
 

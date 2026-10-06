@@ -1,7 +1,8 @@
 #!/bin/sh
 # Packages a vero app with a GTK front end as .deb files for Debian and
 # Ubuntu, amd64 and arm64, from a Mac: the worker cross-compiled
-# (build-all.sh), the package made by dpkg-deb in a Debian container.
+# (build-all.sh), the package made by vero-repo, in Go, as dpkg-deb would.
+# It needs only Go.
 #
 # From beside your app's go.mod:
 #
@@ -26,7 +27,6 @@
 # what you pass.
 set -e
 VERO=$(cd "$(dirname "$0")/.." && pwd)
-. "$VERO/scripts/lib/docker.sh"
 ROOT=$PWD
 [ -f "$ROOT/go.mod" ] || { echo "run this from beside your app's go.mod" >&2; exit 2; }
 
@@ -54,7 +54,8 @@ DISPLAY_NAME=${DISPLAY_NAME:-$NAME}
 APP=$(cd "$APP" && pwd)
 mkdir -p "$OUT"
 OUT=$(cd "$OUT" && pwd)
-vero_docker
+mkdir -p "$HOME/.cache/vero/bin"
+go build -C "$VERO/cmd/vero-repo" -o "$HOME/.cache/vero/bin/vero-repo" .
 
 echo "building the worker"
 DIST="$ROOT/dist"
@@ -105,9 +106,7 @@ DESKTOP
         # Debian's long description: each line indented, a blank one a dot.
         [ -n "$DESCRIPTION" ] && printf '%s\n' "$DESCRIPTION" | fold -s -w 72 | sed 's/^$/./; s/^/ /'
     } > "$P/DEBIAN/control"
-    docker run --rm -v "$STAGE":/build -w /build debian:bookworm-slim \
-        dpkg-deb --root-owner-group --build "${NAME}_${VERSION}_$arch" >/dev/null
-    mv "$STAGE/${NAME}_${VERSION}_$arch.deb" "$OUT/"
+    "$HOME/.cache/vero/bin/vero-repo" deb "$P" "$OUT/${NAME}_${VERSION}_$arch.deb"
     rm -rf "$STAGE"
     echo "built $OUT/${NAME}_${VERSION}_$arch.deb"
 done

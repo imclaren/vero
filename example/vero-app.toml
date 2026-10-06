@@ -38,8 +38,8 @@ icon = "icon.png"
 package = "worker"
 name = "worker"
 
-# The front end for Linux - the .deb, the rpm, the Flatpak and the AUR
-# package - and later the BSDs and illumos.
+# The front end for Linux - the .deb, the rpm, the AUR package and a
+# Flatpak - and for the BSDs and illumos.
 [gtk]
 folder = "gtk-app"
 entry = "main.py"
@@ -64,11 +64,40 @@ requires = "python3 >= 3.10, python3-gobject, (typelib(Gtk) = 4.0 if openSUSE-re
 [gtk.arch]
 depends = "python, python-gobject, gtk4"
 
-# The runtime the Flatpak runs on, from Flathub. GNOME's has GTK 4,
-# WebKitGTK, Python and PyGObject. Leave these out for vero's default.
+# A Flatpak, for any Linux. It's made only when asked for, with build =
+# true or --targets flatpak, since making one needs Docker. The runtime it
+# runs on comes from Flathub: GNOME's has GTK 4, WebKitGTK, Python and
+# PyGObject. Leave these out for vero's default.
 [gtk.flatpak]
+build = false
 runtime = "org.gnome.Platform"
 runtime_version = "51"
+
+# The BSDs and illumos. Each is packaged for when its section is here.
+# python is the command that starts the app there, where python3 isn't
+# one.
+#
+# FreeBSD and DragonFly: each package the app needs, with the port it
+# comes from.
+[gtk.freebsd]
+deps = { python3 = "lang/python3", gtk4 = "x11-toolkits/gtk40", py312-pygobject = "devel/py-pygobject@py312" }
+
+[gtk.dragonfly]
+deps = { gtk4 = "x11-toolkits/gtk40", py311-pygobject = "devel/py-pygobject@py311" }
+python = "python3.11"
+
+# NetBSD and illumos use pkgsrc: what the app needs, as patterns.
+[gtk.netbsd]
+depends = ["gtk4-[0-9]*", "py312-gobject3-[0-9]*"]
+python = "python3.12"
+
+[gtk.illumos]
+depends = ["gtk4-[0-9]*", "py312-gobject3-[0-9]*"]
+python = "python3.12"
+
+# OpenBSD: each package the app needs, as port:pattern:package.
+[gtk.openbsd]
+depends = ["x11/gtk+4:gtk+4-*:gtk+4-4.0", "devel/py-gobject3:py3-gobject3-*:py3-gobject3-3.0"]
 
 # The front end for Windows: its project's folder, and the program it builds.
 [wpf]

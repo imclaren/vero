@@ -11,15 +11,15 @@ import (
 	"strings"
 )
 
-// toolsImage is vero's tools container: what makes Flatpaks and the rpm
-// and Flatpak repositories, which have no Go equivalent: flatpak and
-// ostree, createrepo_c, rpmsign, and gpg, which rpmsign and ostree sign
-// with. vero-repo builds it the first time it's needed.
-const toolsImage = "vero-tools:1"
+// toolsImage is vero's tools container: what makes Flatpaks and their
+// repository, which have no Go equivalent: flatpak and ostree, and gpg,
+// which ostree signs with. vero-repo builds it the first time a Flatpak
+// is asked for.
+const toolsImage = "vero-tools:2"
 
 const toolsDockerfile = `FROM debian:trixie-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        flatpak ostree gnupg createrepo-c rpm ca-certificates \
+        flatpak ostree gnupg ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 `
 

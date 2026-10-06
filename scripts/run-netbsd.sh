@@ -47,7 +47,10 @@ mkdir -p "$VM"
 
 if [ ! -f "$VM/base.img" ]; then
     echo "downloading NetBSD $RELEASE (once; about 200MB)"
+    # From the archive once a newer release has replaced it on the mirror.
     curl -fL "https://cdn.netbsd.org/pub/NetBSD/NetBSD-$RELEASE/evbarm-aarch64/binary/gzimg/arm64.img.gz" \
+        -o "$VM/base.img.gz" ||
+    curl -fL "https://archive.netbsd.org/pub/NetBSD-archive/NetBSD-$RELEASE/evbarm-aarch64/binary/gzimg/arm64.img.gz" \
         -o "$VM/base.img.gz"
     gunzip -f "$VM/base.img.gz"
     mv "$VM/arm64.img" "$VM/base.img" 2>/dev/null || mv "$VM/base.img.gz" "$VM/base.img" 2>/dev/null || true

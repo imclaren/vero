@@ -59,13 +59,22 @@ func makeKey(dir, name, email string) error {
 	if err := os.WriteFile(filepath.Join(dir, privateFile), priv.Bytes(), 0o600); err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(dir, publicFile), pub.Bytes(), 0o644)
+	if err := os.WriteFile(filepath.Join(dir, publicFile), pub.Bytes(), 0o644); err != nil {
+		return err
+	}
+	// OpenBSD's packages are signed with signify, which has keys of its
+	// own: one is made now, beside the OpenPGP key.
+	_, err = (&signer{dir: dir}).signify()
+	return err
 }
 
 // signer is a key that signs a release.
 type signer struct {
 	entity *openpgp.Entity
 	public []byte
+	// dir is the key's folder, which also keeps the signify key that
+	// signs OpenBSD packages.
+	dir string
 }
 
 func loadKey(dir string) (*signer, error) {
@@ -85,7 +94,7 @@ func loadKey(dir string) (*signer, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &signer{entity: list[0], public: pub}, nil
+	return &signer{entity: list[0], public: pub, dir: dir}, nil
 }
 
 var signConfig = &packet.Config{DefaultHash: crypto.SHA256}

@@ -1,19 +1,21 @@
 // Command vero-repo makes the installers of a vero app, and the static
 // site its users install and update them from: signed repositories for
-// Debian and Ubuntu (apt), Fedora and openSUSE (rpm) and Flatpak, a recipe
-// for Arch's AUR, the Windows installers, a page saying how to install on
-// each system, and latest.json for the app's own update check. The site
-// is plain files, to put on any web host.
+// Debian and Ubuntu (apt), Fedora and openSUSE (rpm), FreeBSD and
+// DragonFly (pkg) and OpenBSD, pkgsrc repositories for NetBSD and illumos,
+// optionally Flatpak, a recipe for Arch's AUR, the Windows installers, a
+// page saying how to install on each system, and latest.json for the
+// app's own update check. The site is plain files, to put on any web host.
+// Everything is made in Go, except a Flatpak, which needs Docker.
 //
 //	vero-repo key --name "Example Publisher" --email you@example.com [--dir DIR]
-//	vero-repo package --app vero-app.toml --version 1.2.3 [--targets deb,rpm,flatpak,windows]
+//	vero-repo package --app vero-app.toml --version 1.2.3 [--targets deb,rpm,freebsd,windows,...]
 //	vero-repo build --app vero-app.toml --key DIR --url https://example.com/myapp
 //
 // key makes the key that signs every release, once; keep it safe, and out
-// of your repository. package builds the installers into dist/packages,
-// with vero's scripts. build adds them to the site in dist/site, keeping
-// the newest few versions of each, and signs it. To release an update,
-// package and build again into the same site, and upload it.
+// of your repository. package builds the installers into dist/packages.
+// build adds them to the site in dist/site, keeping the newest few
+// versions of each, and signs it. To release an update, package and build
+// again into the same site, and upload it.
 package main
 
 import (
@@ -37,6 +39,13 @@ func main() {
 		err = packageCommand(os.Args[2:])
 	case "build":
 		err = buildCommand(os.Args[2:])
+	case "deb":
+		// What scripts/package-linux.sh builds its .deb with: a folder laid
+		// out for dpkg-deb, made into a .deb in Go.
+		if len(os.Args) != 4 {
+			usage()
+		}
+		err = debFromFolder(os.Args[2], os.Args[3])
 	default:
 		usage()
 	}
@@ -49,7 +58,7 @@ func main() {
 func usage() {
 	fmt.Fprint(os.Stderr, `usage:
   vero-repo key --name "Your Name or Company" --email you@example.com [--dir DIR]
-  vero-repo package --app vero-app.toml --version 1.2.3 [--targets deb,rpm,flatpak,windows] [--out dist/packages]
+  vero-repo package --app vero-app.toml --version 1.2.3 [--targets deb,rpm,flatpak,windows,freebsd,dragonfly,netbsd,illumos,openbsd] [--out dist/packages]
   vero-repo build --app vero-app.toml --key DIR --url https://example.com/myapp [--packages dist/packages] [--out dist/site] [--keep 3]
 `)
 	os.Exit(2)
@@ -105,6 +114,9 @@ func buildCommand(args []string) error {
 	in.exes, _ = filepath.Glob(filepath.Join(*packages, "*.exe"))
 	in.rpms, _ = filepath.Glob(filepath.Join(*packages, "*.rpm"))
 	in.flatpaks, _ = filepath.Glob(filepath.Join(*packages, "*.flatpak"))
+	unix, _ := filepath.Glob(filepath.Join(*packages, "*.pkg"))
+	tgz, _ := filepath.Glob(filepath.Join(*packages, "*.tgz"))
+	in.unix = append(unix, tgz...)
 	latest, err := build(*out, in, *keep, *url, a, s, *keyDir)
 	if err != nil {
 		return err
@@ -117,11 +129,13 @@ func buildCommand(args []string) error {
 // packageFiles are the installers vero-repo package made, by kind.
 type packageFiles struct {
 	debs, exes, rpms, flatpaks []string
+	// unix are the packages for the BSDs and illumos.
+	unix []string
 }
 
 // build adds new installers to the site in out, and writes its indexes
-// and pages. The rpm and Flatpak repositories are made in vero's tools
-// container, with the key in keyDir; the rest in Go.
+// and pages, in Go; only the Flatpak repository is made in vero's tools
+// container, with the key in keyDir.
 func build(out string, in packageFiles, keep int, url string, a *App, s *signer, keyDir string) (Latest, error) {
 	debs, exes := in.debs, in.exes
 	latest := Latest{Name: a.Name, Downloads: map[string]Download{}}
@@ -147,19 +161,21 @@ func build(out string, in packageFiles, keep int, url string, a *App, s *signer,
 			return latest, err
 		}
 	}
-	_, rpmErr := os.Stat(filepath.Join(out, "rpm"))
-	_, flatpakErr := os.Stat(filepath.Join(out, "flatpak"))
-	if len(in.rpms) > 0 || len(in.flatpaks) > 0 || rpmErr == nil || flatpakErr == nil {
-		t, err := newTools(keyDir)
-		if err != nil {
-			return latest, err
-		}
-		rpms, err := buildRPM(out, in.rpms, keep, url, a, s, t)
+	if _, err := os.Stat(filepath.Join(out, "rpm")); len(in.rpms) > 0 || err == nil {
+		rpms, err := buildRPM(out, in.rpms, keep, url, a, s)
 		if err != nil {
 			return latest, err
 		}
 		for arch, d := range rpms {
 			note("rpm-"+arch, d)
+		}
+	}
+	// Only Flatpak needs Docker: its repository is made by flatpak and
+	// ostree, in vero's tools container.
+	if _, err := os.Stat(filepath.Join(out, "flatpak")); len(in.flatpaks) > 0 || err == nil {
+		t, err := newTools(keyDir)
+		if err != nil {
+			return latest, err
 		}
 		flatpaks, err := buildFlatpak(out, in.flatpaks, keep, url, a, s, t)
 		if err != nil {
@@ -167,6 +183,35 @@ func build(out string, in packageFiles, keep int, url string, a *App, s *signer,
 		}
 		for arch, d := range flatpaks {
 			note("flatpak-"+arch, d)
+		}
+	}
+	for i := range unixSystems {
+		sys := &unixSystems[i]
+		var mine []string
+		match := unixPackage(a.Name)
+		for _, p := range in.unix {
+			if m := match.FindStringSubmatch(filepath.Base(p)); m != nil && m[2] == sys.name {
+				mine = append(mine, p)
+			}
+		}
+		if _, err := os.Stat(filepath.Join(out, sys.name)); len(mine) == 0 && err != nil {
+			continue
+		}
+		var newest map[string]Download
+		var err error
+		switch sys.format {
+		case "pkg":
+			newest, err = buildPkgRepo(out, sys, mine, keep, url, a, s)
+		case "pkgsrc":
+			newest, err = buildPkgsrcRepo(out, sys, mine, keep, a)
+		case "openbsd":
+			newest, err = buildOpenBSDRepo(out, sys, mine, keep, a, s)
+		}
+		if err != nil {
+			return latest, fmt.Errorf("the %s repository: %w", sys.label, err)
+		}
+		for arch, d := range newest {
+			note(sys.name+"-"+arch, d)
 		}
 	}
 	windows, err := buildWindows(out, exes, keep, a)

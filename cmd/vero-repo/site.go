@@ -82,6 +82,17 @@ type page struct {
 	Flatpak bool
 	AUR     bool
 	Windows []windowsDownload
+	// Unix are the BSDs and illumos the site has a repository for.
+	Unix []unixSection
+}
+
+// unixSection is how to install on one of the BSDs or illumos.
+type unixSection struct {
+	System   string // vero's name, as in latest.json
+	Label    string
+	Commands []string
+	Update   string
+	Note     string
 }
 
 type windowsDownload struct {
@@ -121,6 +132,14 @@ func writeSite(site, url string, a *App, latest Latest, s *signer) error {
 	if _, err := os.Stat(filepath.Join(site, "aur", "PKGBUILD")); err == nil {
 		p.AUR = true
 	}
+	for _, sys := range unixSystems {
+		for k := range latest.Downloads {
+			if strings.HasPrefix(k, sys.name+"-") {
+				p.Unix = append(p.Unix, unixInstructions(p, sys, ""))
+				break
+			}
+		}
+	}
 	for _, arch := range []string{"x64", "arm64"} {
 		if d, ok := latest.Downloads["windows-"+arch]; ok {
 			label := map[string]string{"x64": "Most PCs (x64)", "arm64": "ARM PCs (ARM64)"}[arch]
@@ -134,7 +153,7 @@ func writeSite(site, url string, a *App, latest Latest, s *signer) error {
 	if err := os.WriteFile(filepath.Join(site, "index.html"), html.Bytes(), 0o644); err != nil {
 		return err
 	}
-	if !p.Apt && !p.RPM && !p.Flatpak {
+	if !p.Apt && !p.RPM && !p.Flatpak && len(p.Unix) == 0 {
 		return nil
 	}
 	var sh bytes.Buffer
@@ -199,6 +218,64 @@ func aurCommands(p page) []string {
 		fmt.Sprintf("curl -fsSLO %s/aur/PKGBUILD", p.URL),
 		"makepkg -si",
 	}
+}
+
+// unixInstructions are the commands, run as root, that add the app's
+// repository on sys and install it, and the one that updates it. yes
+// makes them ask nothing, for install.sh.
+func unixInstructions(p page, sys unixSystem, yes string) unixSection {
+	n, u := p.App.Name, p.URL
+	s := unixSection{System: sys.name, Label: sys.label}
+	switch sys.format {
+	case "pkg":
+		y, update := "", "pkg update"
+		if yes != "" {
+			// A new system has only pkg's bootstrap, which asks first.
+			y, update = " -y", "ASSUME_ALWAYS_YES=yes pkg update"
+		}
+		s.Commands = []string{
+			"mkdir -p /usr/local/etc/pkg/repos /usr/local/etc/pkg/keys",
+			fmt.Sprintf("fetch -o /usr/local/etc/pkg/keys/%s.pem %s/%s/key.pem", n, u, sys.name),
+			fmt.Sprintf("fetch -o /usr/local/etc/pkg/repos/%s.conf %s/%s/%s.conf", n, u, sys.name, n),
+			update,
+			"pkg install" + y + " " + n,
+		}
+		s.Update = "pkg upgrade"
+	case "pkgsrc":
+		prefix := sys.prefix
+		y := ""
+		if yes != "" {
+			y = " -y"
+		}
+		repo := fmt.Sprintf("%s/%s/$arch/All", u, sys.name)
+		conf := prefix + "/etc/pkgin/repositories.conf"
+		s.Commands = []string{
+			fmt.Sprintf("grep -qs '%s' %s || echo '%s' >> %s", repo, conf, repo, conf),
+			// -f: pkgin otherwise skips a repository it knew before.
+			"pkgin" + y + " -f update",
+			"pkgin" + y + " install " + n,
+		}
+		// -f again: pkgin can't add a newer summary from one repository
+		// while another is unchanged; it numbers their packages alike.
+		s.Update = "pkgin -f upgrade"
+		if sys.name == "netbsd" {
+			s.Note = "These need pkgin, which NetBSD's installer offers; pkg_add pkgin adds it if it's missing."
+		} else {
+			s.Note = "These need pkgsrc, in " + prefix + ". SmartOS has it; for OmniOS and OpenIndiana, pkgsrc.smartos.org says how to add it."
+		}
+	case "openbsd":
+		path := fmt.Sprintf("PKG_PATH=%s/%s/%%a/:installpath", u, sys.name)
+		y := ""
+		if yes != "" {
+			y = " -I"
+		}
+		s.Commands = []string{
+			fmt.Sprintf("ftp -o /etc/signify/%s-pkg.pub %s/%s/%s-pkg.pub", n, u, sys.name, n),
+			fmt.Sprintf("%s pkg_add%s %s", path, y, n),
+		}
+		s.Update = fmt.Sprintf("%s pkg_add -u %s", path, n)
+	}
+	return s
 }
 
 var funcs = template.FuncMap{"apt": aptCommands, "dnf": dnfCommands, "zypper": zypperCommands, "flatpak": flatpakCommands, "aur": aurCommands}
@@ -272,6 +349,19 @@ var indexPage = template.Must(template.New("index").Funcs(funcs).Parse(`<!doctyp
 <p class="soft">To update it, do the same again.</p>
 </section>
 {{- end}}
+{{- range .Unix}}
+<section data-system="{{.System}}">
+<h2>{{.Label}}</h2>
+<p>As root, add {{$.App.DisplayName}}'s repository and install it:</p>
+<pre>{{range .Commands}}{{.}}
+{{end}}</pre>
+<p>To update it later, with your other packages:</p>
+<pre>{{.Update}}</pre>
+{{- if .Note}}
+<p class="soft">{{.Note}}</p>
+{{- end}}
+</section>
+{{- end}}
 {{- if .Windows}}
 <section data-system="windows">
 <h2>Windows</h2>
@@ -287,7 +377,9 @@ var indexPage = template.Must(template.New("index").Funcs(funcs).Parse(`<!doctyp
 </main>
 <script>
   // The section for this computer first.
-  var ua = navigator.userAgent, system = /Windows/.test(ua) ? "windows" : /Linux|X11/.test(ua) && !/Android/.test(ua) ? "linux" : "";
+  var ua = navigator.userAgent, system = /Windows/.test(ua) ? "windows" : /FreeBSD/.test(ua) ? "freebsd" : /OpenBSD/.test(ua) ? "openbsd" :
+    /NetBSD/.test(ua) ? "netbsd" : /DragonFly/.test(ua) ? "dragonfly" : /SunOS|illumos/.test(ua) ? "illumos" :
+    /Linux|X11/.test(ua) && !/Android/.test(ua) ? "linux" : "";
   var mine = system ? document.querySelectorAll('[data-system="' + system + '"]') : [];
   var list = document.getElementById("systems");
   for (var i = mine.length - 1; i >= 0; i--) {
@@ -304,11 +396,28 @@ var installScript = textTemplate.Must(textTemplate.New("install").Funcs(textTemp
 	"dnf":     func(p page) []string { return dnfSteps(p, " -y") },
 	"zypper":  func(p page) []string { return zypperSteps(p, " -y") },
 	"flatpak": func(p page) []string { return flatpakSteps(p, " -y") },
+	"unix": func(p page) []unixSection {
+		var out []unixSection
+		for _, s := range p.Unix {
+			out = append(out, unixInstructions(p, *system(s.System), "yes"))
+		}
+		return out
+	},
 }).Parse(`#!/bin/sh
-# Installs {{.App.DisplayName}} from {{.URL}}: from its repository on Debian,
-# Ubuntu{{if .RPM}}, Fedora and openSUSE{{end}}, signed by the key at {{.URL}}/key.asc,
-# so that your usual updates keep it up to date{{if .Flatpak}}; elsewhere, with Flatpak{{end}}.
+# Installs {{.App.DisplayName}} from {{.URL}}, from its repository for this system,
+# so that your usual updates keep it up to date. {{.URL}} says which
+# systems it has, and how to do the same by hand.
 set -e
+{{- range unix .}}
+if [ "$(uname -s)" = {{if eq .System "freebsd"}}FreeBSD{{else if eq .System "dragonfly"}}DragonFly{{else if eq .System "netbsd"}}NetBSD{{else if eq .System "openbsd"}}OpenBSD{{else}}SunOS{{end}} ]; then
+    [ "$(id -u)" = 0 ] || { echo "Run this as root." >&2; exit 1; }
+{{- range .Commands}}
+    {{.}}
+{{- end}}
+    echo "{{$.App.DisplayName}} is installed. To update it later: {{.Update}}"
+    exit 0
+fi
+{{- end}}
 command -v curl > /dev/null || { echo "This needs curl. Install it, then run this again." >&2; exit 1; }
 # Run as root, as in a container, there's no sudo, and no need for it.
 [ "$(id -u)" = 0 ] && sudo() { "$@"; }

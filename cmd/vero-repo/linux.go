@@ -31,16 +31,16 @@ type treeFile struct {
 	mode fs.FileMode
 }
 
-// buildWorker cross-compiles the app's worker for Linux on goarch, as
+// buildWorker cross-compiles the app's worker for goos on goarch, as
 // build-all.sh does, with main.version set, into dir.
-func buildWorker(a *App, root, worker, goarch, ldflags, dir string) (string, error) {
-	out := filepath.Join(dir, a.Worker.Name+"-"+goarch)
+func buildWorker(a *App, root, worker, goos, goarch, ldflags, dir string) (string, error) {
+	out := filepath.Join(dir, a.Worker.Name+"-"+goos+"-"+goarch)
 	flags := strings.TrimSpace("-s -w -X main.version=" + a.Version + " " + ldflags)
 	cmd := exec.Command("go", "build", "-trimpath", "-ldflags", flags, "-o", out, worker)
 	cmd.Dir, cmd.Stdout, cmd.Stderr = root, os.Stdout, os.Stderr
-	cmd.Env = append(os.Environ(), "GOOS=linux", "GOARCH="+goarch, "CGO_ENABLED=0")
+	cmd.Env = append(os.Environ(), "GOOS="+goos, "GOARCH="+goarch, "CGO_ENABLED=0")
 	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("building the worker for linux/%s: %w", goarch, err)
+		return "", fmt.Errorf("building the worker for %s/%s: %w", goos, goarch, err)
 	}
 	return out, nil
 }
@@ -50,6 +50,12 @@ func buildWorker(a *App, root, worker, goarch, ldflags, dir string) (string, err
 // command in bin, the menu entry, the icon at the sizes a desktop uses,
 // and its AppStream metadata. exec is the menu entry's command.
 func linuxTree(a *App, prefix, workerPath, exec string) ([]treeFile, error) {
+	return unixTree(a, prefix, workerPath, exec, a.GTK.python(""))
+}
+
+// unixTree is linuxTree on any Unix: the app under prefix, started with
+// python.
+func unixTree(a *App, prefix, workerPath, exec, python string) ([]treeFile, error) {
 	lib := path.Join(prefix, "lib", a.Name)
 	var files []treeFile
 	err := appFiles(a, func(rel string, data []byte, mode fs.FileMode) {
@@ -65,7 +71,7 @@ func linuxTree(a *App, prefix, workerPath, exec string) ([]treeFile, error) {
 	if err != nil {
 		return nil, err
 	}
-	launcher := fmt.Sprintf("#!/bin/sh\nexec python3 %s/%s \"$@\"\n", lib, a.GTK.Entry)
+	launcher := fmt.Sprintf("#!/bin/sh\nexec %s %s/%s \"$@\"\n", python, lib, a.GTK.Entry)
 	files = append(files,
 		treeFile{path.Join(lib, a.Worker.Name), worker, 0o755},
 		treeFile{path.Join(prefix, "bin", a.Name), []byte(launcher), 0o755},
