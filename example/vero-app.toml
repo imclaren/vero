@@ -118,3 +118,49 @@ keyring = false
 notifications = false
 autostart = false
 webview = false
+
+# The Mac app: a SwiftPM package (product), or an Xcode project (project
+# and scheme). prepare runs before each architecture is built, with GOARCH
+# and CC set for it: here, it builds the C archive the app links. The
+# worker goes in Contents/Resources, with any files resources lists. feed
+# is where the app checks for updates, and sparkle_public_key the key it
+# checks them with, which vero-repo key prints; both go in its Info.plist.
+[macos]
+folder = "menubar-app"
+product = "MenuBarExample"
+prepare = "CGO_ENABLED=1 go build -buildmode=c-archive -o libvero.a ../../cshim"
+menubar = true
+minimum = "13.0"
+
+# The page in a browser: what its build makes, which the site serves.
+[web]
+folder = "web-app"
+build = "./build.sh"
+files = ["index.html", "main.wasm", "wasm_exec.js"]
+
+# A terminal front end whose worker is one worker.wasm, run by wasmtime.
+[wasi]
+frontend = "wasi-app"
+worker = "wasi-app/worker"
+
+# The Android app: its build makes an aligned, unsigned .apk, which vero
+# signs with your keystore (VERO_ANDROID_KEYSTORE), or one it makes and
+# keeps beside your signing key. The build needs a JDK: Homebrew's openjdk
+# is used unless JAVA_HOME says otherwise.
+[android]
+folder = "android-app"
+build = "JAVA_HOME=${JAVA_HOME:-/opt/homebrew/opt/openjdk} PATH=$JAVA_HOME/bin:$PATH ./build.sh --build"
+apk = ".build/app-aligned.apk"
+
+# The iOS app: its build makes an app for the Simulator. An .ipa for the
+# App Store is made only with your Apple account's identity and profile
+# (VERO_IOS_IDENTITY and VERO_IOS_PROFILE), from the app device_app names.
+[ios]
+folder = "ios-app"
+build = "./build.sh --build"
+simulator_app = ".build/VeroExample.app"
+
+# Plan 9: the front end is a Go program that finds the worker beside it.
+[plan9]
+frontend = "plan9-app"
+arches = ["amd64", "386"]

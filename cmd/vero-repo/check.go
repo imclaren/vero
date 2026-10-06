@@ -751,3 +751,10 @@ func (c *checker) checkPage() {
 	}
 	c.ok("the page's links")
 }
+
+// loadKeyring reads an armored public key, as key.asc is.
+func loadKeyring(armored []byte) (openpgp.EntityList, error) {
+	return openpgp.ReadArmoredKeyRing(bytes.NewReader(armored))
+}
+
+func sha512Sum(b []byte) [64]byte { return sha512.Sum512(b) }

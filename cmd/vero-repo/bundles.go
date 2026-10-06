@@ -140,7 +140,7 @@ func packageAndroid(a *App, out string, keyDir string) error {
 		return err
 	}
 	defer os.Remove(aligned)
-	if err := runIn("", filepath.Join(tools, "apksigner"), "sign", "--ks", ks, "--ks-key-alias", alias,
+	if err := runJava(filepath.Join(tools, "apksigner"), "sign", "--ks", ks, "--ks-key-alias", alias,
 		"--ks-pass", "pass:"+pass, "--key-pass", "pass:"+pass, "--out", apk, aligned); err != nil {
 		return err
 	}
@@ -151,12 +151,25 @@ func packageAndroid(a *App, out string, keyDir string) error {
 		if err := copyFile(filepath.Join(dir, an.AAB), aab); err != nil {
 			return err
 		}
-		if err := runIn("", "jarsigner", "-keystore", ks, "-storepass", pass, "-keypass", pass, aab, alias); err != nil {
+		if err := runIn("", javaTool("jarsigner"), "-keystore", ks, "-storepass", pass, "-keypass", pass, aab, alias); err != nil {
 			return err
 		}
 		fmt.Println("built", aab)
 	}
 	return nil
+}
+
+// javaTool is a program of the JDK: from JAVA_HOME, or Homebrew's
+// openjdk, which Homebrew keeps off the PATH, or the PATH.
+func javaTool(name string) string {
+	home := os.Getenv("JAVA_HOME")
+	if home == "" {
+		home = "/opt/homebrew/opt/openjdk"
+	}
+	if p := filepath.Join(home, "bin", name); fileExists(p) {
+		return p
+	}
+	return name
 }
 
 // androidBuildTools is the newest build-tools folder of the Android SDK.
@@ -198,7 +211,7 @@ func androidKeystore(keyDir string) (ks, alias, pass string, err error) {
 		return ks, alias, strings.TrimSpace(string(data)), nil
 	}
 	pass = randomPassword()
-	err = runIn("", "keytool", "-genkeypair", "-keystore", ks, "-storetype", "PKCS12", "-alias", alias,
+	err = runIn("", javaTool("keytool"), "-genkeypair", "-keystore", ks, "-storetype", "PKCS12", "-alias", alias,
 		"-storepass", pass, "-keypass", pass, "-keyalg", "RSA", "-keysize", "4096", "-validity", "10000",
 		"-dname", "CN=Android release key")
 	if err != nil {
@@ -554,7 +567,11 @@ func untarGz(path, dir string) error {
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 			return err
 		}
-		if err := os.WriteFile(target, b.Bytes(), fs.FileMode(h.Mode).Perm()); err != nil {
+		mode := fs.FileMode(h.Mode).Perm()
+		if mode&0o400 == 0 {
+			mode |= 0o644
+		}
+		if err := os.WriteFile(target, b.Bytes(), mode); err != nil {
 			return err
 		}
 	}
@@ -635,4 +652,22 @@ func joinHTML(items []template.HTML) string {
 		s = append(s, string(i))
 	}
 	return strings.Join(s, " · ")
+}
+
+// runJava runs one of the Android SDK's tools, which are Java programs
+// that find Java by JAVA_HOME.
+func runJava(name string, args ...string) error {
+	cmd := exec.Command(name, args...)
+	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+	home := os.Getenv("JAVA_HOME")
+	if home == "" && fileExists("/opt/homebrew/opt/openjdk/bin/java") {
+		home = "/opt/homebrew/opt/openjdk"
+	}
+	if home != "" {
+		cmd.Env = append(os.Environ(), "JAVA_HOME="+home, "PATH="+filepath.Join(home, "bin")+":"+os.Getenv("PATH"))
+	}
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("%s: %w", filepath.Base(name), err)
+	}
+	return nil
 }

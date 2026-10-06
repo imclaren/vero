@@ -9,7 +9,7 @@ import PackageDescription
 let package = Package(
     name: "MenuBarExample",
     platforms: [.macOS(.v13)],
-    dependencies: [.package(path: "../..")],
+    dependencies: [.package(name: "vero", path: "../..")],
     targets: [
         .executableTarget(
             name: "MenuBarExample",
