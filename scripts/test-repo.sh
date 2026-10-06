@@ -82,7 +82,10 @@ if [ -n "$VMSYS" ]; then
             UPDATE="PKG_PATH=$URL/openbsd/%a/:installpath pkg_add -u vero-example" ;;
         dragonfly) SSH_PORT=2225 PREFIX=/usr/local PY=python3.11
             INSTALL="fetch -q -o - $URL/install.sh | sh"
-            UPDATE="pkg upgrade -y > /dev/null" ;;
+            # Just the example: an upgrade of everything takes in
+            # whatever DragonFly's own repository is changing that day,
+            # which has been known to remove packages the example needs.
+            UPDATE="pkg upgrade -y vero-example > /dev/null" ;;
         illumos) SSH_PORT=2226 PREFIX=/opt/local PY=/opt/local/bin/python3.12
             # pkgsrc, as pkgsrc.smartos.org says to add it to OpenIndiana.
             SETUP="[ -x /opt/local/bin/pkgin ] || { cd /tmp && curl -fsSLO https://pkgsrc.smartos.org/packages/SmartOS/bootstrap/bootstrap-trunk-x86_64-20260811.tar.gz &&

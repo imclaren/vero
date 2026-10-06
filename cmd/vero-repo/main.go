@@ -203,7 +203,7 @@ func build(out string, in packageFiles, keep int, url string, a *App, s *signer,
 		case "pkg":
 			newest, err = buildPkgRepo(out, sys, mine, keep, url, a, s)
 		case "pkgsrc":
-			newest, err = buildPkgsrcRepo(out, sys, mine, keep, a)
+			newest, err = buildPkgsrcRepo(out, sys, mine, keep, a, s)
 		case "openbsd":
 			newest, err = buildOpenBSDRepo(out, sys, mine, keep, a, s)
 		}

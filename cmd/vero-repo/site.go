@@ -258,6 +258,14 @@ func unixInstructions(p page, sys unixSystem, yes string) unixSection {
 		// -f again: pkgin can't add a newer summary from one repository
 		// while another is unchanged; it numbers their packages alike.
 		s.Update = "pkgin -f upgrade"
+		if sys.name == "illumos" {
+			// pkgsrc there installs only packages signed by a key in its
+			// keyring: this one is added to it, once.
+			keyring := prefix + "/etc/gnupg/pkgsrc.gpg"
+			s.Commands = append([]string{
+				fmt.Sprintf("grep -qs '%s' %s.added || { curl -fsSL %s/%s/key.gpg >> %s && echo '%s' >> %s.added; }", u, keyring, u, sys.name, keyring, u, keyring),
+			}, s.Commands...)
+		}
 		if sys.name == "netbsd" {
 			s.Note = "These need pkgin, which NetBSD's installer offers; pkg_add pkgin adds it if it's missing."
 		} else {

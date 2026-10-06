@@ -443,7 +443,7 @@ func TestPkgsrc(t *testing.T) {
 		}
 	}
 	site := t.TempDir()
-	if _, err := buildPkgsrcRepo(site, sys, []string{file}, 3, a); err != nil {
+	if _, err := buildPkgsrcRepo(site, sys, []string{file}, 3, a, testKey(t)); err != nil {
 		t.Fatal(err)
 	}
 	z, _ = gzip.NewReader(bytes.NewReader(mustRead(t, filepath.Join(site, "netbsd", "aarch64", "All", "pkg_summary.gz"))))

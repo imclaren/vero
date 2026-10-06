@@ -473,7 +473,7 @@ dist/site/
   freebsd/       the FreeBSD repository for each processor, signed; its .conf; key.pem
   dragonfly/     the same, for DragonFly
   netbsd/        the NetBSD pkgsrc repository for each processor
-  illumos/       the illumos pkgsrc repository
+  illumos/       the illumos pkgsrc repository, signed, and key.gpg, which the page adds to pkgsrc's keyring
   openbsd/       the OpenBSD packages for each processor, signed, and the key that checks them
   flatpak/       if you made one: the Flatpak repository, signed; the .flatpakref that installs
                  from it in one click; and the newest Flatpaks as single files
@@ -486,10 +486,11 @@ serve exactly as they are.
 
 ### Notes
 
-The pkgsrc packages, for NetBSD and illumos, aren't signed: pkgsrc's own
-signing needs a set-up on each computer that installs them, so your site's
-HTTPS vouches for them instead. Everything else that installs from your
-site checks your signature.
+The illumos packages are signed, because pkgsrc there, as SmartOS sets it
+up, installs only signed packages: the page's commands add your key to its
+keyring first. The NetBSD packages aren't signed, since NetBSD's pkgsrc
+doesn't check unless it's set up to, so your site's HTTPS vouches for
+them. Everything else that installs from your site checks your signature.
 
 The Windows installers aren't signed, because signing needs your own
 code-signing certificate. Until you sign them, with `signtool` on Windows

@@ -9,6 +9,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
+	"crypto/sha512"
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
@@ -24,6 +25,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ProtonMail/go-crypto/openpgp"
+	"github.com/ProtonMail/go-crypto/openpgp/packet"
 	"github.com/ulikunitz/xz"
 )
 
@@ -252,8 +255,8 @@ func bsdTarFile(tw *tar.Writer, name string, data []byte, mode fs.FileMode, mtim
 // buildPkgRepo makes site/SYSTEM/ARCH a repository pkg installs and
 // updates from, for each architecture: the packages in All, the newest
 // keep of each, and the indexes, signed with the key's RSA half as pkg's
-// "pubkey" signatures are: as FreeBSD's pkg signs them, and for DragonFly,
-// as its older pkg did. It returns the newest package of each
+// "pubkey" signatures are, as pkg on FreeBSD signs them; DragonFly's pkg
+// checks that kind first too. It returns the newest package of each
 // architecture.
 func buildPkgRepo(site string, sys *unixSystem, newPkgs []string, keep int, url string, a *App, s *signer) (map[string]Download, error) {
 	newest := map[string]Download{}
@@ -313,7 +316,7 @@ func buildPkgRepo(site string, sys *unixSystem, newPkgs []string, keep int, url 
 			name, member string
 			data         []byte
 		}{{"packagesite", "packagesite.yaml", manifests.Bytes()}, {"data", "data", data}} {
-			packed, err := pkgArchive(archive.member, archive.data, s, sys.name == "dragonfly")
+			packed, err := pkgArchive(archive.member, archive.data, s, false)
 			if err != nil {
 				return nil, err
 			}
@@ -604,7 +607,7 @@ func pkgsrcBuildInfo(a *App, sys *unixSystem, arch unixArch) []byte {
 // and pkg_summary.gz, which lists the newest. pkgsrc packages aren't signed:
 // HTTPS is what vouches for them. It returns the newest of each
 // architecture.
-func buildPkgsrcRepo(site string, sys *unixSystem, newPkgs []string, keep int, a *App) (map[string]Download, error) {
+func buildPkgsrcRepo(site string, sys *unixSystem, newPkgs []string, keep int, a *App, s *signer) (map[string]Download, error) {
 	newest := map[string]Download{}
 	for _, arch := range sys.arches {
 		all := filepath.Join(site, sys.name, arch.name, "All")
@@ -615,7 +618,19 @@ func buildPkgsrcRepo(site string, sys *unixSystem, newPkgs []string, keep int, a
 				continue
 			}
 			version := strings.TrimSuffix(strings.TrimPrefix(base, a.Name+"-"), suffix)
-			if err := copyFile(p, filepath.Join(all, a.Name+"-"+version+".tgz")); err != nil {
+			file := a.Name + "-" + version + ".tgz"
+			data, err := os.ReadFile(p)
+			if err != nil {
+				return nil, err
+			}
+			// illumos's pkgsrc, as SmartOS sets it up, installs only
+			// signed packages; NetBSD's, as it comes, takes either.
+			if sys.name == "illumos" {
+				if data, err = signPkgsrc(data, a.Name+"-"+version, file, s); err != nil {
+					return nil, err
+				}
+			}
+			if err := writeTree(filepath.Join(all, file), data, 0o644); err != nil {
 				return nil, err
 			}
 		}
@@ -646,13 +661,29 @@ func buildPkgsrcRepo(site string, sys *unixSystem, newPkgs []string, keep int, a
 		}
 		newest[arch.name] = Download{Version: versions[files[0]], URL: filepathRel(site, filepath.Join(all, files[0]))}
 	}
+	if sys.name == "illumos" && len(newest) > 0 {
+		key, err := s.gpgKeyring()
+		if err != nil {
+			return nil, err
+		}
+		if err := os.WriteFile(filepath.Join(site, sys.name, "key.gpg"), key, 0o644); err != nil {
+			return nil, err
+		}
+	}
 	return newest, nil
 }
 
 // pkgsrcSummary is a package's entry in pkg_summary: what pkgin knows of
 // it, from the package's own files.
 func pkgsrcSummary(file string, data []byte) ([]byte, error) {
-	z, err := gzip.NewReader(bytes.NewReader(data))
+	inner := data
+	if bytes.HasPrefix(data, []byte("!<arch>\n")) {
+		var err error
+		if inner, err = arLast(data); err != nil {
+			return nil, err
+		}
+	}
+	z, err := gzip.NewReader(bytes.NewReader(inner))
 	if err != nil {
 		return nil, err
 	}
@@ -698,3 +729,83 @@ func pkgsrcSummary(file string, data []byte) ([]byte, error) {
 // fileArch is arch as a file name has it: DragonFly's "x86:64" as
 // "x86_64".
 func fileArch(arch unixArch) string { return strings.ReplaceAll(arch.name, ":", "_") }
+
+// signPkgsrc signs a pkgsrc package as pkg_admin gpg-sign-package does,
+// for a pkgsrc that installs only signed packages, as SmartOS's does: a
+// BSD ar archive of +PKG_HASH - the SHA-512 of each 64 KiB of the
+// package - its detached OpenPGP signature, and the package, named file.
+func signPkgsrc(pkg []byte, pkgname, file string, s *signer) ([]byte, error) {
+	var hash bytes.Buffer
+	fmt.Fprintf(&hash, "pkgsrc signature\n\nversion: 1\npkgname: %s\nalgorithm: SHA512\nblock size: 65536\nfile size: %d\n\n", pkgname, len(pkg))
+	for i := 0; i < len(pkg); i += 65536 {
+		sum := sha512.Sum512(pkg[i:min(i+65536, len(pkg))])
+		hash.WriteString(hex.EncodeToString(sum[:]) + "\n")
+	}
+	hash.WriteString("end pkgsrc signature\n")
+	// SHA-512: pkg_add checks the signature as a clearsigned message that
+	// says its hash is.
+	// As gpg makes it: no salt notation, which netpgp, which pkg_add
+	// checks with, doesn't expect; and a newline at the end.
+	var sig bytes.Buffer
+	plain := false
+	cfg := &packet.Config{DefaultHash: crypto.SHA512, NonDeterministicSignaturesViaNotation: &plain}
+	if err := openpgp.ArmoredDetachSign(&sig, s.entity, bytes.NewReader(hash.Bytes()), cfg); err != nil {
+		return nil, err
+	}
+	sig.WriteString("\n")
+	var out bytes.Buffer
+	out.WriteString("!<arch>\n")
+	mtime := buildTime().Unix()
+	for _, m := range []struct {
+		name string
+		data []byte
+	}{{"+PKG_HASH", hash.Bytes()}, {"+PKG_GPG_SIGNATURE", sig.Bytes()}, {file, pkg}} {
+		// BSD ar: a name longer than 16 goes before the data, as #1/LEN.
+		name, data := m.name, m.data
+		if len(name) > 16 || strings.Contains(name, " ") {
+			data = append([]byte(name), data...)
+			name = fmt.Sprintf("#1/%d", len(m.name))
+		}
+		fmt.Fprintf(&out, "%-16s%-12d%-6d%-6d%-8s%-10d`\n", name, mtime, 0, 0, "100644", len(data))
+		out.Write(data)
+		if len(data)%2 == 1 {
+			out.WriteByte('\n')
+		}
+	}
+	return out.Bytes(), nil
+}
+
+// gpgKeyring is the public key as pkgsrc's keyring holds it: binary
+// OpenPGP, which can be added to the end of one.
+func (s *signer) gpgKeyring() ([]byte, error) {
+	var b bytes.Buffer
+	if err := s.entity.Serialize(&b); err != nil {
+		return nil, err
+	}
+	return b.Bytes(), nil
+}
+
+// arLast is the last member of a BSD ar archive: a signed pkgsrc
+// package's package.
+func arLast(data []byte) ([]byte, error) {
+	var last []byte
+	for pos := 8; pos+60 <= len(data); {
+		h := data[pos : pos+60]
+		var size int
+		if _, err := fmt.Sscan(strings.TrimSpace(string(h[48:58])), &size); err != nil || pos+60+size > len(data) {
+			return nil, errors.New("a damaged ar archive")
+		}
+		body := data[pos+60 : pos+60+size]
+		if name := strings.TrimSpace(string(h[0:16])); strings.HasPrefix(name, "#1/") {
+			var n int
+			fmt.Sscan(name[3:], &n)
+			body = body[n:]
+		}
+		last = body
+		pos += 60 + size + size%2
+	}
+	if last == nil {
+		return nil, errors.New("an empty ar archive")
+	}
+	return last, nil
+}
