@@ -35,7 +35,9 @@ type Options struct {
 // Handler serves the site. Every file in Dir is served at its path, and
 // /download?for=SYSTEM[&arch=ARCH] redirects to that system's newest
 // installer from latest.json: for=windows&arch=x64, for=linux (the .deb),
-// for=rpm, for=macos. The architecture is guessed from the browser when it
+// for=rpm, for=macos (the disk image), for=pkg (the Mac's installer
+// package). Common names work too: mac and osx, win, deb, debian and
+// ubuntu, fedora. The architecture is guessed from the browser when it
 // is left out (arm64 for Apple silicon and Windows on ARM, where the
 // browser says so).
 func Handler(o Options) http.Handler {
@@ -115,7 +117,7 @@ func (s *server) download(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "no releases yet", http.StatusNotFound)
 		return
 	}
-	system := r.URL.Query().Get("for")
+	system := systemName(r.URL.Query().Get("for"))
 	arch := r.URL.Query().Get("arch")
 	if arch == "" {
 		arch = guessArch(r.UserAgent())
@@ -133,13 +135,32 @@ func (s *server) download(w http.ResponseWriter, r *http.Request) {
 	http.Error(w, "no download for "+system+" "+arch, http.StatusNotFound)
 }
 
+// systemName is the name vero-repo uses for a system, from the names
+// people link with: mac and osx for macos, win for windows, deb, debian
+// and ubuntu for linux's .deb, fedora for rpm, pkg for the Mac's installer
+// package.
+func systemName(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if n, ok := map[string]string{
+		"mac": "macos", "osx": "macos", "darwin": "macos", "macosx": "macos",
+		"pkg": "macos-pkg", "mac-pkg": "macos-pkg",
+		"win": "windows", "win32": "windows", "win64": "windows",
+		"deb": "linux", "debian": "linux", "ubuntu": "linux",
+		"fedora": "rpm", "opensuse": "rpm", "suse": "rpm",
+	}[s]; ok {
+		return n
+	}
+	return s
+}
+
 // keys are the latest.json keys to try for a system and architecture, the
 // best fit first, and then the other architecture, so that a wrong guess
 // still gets an installer.
 func keys(system, arch string) []string {
 	arches := map[string][]string{
 		"windows": {"x64", "arm64"}, "linux": {"amd64", "arm64"}, "rpm": {"x86_64", "aarch64"},
-		"flatpak": {"x86_64", "aarch64"}, "freebsd": {"amd64", "aarch64"}, "macos": {""},
+		"flatpak": {"x86_64", "aarch64"}, "freebsd": {"amd64", "aarch64"}, "macos": {"universal", ""},
+		"macos-pkg": {""},
 	}[system]
 	if arches == nil {
 		arches = []string{"amd64", "x86_64", "aarch64", "arm64"}

@@ -87,7 +87,7 @@ func Keys(goos, goarch string) []string {
 	case "windows":
 		return []string{"windows-" + map[string]string{"amd64": "x64", "arm64": "arm64"}[goarch]}
 	case "darwin":
-		return []string{"macos"}
+		return []string{"macos-universal", "macos"}
 	case "linux":
 		rpm := map[string]string{"amd64": "x86_64", "arm64": "aarch64"}[goarch]
 		return []string{"linux-" + goarch, "rpm-" + rpm, "flatpak-" + rpm}

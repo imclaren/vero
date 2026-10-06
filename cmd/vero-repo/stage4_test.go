@@ -130,7 +130,7 @@ func TestAppcastAndCask(t *testing.T) {
 		os.WriteFile(dmg+".json", info, 0o644)
 		dmgs = append(dmgs, dmg)
 	}
-	newest, err := buildMac(site, dmgs, 3, "https://example.com/vero/", a, s)
+	newest, err := buildMac(site, dmgs, nil, "", 3, "https://example.com/vero/", a, s)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -15,7 +15,9 @@ func TestSite(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "index.html"), []byte("<p>install</p>"), 0o644)
 	os.WriteFile(filepath.Join(dir, "latest.json"), []byte(`{"name":"myapp","version":"1.2.0","downloads":{
 		"windows-x64":{"version":"1.2.0","url":"windows/myapp-1.2.0-x64-setup.exe"},
-		"linux-amd64":{"version":"1.2.0","url":"apt/pool/main/m/myapp/myapp_1.2.0_amd64.deb"}}}`), 0o644)
+		"linux-amd64":{"version":"1.2.0","url":"apt/pool/main/m/myapp/myapp_1.2.0_amd64.deb"},
+		"macos-universal":{"version":"1.2.0","url":"macos/myapp-1.2.0-macos.dmg"},
+		"macos-pkg":{"version":"1.2.0","url":"macos/myapp-1.2.0-macos.pkg"}}}`), 0o644)
 
 	srv := httptest.NewServer(Handler(Options{Dir: dir, Prefix: "/dl"}))
 	defer srv.Close()
@@ -39,6 +41,18 @@ func TestSite(t *testing.T) {
 	}
 	if r := get("/dl/download?for=linux"); r.StatusCode != 302 || r.Header.Get("Location") != "/dl/apt/pool/main/m/myapp/myapp_1.2.0_amd64.deb" {
 		t.Errorf("linux: %d %s", r.StatusCode, r.Header.Get("Location"))
+	}
+	// The Mac, by the names people link with.
+	for _, name := range []string{"macos", "mac", "osx", "Mac"} {
+		if r := get("/dl/download?for=" + name); r.StatusCode != 302 || r.Header.Get("Location") != "/dl/macos/myapp-1.2.0-macos.dmg" {
+			t.Errorf("for=%s: %d %s", name, r.StatusCode, r.Header.Get("Location"))
+		}
+	}
+	if r := get("/dl/download?for=pkg"); r.StatusCode != 302 || r.Header.Get("Location") != "/dl/macos/myapp-1.2.0-macos.pkg" {
+		t.Errorf("for=pkg: %d %s", r.StatusCode, r.Header.Get("Location"))
+	}
+	if r := get("/dl/download?for=ubuntu"); r.StatusCode != 302 || r.Header.Get("Location") != "/dl/apt/pool/main/m/myapp/myapp_1.2.0_amd64.deb" {
+		t.Errorf("for=ubuntu: %d %s", r.StatusCode, r.Header.Get("Location"))
 	}
 	if r := get("/dl/download?for=plan9"); r.StatusCode != 404 {
 		t.Errorf("plan9: %d", r.StatusCode)

@@ -57,3 +57,17 @@ func TestCheck(t *testing.T) {
 		t.Errorf("keys: %v", k)
 	}
 }
+
+// TestKeys: an app finds its own download in latest.json, as vero-repo
+// build names them.
+func TestKeys(t *testing.T) {
+	if k := Keys("darwin", "arm64"); k[0] != "macos-universal" {
+		t.Errorf("darwin: %v", k)
+	}
+	if k := Keys("windows", "arm64"); k[0] != "windows-arm64" {
+		t.Errorf("windows: %v", k)
+	}
+	if k := Keys("linux", "amd64"); k[0] != "linux-amd64" {
+		t.Errorf("linux: %v", k)
+	}
+}

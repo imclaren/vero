@@ -163,10 +163,12 @@ else
     esac
 fi
 
+# release VERSION [BUILD [NOTES]]: the Mac's build number, when it isn't the
+# version, and what's new, for the update prompt.
 release() {
     rm -rf "$PACKAGES"
-    (cd "$VERO" && scripts/package.sh --app example/vero-app.toml --version "$1" --targets "$TARGETS" --out "$PACKAGES")
-    "$REPO" build --app "$VERO/example/vero-app.toml" --packages "$PACKAGES" --key "$KEY" --url "$URL" --out "$SITE"
+    (cd "$VERO" && scripts/package.sh --app example/vero-app.toml --version "$1" ${2:+--build "$2"} --targets "$TARGETS" --out "$PACKAGES")
+    "$REPO" build --app "$VERO/example/vero-app.toml" --packages "$PACKAGES" --key "$KEY" --url "$URL" --out "$SITE" ${3:+--notes "$3"}
 }
 if [ -n "$MAC" ] || [ "$VMSYS" = windows ]; then
     in_container() { sh -c "$1"; }
@@ -209,6 +211,19 @@ mac_test() {
     hdiutil detach -quiet "$T/mnt"
     APP="$T/$(basename "$APP")"
     codesign --verify --deep --strict "$APP" || { echo "FAIL: the app's signature doesn't verify" >&2; exit 1; }
+    short=$(plutil -extract CFBundleShortVersionString raw "$APP/Contents/Info.plist")
+    build=$(plutil -extract CFBundleVersion raw "$APP/Contents/Info.plist")
+    [ "$short" = 1.0.0 ] && [ "$build" = 100 ] || { echo "FAIL: the app says $short ($build), not 1.0.0 (100)" >&2; exit 1; }
+    # The installer package: it installs into /Applications, not over a
+    # copy elsewhere, and hands the app to whoever installed it.
+    PKG="$SITE/macos/vero-example-1.0.0-macos.pkg"
+    [ -f "$PKG" ] || { echo "FAIL: no .pkg on the site" >&2; exit 1; }
+    curl -fsSL "$URL/latest.json" | grep -q '"macos-pkg"' || { echo "FAIL: latest.json has no macos-pkg" >&2; exit 1; }
+    pkgutil --expand "$PKG" "$T/pkg"
+    INFO=$(cat "$T"/pkg/*.pkg/PackageInfo)
+    case $INFO in *"<relocate>"*) case $INFO in *"<relocate/>"*) ;; *) echo "FAIL: the .pkg relocates the app" >&2; exit 1 ;; esac ;; esac
+    sh -n "$T"/pkg/*.pkg/Scripts/postinstall && grep -q 'chown -R' "$T"/pkg/*.pkg/Scripts/postinstall || { echo "FAIL: the .pkg has no postinstall" >&2; exit 1; }
+    echo "ok: the .pkg installs into /Applications and gives the app to its user"
     got=$("$APP/Contents/Resources/worker" -version)
     [ "$got" = 1.0.0 ] || { echo "FAIL: the bundled worker says $got, not 1.0.0" >&2; exit 1; }
     open "$APP"
@@ -218,14 +233,29 @@ mac_test() {
     pkill -f "$APP/Contents/MacOS/"
     echo "ok: 1.0.0 installed from the disk image, and the app started its worker"
     echo "== releasing 1.0.1 into the same site"
-    release 1.0.1
+    release 1.0.1 101 "Faster.
+
+- One thing"
     # What Sparkle would fetch: the newest item, its signature checked
     # with the key the app would carry.
     "$REPO" check --app "$VERO/example/vero-app.toml" --url "$URL" --key "$KEY" "$SITE" >/dev/null
     newest=$(curl -fsSL "$URL/macos/appcast.xml" | grep -o '<sparkle:version>[^<]*' | head -1 | cut -d'>' -f2)
-    [ "$newest" = 1.0.1 ] || { echo "FAIL: the appcast's newest is $newest, not 1.0.1" >&2; exit 1; }
+    [ "$newest" = 101 ] || { echo "FAIL: the appcast's newest build is $newest, not 101" >&2; exit 1; }
+    curl -fsSL "$URL/macos/vero-example-1.0.1-notes.html" | grep -q '<li>One thing</li>' || { echo "FAIL: no release notes for 1.0.1" >&2; exit 1; }
+    curl -fsSL "$URL/macos/appcast.xml" | grep -q 'releaseNotesLink>[^<]*vero-example-1.0.1-notes.html' || { echo "FAIL: the appcast doesn't link the notes" >&2; exit 1; }
     curl -fsSL "$URL/homebrew/vero-example.rb" | grep -q 'version "1.0.1"' || { echo "FAIL: the cask isn't 1.0.1" >&2; exit 1; }
-    echo "ok: the appcast offers 1.0.1, signed, and the cask has it"
+    echo "ok: the appcast offers 1.0.1, signed, with its notes, and the cask has it"
+    # An app with Sparkle.framework inside, signed as vero signs one:
+    # nested code first, and Gatekeeper's strict check passes.
+    SPARKLE_VERSION=2.6.4
+    SPARKLE="$CACHE/sparkle-$SPARKLE_VERSION"
+    if [ ! -d "$SPARKLE/Sparkle.framework" ]; then
+        mkdir -p "$SPARKLE"
+        curl -fsSL "https://github.com/sparkle-project/Sparkle/releases/download/$SPARKLE_VERSION/Sparkle-$SPARKLE_VERSION.tar.xz" | tar -xJf - -C "$SPARKLE"
+    fi
+    (cd "$VERO/cmd/vero-repo" && VERO_SPARKLE_FRAMEWORK="$SPARKLE/Sparkle.framework" go test -count=1 -run TestSignWithSparkle . >/dev/null) \
+        || { echo "FAIL: an app with Sparkle.framework doesn't sign" >&2; exit 1; }
+    echo "ok: an app with Sparkle.framework inside signs and verifies"
     echo "PASS"
 }
 
@@ -280,7 +310,7 @@ sys.exit(0 if magenta*3*31 > len(px)*0.03 else 1)
 }
 
 echo "== releasing 1.0.0"
-release 1.0.0
+if [ -n "$MAC" ]; then release 1.0.0 100; else release 1.0.0; fi
 go build -o "$CACHE/bin/serve" "$VERO/scripts/lib/serve.go"
 "$CACHE/bin/serve" "$SITE" "$PORT" &
 SERVER=$!

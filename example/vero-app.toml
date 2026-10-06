@@ -142,6 +142,9 @@ product = "MenuBarExample"
 prepare = "CGO_ENABLED=1 go build -buildmode=c-archive -o libvero.a ../../cshim"
 menubar = true
 minimum = "13.0"
+# An installer package as well as the disk image: one that installs into
+# /Applications and gives the app to whoever installed it.
+pkg = true
 
 # The page in a browser: what its build makes, which the site serves.
 [web]

@@ -111,7 +111,16 @@ func buildCommand(args []string) error {
 	out := fs.String("out", "dist/site", "the site's folder; an update builds into the same one")
 	keep := fs.Int("keep", 3, "how many versions of each installer to keep")
 	noPage := fs.Bool("no-page", false, "no index.html or install.sh: for downloads you serve yourself, privately")
+	notes := fs.String("notes", "", "what's new in this release, for the Mac's update prompt: paragraphs, and lines starting \"- \" as a list")
+	notesFile := fs.String("notes-file", "", "the same as --notes, from a file")
 	fs.Parse(args)
+	if *notesFile != "" {
+		data, err := os.ReadFile(*notesFile)
+		if err != nil {
+			return err
+		}
+		*notes = string(data)
+	}
 	if *keyDir == "" || *url == "" {
 		return errors.New("build needs --key and --url")
 	}
@@ -127,6 +136,8 @@ func buildCommand(args []string) error {
 	in.debs, _ = filepath.Glob(filepath.Join(*packages, "*.deb"))
 	in.exes, _ = filepath.Glob(filepath.Join(*packages, "*.exe"))
 	in.dmgs, _ = filepath.Glob(filepath.Join(*packages, "*.dmg"))
+	in.macPkgs, _ = filepath.Glob(filepath.Join(*packages, "*-macos.pkg"))
+	in.notes = *notes
 	for _, pattern := range []string{"*-android.apk", "*-wasi-*.tar.gz", "*-plan9-*.tgz", "*-web.tar.gz"} {
 		more, _ := filepath.Glob(filepath.Join(*packages, pattern))
 		in.bundles = append(in.bundles, more...)
@@ -166,6 +177,10 @@ func buildCommand(args []string) error {
 // packageFiles are the installers vero-repo package made, by kind.
 type packageFiles struct {
 	debs, exes, rpms, flatpaks, dmgs []string
+	// macPkgs are the Mac's installer packages, beside its disk images;
+	// notes are what's new in this release, for the Mac's update prompt.
+	macPkgs []string
+	notes   string
 	// bundles are the web, Android, WASI and Plan 9 bundles.
 	bundles []string
 	// unix are the packages for the BSDs and illumos.
@@ -256,7 +271,7 @@ func build(out string, in packageFiles, keep int, url string, a *App, s *signer,
 		}
 	}
 	if _, err := os.Stat(filepath.Join(out, "macos")); len(in.dmgs) > 0 || err == nil {
-		mac, err := buildMac(out, in.dmgs, keep, url, a, s)
+		mac, err := buildMac(out, in.dmgs, in.macPkgs, in.notes, keep, url, a, s)
 		if err != nil {
 			return latest, err
 		}

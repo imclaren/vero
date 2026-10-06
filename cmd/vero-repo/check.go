@@ -168,7 +168,7 @@ func checkSite(site, url string, a *App, sparkle ed25519.PublicKey, previous *La
 		c.checkFlatpak()
 	}
 	if exists("macos") {
-		c.checkMac()
+		c.checkMac(latest)
 	}
 	if exists("winget") {
 		c.checkWinget()
@@ -602,15 +602,33 @@ func (c *checker) checkFlatpak() {
 	c.ok("the Flatpak repository's files")
 }
 
-func (c *checker) checkMac() {
+// macDisk matches a disk image's name, NAME-VERSION-macos.dmg, by the
+// app's name when the check knows it, and by the pattern otherwise.
+func (c *checker) macDisk(name string) []string {
+	if c.a != nil {
+		return macDisk(c.a.Name).FindStringSubmatch(name)
+	}
+	return regexp.MustCompile(`^.+-(.+)-macos\.dmg$`).FindStringSubmatch(name)
+}
+
+func (c *checker) checkMac(latest Latest) {
 	data, ok := c.file("macos/appcast.xml")
 	if !ok {
 		return
 	}
+	// The appcast apps already installed read, when it is somewhere else
+	// too, is the same.
+	if c.a != nil && c.a.MacOS != nil && c.a.MacOS.Appcast != "" {
+		if other, ok := c.file(c.a.MacOS.Appcast); ok && !bytes.Equal(other, data) {
+			c.fail("%s isn't the same as macos/appcast.xml", c.a.MacOS.Appcast)
+		}
+	}
 	var cast struct {
 		Items []struct {
-			Version   string `xml:"http://www.andymatuschak.org/xml-namespaces/sparkle version"`
-			Enclosure struct {
+			Version      string `xml:"http://www.andymatuschak.org/xml-namespaces/sparkle version"`
+			ShortVersion string `xml:"http://www.andymatuschak.org/xml-namespaces/sparkle shortVersionString"`
+			Notes        string `xml:"http://www.andymatuschak.org/xml-namespaces/sparkle releaseNotesLink"`
+			Enclosure    struct {
 				URL       string `xml:"url,attr"`
 				Length    int64  `xml:"length,attr"`
 				Signature string `xml:"http://www.andymatuschak.org/xml-namespaces/sparkle edSignature,attr"`
@@ -624,6 +642,30 @@ func (c *checker) checkMac() {
 	for i, item := range cast.Items {
 		if i > 0 && compareVersions(item.Version, cast.Items[i-1].Version) >= 0 {
 			c.fail("macos/appcast.xml: build %s isn't older than %s above it, so Sparkle wouldn't offer the newest", item.Version, cast.Items[i-1].Version)
+		}
+		if item.Notes != "" {
+			if rel := c.local(item.Notes); rel != "" {
+				c.file(rel)
+			}
+		}
+		// The versions are the app's own: what package read from its
+		// Info.plist, beside the disk image, and in its name.
+		name := path.Base(item.Enclosure.URL)
+		if m := c.macDisk(name); m != nil {
+			if item.ShortVersion != m[1] {
+				c.fail("macos/appcast.xml: %s says version %s, but the disk image is %s", name, item.ShortVersion, m[1])
+			}
+			if note, err := os.ReadFile(filepath.Join(c.site, "macos", name+".json")); err == nil {
+				var info macInfo
+				if json.Unmarshal(note, &info) == nil && (info.BundleVersion != item.Version || info.ShortVersion != item.ShortVersion) {
+					c.fail("%s: the app inside is %s (build %s), but the appcast says %s (build %s)", name, info.ShortVersion, info.BundleVersion, item.ShortVersion, item.Version)
+				}
+			}
+			if i == 0 {
+				if d, ok := latest.Downloads["macos-universal"]; ok && d.Version != item.ShortVersion {
+					c.fail("latest.json says the Mac's newest is %s, but the appcast's is %s", d.Version, item.ShortVersion)
+				}
+			}
 		}
 		rel := c.local(item.Enclosure.URL)
 		if rel == "" {

@@ -13,10 +13,12 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"html"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 
 	"filippo.io/edwards25519"
@@ -51,8 +53,9 @@ type MacOS struct {
 	// programs and their licences, say. Each program in it is signed
 	// before the app around it.
 	Resources []string `toml:"resources"`
-	// Entitlements is a .plist of entitlements the app and its programs
-	// are signed with, under the hardened runtime.
+	// Entitlements is a .plist of entitlements the app is signed with,
+	// under the hardened runtime. The programs and bundles inside it are
+	// signed without, as Apple asks.
 	Entitlements string `toml:"entitlements"`
 	// DownloadURL is where the disk images are downloaded from, when that
 	// isn't the site's macos folder: a server of your own, say. The appcast
@@ -66,6 +69,10 @@ type MacOS struct {
 	Category string `toml:"category"`
 	// Pkg also makes an installer package, beside the disk image.
 	Pkg bool `toml:"pkg"`
+	// Appcast is a second place in the site for the appcast, beside
+	// macos/appcast.xml: where apps already installed look for it, such as
+	// "appcast.xml" at the site's top.
+	Appcast string `toml:"appcast"`
 	// Feed and SparklePublicKey are what an app that updates itself with
 	// Sparkle reads from its Info.plist: where the site's appcast is, and
 	// the public half of the key that signs updates, which vero-repo key
@@ -88,9 +95,58 @@ type macInfo struct {
 	App           string `json:"app"`
 }
 
-// macDisk is NAME-VERSION-macos.dmg.
+// macDisk is NAME-VERSION-macos.dmg, and macPkg NAME-VERSION-macos.pkg.
 func macDisk(name string) *regexp.Regexp {
 	return regexp.MustCompile(`^` + regexp.QuoteMeta(name) + `-(.+)-macos\.dmg$`)
+}
+
+func macPkg(name string) *regexp.Regexp {
+	return regexp.MustCompile(`^` + regexp.QuoteMeta(name) + `-(.+)-macos\.pkg$`)
+}
+
+// macNotes is the page of what's new in a version, which the appcast
+// links for Sparkle's update prompt.
+func macNotes(name, version string) string { return fmt.Sprintf("%s-%s-notes.html", name, version) }
+
+// notesPage is release notes as a small page: paragraphs, split at blank
+// lines, and lines starting "- " as a list.
+func notesPage(title, notes string) []byte {
+	esc := func(s string) string { return html.EscapeString(strings.TrimSpace(s)) }
+	var b strings.Builder
+	b.WriteString("<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\"><title>" + esc(title) + "</title>\n")
+	b.WriteString("<style>body{font:13px -apple-system,system-ui,sans-serif;margin:12px;color-scheme:light dark}ul{padding-left:1.2em}</style></head><body>\n")
+	for _, para := range regexp.MustCompile(`\n\s*\n`).Split(strings.TrimSpace(notes), -1) {
+		inList := false
+		var text []string
+		flush := func() {
+			if len(text) > 0 {
+				b.WriteString("<p>" + esc(strings.Join(text, " ")) + "</p>\n")
+				text = nil
+			}
+		}
+		for _, line := range strings.Split(para, "\n") {
+			if item, ok := strings.CutPrefix(strings.TrimSpace(line), "- "); ok {
+				flush()
+				if !inList {
+					b.WriteString("<ul>\n")
+					inList = true
+				}
+				b.WriteString("<li>" + esc(item) + "</li>\n")
+				continue
+			}
+			if inList {
+				b.WriteString("</ul>\n")
+				inList = false
+			}
+			text = append(text, line)
+		}
+		flush()
+		if inList {
+			b.WriteString("</ul>\n")
+		}
+	}
+	b.WriteString("</body></html>\n")
+	return []byte(b.String())
 }
 
 // packageMac builds the Mac app and its disk image, and a .pkg if asked,
@@ -128,6 +184,11 @@ func packageMac(a *App, root, worker, out, ldflags, tmp string) error {
 	if err != nil {
 		return err
 	}
+	// The versions are this release's, whatever the project says: Sparkle
+	// compares CFBundleVersion, and shows CFBundleShortVersionString.
+	if err := setVersions(app, a.Version, a.buildNumber()); err != nil {
+		return err
+	}
 	resources := filepath.Join(app, "Contents", "Resources")
 	if err := os.MkdirAll(resources, 0o755); err != nil {
 		return err
@@ -159,30 +220,12 @@ func packageMac(a *App, root, worker, out, ldflags, tmp string) error {
 		return err
 	}
 
-	// Signed inside out: every program in the app - the worker, and any
-	// in Resources - then the app around them, each with the hardened
-	// runtime that notarisation needs.
 	identity := os.Getenv("VERO_MAC_IDENTITY")
-	sign := func(path string) error {
-		args := []string{"--force", "--sign", "-"}
-		if identity != "" {
-			args = []string{"--force", "--options", "runtime", "--timestamp", "--sign", identity}
-		}
-		if m.Entitlements != "" {
-			args = append(args, "--entitlements", a.Path(filepath.Join(m.Folder, m.Entitlements)))
-		}
-		return runIn("", "codesign", append(args, path)...)
+	entitlements := ""
+	if m.Entitlements != "" {
+		entitlements = a.Path(filepath.Join(m.Folder, m.Entitlements))
 	}
-	nested, err := machOFiles(filepath.Join(app, "Contents"), filepath.Join(app, "Contents", "MacOS"))
-	if err != nil {
-		return err
-	}
-	for _, f := range nested {
-		if err := sign(f); err != nil {
-			return err
-		}
-	}
-	if err := sign(app); err != nil {
+	if err := signApp(app, identity, entitlements); err != nil {
 		return err
 	}
 	if identity == "" {
@@ -228,14 +271,257 @@ func packageMac(a *App, root, worker, out, ldflags, tmp string) error {
 
 	if m.Pkg {
 		pkg := filepath.Join(out, fmt.Sprintf("%s-%s-macos.pkg", a.Name, a.Version))
-		args := []string{"--component", app, "--install-location", "/Applications"}
-		if installer := os.Getenv("VERO_MAC_INSTALLER"); installer != "" {
-			args = append(args, "--sign", installer, "--timestamp")
-		}
-		if err := runIn("", "pkgbuild", append(args, pkg)...); err != nil {
+		if err := buildMacPkg(a, app, pkg, filepath.Join(tmp, "pkg")); err != nil {
 			return err
 		}
+		installer := os.Getenv("VERO_MAC_INSTALLER")
+		if profile := os.Getenv("VERO_NOTARY_PROFILE"); profile != "" && installer != "" {
+			fmt.Println("notarising the installer package")
+			if err := runIn("", "xcrun", "notarytool", "submit", pkg, "--keychain-profile", profile, "--wait"); err != nil {
+				return err
+			}
+			if err := runIn("", "xcrun", "stapler", "staple", pkg); err != nil {
+				return err
+			}
+		}
 		fmt.Println("built", pkg)
+	}
+	return nil
+}
+
+// setVersions writes this release's versions into an app's Info.plist.
+func setVersions(app, short, build string) error {
+	plist := filepath.Join(app, "Contents", "Info.plist")
+	for _, kv := range [][2]string{{"CFBundleShortVersionString", short}, {"CFBundleVersion", build}} {
+		if err := runIn("", "plutil", "-replace", kv[0], "-string", kv[1], plist); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// signApp signs an app inside out. A bundle's signature covers what is in
+// it, so everything nested is signed first, deepest first: the programs
+// and libraries - the worker, helpers in Resources, Sparkle's Autoupdate -
+// then the bundles around them - .xpc services, helper .apps such as
+// Sparkle's Updater.app, frameworks - and the app last, the only one with
+// the entitlements. With an identity each has the hardened runtime and a
+// timestamp, which notarisation needs; without, each is signed ad hoc.
+// codesign --deep would seem to do this and doesn't: it signs nested code
+// with the outer bundle's settings, and Apple has deprecated it.
+func signApp(app, identity, entitlements string) error {
+	args := []string{"--force", "--sign", "-"}
+	if identity != "" {
+		args = []string{"--force", "--options", "runtime", "--timestamp", "--sign", identity}
+	}
+	nested, err := nestedCode(app)
+	if err != nil {
+		return err
+	}
+	for _, path := range nested {
+		if err := quietSign(append(append([]string{}, args...), path)); err != nil {
+			return err
+		}
+	}
+	last := append([]string{}, args...)
+	if entitlements != "" {
+		last = append(last, "--entitlements", entitlements)
+	}
+	if err := quietSign(append(last, app)); err != nil {
+		return err
+	}
+	// Checked, as notarisation and Gatekeeper will.
+	out, err := exec.Command("codesign", "--verify", "--deep", "--strict", app).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("the signed app doesn't verify: %s", strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// quietSign runs codesign, showing only what goes wrong.
+func quietSign(args []string) error {
+	out, err := exec.Command("codesign", args...).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("codesign %s: %s", args[len(args)-1], strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// codeBundles are the bundles inside an app that are signed as bundles.
+var codeBundles = []string{".app", ".xpc", ".framework", ".appex", ".bundle", ".plugin"}
+
+// nestedCode is what is signed before the app itself: every Mach-O file
+// and every code bundle under its Contents, deepest first, and at the same
+// depth files before bundles.
+func nestedCode(app string) ([]string, error) {
+	type item struct {
+		path   string
+		depth  int
+		bundle bool
+	}
+	var items []item
+	err := filepath.Walk(filepath.Join(app, "Contents"), func(path string, st os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		depth := strings.Count(path, string(filepath.Separator))
+		if st.IsDir() {
+			for _, ext := range codeBundles {
+				if strings.HasSuffix(path, ext) {
+					items = append(items, item{path, depth, true})
+				}
+			}
+			return nil
+		}
+		if !st.Mode().IsRegular() {
+			return nil
+		}
+		f, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		var magic [4]byte
+		if n, _ := f.Read(magic[:]); n == 4 && isMachO(magic) {
+			items = append(items, item{path, depth, false})
+		}
+		return nil
+	})
+	sort.SliceStable(items, func(i, j int) bool {
+		if items[i].depth != items[j].depth {
+			return items[i].depth > items[j].depth
+		}
+		return !items[i].bundle && items[j].bundle
+	})
+	out := make([]string, len(items))
+	for i, it := range items {
+		out[i] = it.path
+	}
+	return out, err
+}
+
+// buildMacPkg makes an installer package for the app that installs it in
+// /Applications, as the user's own, so that Sparkle can update it.
+//
+// Not relocatable: left as pkgbuild makes it, Installer looks for a copy
+// of the app anywhere on the disk - the build folder, Downloads - and
+// installs over that one, reporting success, with /Applications empty.
+// The switch for it is only in a component list, from pkgbuild --analyze.
+//
+// Given to whoever installs it: an installer runs as root, and Sparkle
+// can't replace an app root owns without an administrator's password, so
+// a postinstall script hands it to the user, as an app dragged from the
+// disk image is. The owner is no part of the signature.
+func buildMacPkg(a *App, app, pkg, work string) error {
+	os.RemoveAll(work)
+	root, scripts := filepath.Join(work, "root"), filepath.Join(work, "scripts")
+	for _, d := range []string{root, scripts} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			return err
+		}
+	}
+	name := filepath.Base(app)
+	if err := runIn("", "ditto", app, filepath.Join(root, name)); err != nil {
+		return err
+	}
+	components := filepath.Join(work, "components.plist")
+	if err := exec.Command("pkgbuild", "--analyze", "--root", root, components).Run(); err != nil {
+		return fmt.Errorf("pkgbuild --analyze: %w", err)
+	}
+	if err := runIn("", "/usr/libexec/PlistBuddy", "-c", "Set :0:BundleIsRelocatable false", components); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(scripts, "postinstall"), []byte(postinstall(name)), 0o755); err != nil {
+		return err
+	}
+	component := filepath.Join(work, "component.pkg")
+	if err := exec.Command("pkgbuild", "--root", root, "--component-plist", components, "--install-location", "/Applications",
+		"--scripts", scripts, "--identifier", a.ID, "--version", a.Version, component).Run(); err != nil {
+		return fmt.Errorf("pkgbuild: %w", err)
+	}
+	if err := checkPkg(component); err != nil {
+		return err
+	}
+	dist := filepath.Join(work, "Distribution")
+	if err := os.WriteFile(dist, []byte(distribution(a, name)), 0o644); err != nil {
+		return err
+	}
+	args := []string{"--distribution", dist, "--package-path", work}
+	if installer := os.Getenv("VERO_MAC_INSTALLER"); installer != "" {
+		args = append(args, "--sign", installer, "--timestamp")
+	}
+	os.Remove(pkg)
+	if out, err := exec.Command("productbuild", append(args, pkg)...).CombinedOutput(); err != nil {
+		return fmt.Errorf("productbuild: %s", strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// postinstall gives the installed app to whoever installed it: the user
+// Installer runs for or, from sudo or a management tool, whoever is at the
+// screen. With nobody there, it stays root's.
+func postinstall(app string) string {
+	return `#!/bin/sh
+# $2 is where the package installs to: /Applications.
+APP="$2/` + app + `"
+[ -d "$APP" ] || APP="/Applications/` + app + `"
+[ -d "$APP" ] || exit 0
+WHO="$USER"
+case "$WHO" in ""|root) WHO=$(stat -f %Su /dev/console 2>/dev/null) ;; esac
+case "$WHO" in ""|root|loginwindow|_mbsetupuser) exit 0 ;; esac
+GROUP=$(id -gn "$WHO" 2>/dev/null) || exit 0
+# Never a reason for the installation to fail.
+chown -R "$WHO:$GROUP" "$APP" || true
+exit 0
+`
+}
+
+// distribution is the productbuild distribution: the one component, for
+// both architectures, from the app's oldest macOS on.
+func distribution(a *App, app string) string {
+	id, v := xmlText(a.ID), xmlText(a.Version)
+	return `<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="2">
+    <pkg-ref id="` + id + `">
+        <bundle-version>
+            <bundle CFBundleShortVersionString="` + v + `" CFBundleVersion="` + xmlText(a.buildNumber()) + `" id="` + id + `" path="` + xmlText(app) + `"/>
+        </bundle-version>
+    </pkg-ref>
+    <product id="` + id + `" version="` + v + `"/>
+    <title>` + xmlText(a.DisplayName) + `</title>
+    <options customize="never" require-scripts="false" hostArchitectures="arm64,x86_64"/>
+    <volume-check>
+        <allowed-os-versions>
+            <os-version min="` + xmlText(macMinimum(a.MacOS)) + `"/>
+        </allowed-os-versions>
+    </volume-check>
+    <choices-outline><line choice="default"><line choice="` + id + `"/></line></choices-outline>
+    <choice id="default"/>
+    <choice id="` + id + `" visible="false"><pkg-ref id="` + id + `"/></choice>
+    <pkg-ref id="` + id + `" version="` + v + `" onConclusion="none">component.pkg</pkg-ref>
+</installer-gui-script>
+`
+}
+
+// checkPkg makes sure a component package installs in place, and has its
+// postinstall: a package that installs somewhere else says nothing, and
+// neither does one that lost its script.
+func checkPkg(component string) error {
+	expanded := component + ".expanded"
+	os.RemoveAll(expanded)
+	defer os.RemoveAll(expanded)
+	if err := exec.Command("pkgutil", "--expand", component, expanded).Run(); err != nil {
+		return fmt.Errorf("pkgutil --expand: %w", err)
+	}
+	info, err := os.ReadFile(filepath.Join(expanded, "PackageInfo"))
+	if err != nil {
+		return err
+	}
+	if bytes.Contains(info, []byte("<relocate>")) && !bytes.Contains(info, []byte("<relocate/>")) {
+		return errors.New("the installer package would relocate the app instead of installing it in /Applications")
+	}
+	if st, err := os.Stat(filepath.Join(expanded, "Scripts", "postinstall")); err != nil || st.Mode()&0o100 == 0 || !bytes.Contains(info, []byte("postinstall")) {
+		return errors.New("the installer package has no postinstall script, so the app would be left owned by root")
 	}
 	return nil
 }
@@ -295,6 +581,7 @@ func buildXcodeApp(a *App, tmp string) (string, error) {
 	data := filepath.Join(tmp, "xcode")
 	err := runIn(a.Path(m.Folder), "xcodebuild", "-quiet", "-project", m.Project, "-scheme", m.Scheme,
 		"-configuration", "Release", "-derivedDataPath", data, "ARCHS=arm64 x86_64", "ONLY_ACTIVE_ARCH=NO",
+		"MARKETING_VERSION="+a.Version, "CURRENT_PROJECT_VERSION="+a.buildNumber(),
 		"CODE_SIGNING_ALLOWED=NO", "build")
 	if err != nil {
 		return "", err
@@ -536,7 +823,7 @@ func importSparkle(dir, from string) error {
 
 // buildMac puts new disk images in site/macos, keeps the newest keep, and
 // writes the Sparkle appcast and the Homebrew cask from them.
-func buildMac(site string, newDmgs []string, keep int, url string, a *App, s *signer) (map[string]Download, error) {
+func buildMac(site string, newDmgs, newPkgs []string, notes string, keep int, url string, a *App, s *signer) (map[string]Download, error) {
 	dir := filepath.Join(site, "macos")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
@@ -555,16 +842,44 @@ func buildMac(site string, newDmgs []string, keep int, url string, a *App, s *si
 		if err := os.WriteFile(filepath.Join(dir, filepath.Base(dmg)+".json"), info, 0o644); err != nil {
 			return nil, err
 		}
+		if strings.TrimSpace(notes) != "" {
+			v := macDisk(a.Name).FindStringSubmatch(filepath.Base(dmg))[1]
+			page := notesPage(a.DisplayName+" "+v, notes)
+			if err := os.WriteFile(filepath.Join(dir, macNotes(a.Name, v)), page, 0o644); err != nil {
+				return nil, err
+			}
+		}
+	}
+	for _, pkg := range newPkgs {
+		if macPkg(a.Name).MatchString(filepath.Base(pkg)) {
+			if err := copyFile(pkg, filepath.Join(dir, filepath.Base(pkg))); err != nil {
+				return nil, err
+			}
+		}
+	}
+	pkgs, pkgVersion, err := keepNewest(dir, macPkg(a.Name), keep)
+	if err != nil {
+		return nil, err
 	}
 	files, version, err := keepNewest(dir, macDisk(a.Name), keep)
 	if err != nil {
 		return nil, err
 	}
-	// What keepNewest removed takes its note with it.
-	notes, _ := filepath.Glob(filepath.Join(dir, "*.dmg.json"))
-	for _, n := range notes {
+	// What keepNewest removed takes its note, and its release notes, with it.
+	jsons, _ := filepath.Glob(filepath.Join(dir, "*.dmg.json"))
+	for _, n := range jsons {
 		if _, err := os.Stat(strings.TrimSuffix(n, ".json")); os.IsNotExist(err) {
 			os.Remove(n)
+		}
+	}
+	kept := map[string]bool{}
+	for _, f := range files {
+		kept[macNotes(a.Name, version[f])] = true
+	}
+	pages, _ := filepath.Glob(filepath.Join(dir, a.Name+"-*-notes.html"))
+	for _, p := range pages {
+		if !kept[filepath.Base(p)] {
+			os.Remove(p)
 		}
 	}
 	if len(files) == 0 {
@@ -591,7 +906,11 @@ func buildMac(site string, newDmgs []string, keep int, url string, a *App, s *si
 			return nil, fmt.Errorf("%s has no readable %s", f, f+".json")
 		}
 		st, _ := os.Stat(filepath.Join(dir, f))
-		items = append(items, appcastItem{
+		link := ""
+		if _, err := os.Stat(filepath.Join(dir, macNotes(a.Name, version[f]))); err == nil {
+			link = url + "/macos/" + macNotes(a.Name, version[f])
+		}
+		items = append(items, appcastItem{Notes: link,
 			Title: a.DisplayName + " " + version[f], Date: st.ModTime().UTC().Format("Mon, 02 Jan 2006 15:04:05 +0000"),
 			Version: info.BundleVersion, ShortVersion: info.ShortVersion, Minimum: info.Minimum,
 			Enclosure: appcastEnclosure{URL: downloads + "/" + f, Length: len(data), Type: "application/octet-stream",
@@ -604,8 +923,21 @@ func buildMac(site string, newDmgs []string, keep int, url string, a *App, s *si
 	if err != nil {
 		return nil, err
 	}
-	if err := os.WriteFile(filepath.Join(dir, "appcast.xml"), append([]byte(xml.Header), append(data, '\n')...), 0o644); err != nil {
+	feed := append([]byte(xml.Header), append(data, '\n')...)
+	if err := os.WriteFile(filepath.Join(dir, "appcast.xml"), feed, 0o644); err != nil {
 		return nil, err
+	}
+	if a.MacOS != nil && a.MacOS.Appcast != "" {
+		extra := a.MacOS.Appcast
+		if filepath.IsAbs(extra) || strings.Contains(extra, "..") {
+			return nil, fmt.Errorf("[macos] appcast %q is a path inside the site", extra)
+		}
+		if err := os.MkdirAll(filepath.Join(site, filepath.Dir(extra)), 0o755); err != nil {
+			return nil, err
+		}
+		if err := os.WriteFile(filepath.Join(site, extra), feed, 0o644); err != nil {
+			return nil, err
+		}
 	}
 	newest := files[0]
 	sum, err := fileSHA256(filepath.Join(dir, newest))
@@ -618,7 +950,11 @@ func buildMac(site string, newDmgs []string, keep int, url string, a *App, s *si
 	if err := writeCask(site, downloads, url, a, version[newest], sum, info); err != nil {
 		return nil, err
 	}
-	return map[string]Download{"universal": {Version: version[newest], URL: "macos/" + newest}}, nil
+	mac := map[string]Download{"universal": {Version: version[newest], URL: "macos/" + newest}}
+	if len(pkgs) > 0 {
+		mac["pkg"] = Download{Version: pkgVersion[pkgs[0]], URL: "macos/" + pkgs[0]}
+	}
+	return mac, nil
 }
 
 type appcast struct {
@@ -642,6 +978,7 @@ type appcastItem struct {
 	Version      string           `xml:"sparkle:version"`
 	ShortVersion string           `xml:"sparkle:shortVersionString"`
 	Minimum      string           `xml:"sparkle:minimumSystemVersion,omitempty"`
+	Notes        string           `xml:"sparkle:releaseNotesLink,omitempty"`
 	Enclosure    appcastEnclosure `xml:"enclosure"`
 }
 
@@ -689,38 +1026,6 @@ func fileSHA256(path string) (string, error) {
 	}
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:]), nil
-}
-
-// machOFiles are the programs and libraries under dir, outside skip (the
-// app's own executable, which signing the app signs): what has to be
-// signed before the app around them.
-func machOFiles(dir, skip string) ([]string, error) {
-	var out []string
-	err := filepath.Walk(dir, func(path string, st os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if st.IsDir() {
-			if path == skip || strings.HasSuffix(path, ".framework") {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if !st.Mode().IsRegular() {
-			return nil
-		}
-		f, err := os.Open(path)
-		if err != nil {
-			return err
-		}
-		defer f.Close()
-		var magic [4]byte
-		if n, _ := f.Read(magic[:]); n == 4 && isMachO(magic) {
-			out = append(out, path)
-		}
-		return nil
-	})
-	return out, err
 }
 
 func isMachO(m [4]byte) bool {

@@ -467,7 +467,13 @@ project (`folder`, `project` and `scheme`). vero builds it for Apple
 silicon and Intel in one app, puts the worker in `Contents/Resources`,
 where vero's Swift package looks for it, and makes a disk image, with a
 link to Applications to drag the app to. `pkg = true` makes an installer
-package too.
+package too, which installs the app into `/Applications`, never over a
+copy somewhere else, and makes it the property of whoever installed it,
+so that Sparkle can update it without an administrator's password.
+
+The app's versions are always the release's: `CFBundleShortVersionString`
+is `--version`, and `CFBundleVersion` is `--build`, or the version when
+there's no build number, whatever the Xcode project says.
 
 - **Files to bundle.** `resources` lists more files for
   `Contents/Resources`: helper programs your app runs, and their licences,
@@ -483,12 +489,16 @@ package too.
   any Mac once whoever opens it allows it in System Settings, under
   Privacy & Security; the site's page tells them. To sign it properly, put
   your Developer ID in the environment: `VERO_MAC_IDENTITY="Developer ID
-  Application: Name (TEAMID)"`. Everything inside the app that's a program
-  or a library is signed first, with the hardened runtime, then the app
-  around it, then the disk image. With `VERO_NOTARY_PROFILE` naming a
-  profile you made with `xcrun notarytool store-credentials`, the disk
-  image is notarised and stapled too. `entitlements` names a plist of
-  entitlements to sign with. `VERO_MAC_INSTALLER` signs the `.pkg`.
+  Application: Name (TEAMID)"`. The app is signed from the inside out,
+  with the hardened runtime: first every program and library in it, then
+  the bundles around them, deepest first (such as Sparkle's helper apps
+  and services, then `Sparkle.framework`), then the app itself, then the
+  disk image. The result is checked with `codesign --verify --deep
+  --strict`, as Gatekeeper and notarisation check it. With
+  `VERO_NOTARY_PROFILE` naming a profile you made with `xcrun notarytool
+  store-credentials`, the disk image is notarised and stapled too.
+  `entitlements` names a plist of entitlements for the app itself.
+  `VERO_MAC_INSTALLER` signs the `.pkg`, which is then notarised as well.
 - **Updates.** The site's `macos/appcast.xml` is a Sparkle feed, each
   release signed with your Sparkle key. For your app to use it, its
   `Info.plist` needs `SUFeedURL`, the appcast's address, and
@@ -498,7 +508,14 @@ package too.
   `Info.plist` has to say them itself. vero's example doesn't embed
   Sparkle, so its appcast is only checked, not fetched by the app. Sparkle
   compares `CFBundleVersion`; it's the version unless you give
-  `package.sh --build N` to number builds on their own.
+  `package.sh --build N` to number builds on their own. If apps already
+  installed look for the appcast somewhere else on the site, `appcast` in
+  `[macos]` writes it there too, such as `appcast = "appcast.xml"` for the
+  site's top.
+- **Release notes.** `vero-repo build --notes "..."` (or `--notes-file`)
+  makes a page of what's new, which the appcast links, so Sparkle shows it
+  in its update prompt. Paragraphs are split by blank lines, and lines
+  starting with `- ` become a list.
 - **Downloads served elsewhere.** `download_url` in `[macos]` points the
   appcast and the cask at another server, if the disk images don't live
   on the site. `vero-repo build --no-page` leaves out the public page and
@@ -648,7 +665,7 @@ github.com/imclaren/vero/kit` brings it in.
 | `kit/notify` | Shows a notification from the worker | The desktop's notification service on Linux and the BSDs, a toast on Windows; on macOS and iOS notifications come from the app, so keep what is new in the state and let the front end notify |
 | `kit/update` | Says whether a newer version is on your site | Reads the `latest.json` and the Sparkle appcast that `vero-repo build` writes |
 | `kit/tools` | Finds helper programs the app ships, such as ffmpeg | Wherever the app is installed on each system, or a folder you name |
-| `kit/site` | Serves your install site from your own Go server | For an app with a server already, or one whose downloads are for people who have signed in (`site.Private`); the site is plain files, so this is optional |
+| `kit/site` | Serves your install site from your own Go server, with `/download?for=mac` (or `windows`, `linux`, `pkg` and so on) sending each visitor to their installer | For an app with a server already, or one whose downloads are for people who have signed in (`site.Private`); the site is plain files, so this is optional |
 
 Each builds for every system vero does, without cgo.
 
