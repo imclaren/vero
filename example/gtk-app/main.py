@@ -16,7 +16,10 @@ import gi
 gi.require_version("Gtk", "4.0")
 from gi.repository import GLib, Gtk  # noqa: E402
 
+# The binding: two folders up in this repository, or beside this file once
+# it's installed.
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../bindings/python"))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from vero import NotRunning, Vero, run_in_thread  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))

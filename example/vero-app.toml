@@ -1,0 +1,70 @@
+# vero-app.toml describes a vero app to vero's packaging: what its
+# installers and its install site need that isn't secret. Copy this one
+# beside your app's go.mod and change it. Paths are relative to this file.
+#
+#   scripts/package.sh --app example/vero-app.toml --version 1.0.0
+#   cd cmd/vero-repo && go run . build --app ../../example/vero-app.toml ...
+#
+# The README's "Creating app installers" section goes through it all.
+
+# The package and command name: lower case letters, digits and hyphens.
+name = "vero-example"
+# What people see, in menus and on the install page.
+display_name = "vero example"
+# A reverse-domain name that's yours, which systems tell apps apart by.
+id = "dev.vero.example"
+# Usually given with --version instead, so that each release says its own.
+version = "1.0.0"
+summary = "Shows jobs running in a Go worker"
+# A paragraph or two, for package managers and software centres. A blank
+# line starts a new paragraph.
+description = """
+vero's example app. Its window shows three jobs that a Go worker runs,
+with a Restart button for each, the phase each job is in, and how far
+through it is.
+"""
+# Who publishes it, as "Name <email>". The Windows installer shows the name,
+# and the Debian package names this as its maintainer.
+publisher = "Example Publisher <you@example.com>"
+homepage = "https://github.com/imclaren/vero"
+# An SPDX licence identifier.
+licence = "MIT"
+# A square PNG, 512 or 1024 pixels.
+icon = "icon.png"
+
+[worker]
+# The worker's main package, and the program's name (".exe" is added on
+# Windows). The front ends start it from beside themselves by this name.
+package = "worker"
+name = "worker"
+
+# The front end for Linux, and later the BSDs and illumos.
+[gtk]
+folder = "gtk-app"
+entry = "main.py"
+# Files copied beside the entry: the Python binding, which the app imports.
+include = ["../bindings/python/vero.py"]
+# The menu categories, from freedesktop.org's list.
+categories = "Utility;"
+
+# What the Debian package needs from Debian, and where it's filed.
+[gtk.deb]
+depends = "python3 (>= 3.10), python3-gi, gir1.2-gtk-4.0"
+section = "utils"
+
+# The front end for Windows: its project's folder, and the program it builds.
+[wpf]
+folder = "wpf-app"
+exe = "VeroExample.exe"
+
+# What the app asks of the system it runs on. Each installer turns these
+# into what its system needs: on Windows, autostart offers to open the app
+# at sign-in, and webview installs Microsoft Edge WebView2 where it's
+# missing. Later stages use the rest, such as a Flatpak's permissions.
+[needs]
+network = false
+files = false
+keyring = false
+notifications = false
+autostart = false
+webview = false

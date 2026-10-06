@@ -9,7 +9,7 @@ Run a Go binary embedded in a native (e.g. macOS SwiftUI) app. The Go binary and
 [Build and run the macOS example](#build-and-run-the-macos-example) ·
 [Create a vero macOS app](#create-a-vero-macos-app) ·
 [Build and run the example on all platforms using your Mac](#build-and-run-the-example-on-all-platforms-using-your-mac) ·
-[Creating app installers for Linux and Windows](#creating-app-installers-for-linux-and-windows)
+[Creating app installers](#creating-app-installers)
 
 | Operating system | Example | Required on your Mac to build and run | Build and run on your Mac |
 |---|:---:|---|---|
@@ -301,63 +301,127 @@ them when building: `TARGETS=plan9/386 ./scripts/build-all.sh`.
 not `arm64`, or the Simulator SDK for `ios/amd64`. The other 43 targets only
 need Go.
 
-## Creating app installers for Linux and Windows
+## Creating app installers
 
-The scripts above build and run vero's example. Four of them also work on
-an app of your own that uses vero. Run each one on a Mac from your app's
-folder (the one with its `go.mod`).
+vero builds your app's installers, and the website your users install
+them from and get updates from. You describe your app once, in a file
+called `vero-app.toml`. vero then makes the installers, and a folder of
+plain files to put on any web host: a page telling people how to install
+your app on their system, a signed repository that Debian and Ubuntu
+update from, and the Windows installers.
 
-The commands below assume your app will be laid out like this:
+At the moment this covers Debian and Ubuntu, and Windows. macOS, Fedora,
+Flatpak, the BSDs and illumos are coming next, in the same way.
 
-```
-myapp/
-  go.mod
-  cmd/worker/        your worker (its main package sets `var version`)
-  linux/myapp.py     your GTK front end, with vero.py beside it
-  windows/           your WPF front end (a .csproj)
-  icon.png           a square icon, 512 or 1024 pixels
-```
+You need these on your Mac:
 
-**1. Build your worker for the platforms you list, into `dist/`.**
+- Go, which builds the worker and vero's packaging tool, `vero-repo`.
+- Docker and colima, for the Debian packages. Run
+  [`setup-linux.sh`](scripts/setup-linux.sh) to install them.
+- `makensis` and `dotnet`, for the Windows installers:
+  `brew install makensis dotnet`.
 
-```bash
-WORKER=./cmd/worker CSHIM=none WPF_APP=none LDFLAGS="-X main.version=1.2.3" \
-    TARGETS="windows/amd64 linux/amd64" path/to/vero/scripts/build-all.sh
-```
+### Try it on the example
 
-**2. See your Linux app running.**
-
-```bash
-path/to/vero/scripts/run-linux.sh --app linux --entry myapp.py \
-    --worker ./cmd/worker --worker-name myapp-worker
-```
-
-**3. Make Linux installers.**
+vero's example describes itself in
+[`example/vero-app.toml`](example/vero-app.toml). From vero's folder, this
+builds its installers into `dist/packages`, then its site into `dist/site`:
 
 ```bash
-path/to/vero/scripts/package-linux.sh --name myapp --version 1.2.3 \
-    --app linux --entry myapp.py --worker ./cmd/worker --worker-name myapp-worker \
-    --icon icon.png --summary "One line about it" --maintainer "Your Name <you@example.com>"
+scripts/package.sh --app example/vero-app.toml --version 1.0.0
+(cd cmd/vero-repo && go install .)
+vero-repo key --name "Example Publisher" --email you@example.com --dir ~/.cache/vero/example-key
+vero-repo build --app example/vero-app.toml --key ~/.cache/vero/example-key --url https://example.com/vero-example
 ```
 
-**4. Make Windows installers.**
+`go install` puts `vero-repo` in Go's `bin` folder, which needs to be on
+your `PATH`. `vero-repo key` won't replace a key it made before, so the
+next time, start from `vero-repo build`.
+
+[`scripts/test-repo.sh`](scripts/test-repo.sh) checks all of it for real.
+It builds the example's site, serves it from your Mac, and installs the
+example from it in a clean Debian container, as the site tells people to.
+Then it releases version 1.0.1 and checks that `apt upgrade` brings it.
+Run it with `--image ubuntu:24.04` to try another system.
+
+### Your own app
+
+Run these from your app's folder, the one with its `go.mod`.
+
+**1. Describe your app.** Copy
+[`example/vero-app.toml`](example/vero-app.toml) beside your `go.mod`, and
+change it to describe your app. The comments in it explain each setting.
+Paths in it are relative to the file. Your worker's main package needs a
+`var version`, which the build sets.
+
+**2. Make a signing key, once.**
 
 ```bash
-path/to/vero/scripts/package-windows.sh --name myapp --version 1.2.3 \
-    --app windows --exe myapp.exe --worker ./cmd/worker --worker-name myapp-worker.exe \
-    --icon icon.png --publisher "Your Name or Company"
+vero-repo key --name "Your Name or Company" --email you@example.com
 ```
 
-Each script's header lists all of its options, such as `--homepage`,
-`--recommends` or `--startup` (offer to open the app at sign-in).
+This makes a folder in `~/.config/vero-repo`. Its `private.asc` signs every
+release, so that people's systems can tell your updates are really yours.
+Back it up, keep it out of your repository, and never publish it. Its
+`key.asc` is the public half, which your site publishes.
 
-Add flags to your worker by using `--ldflags`, to add API
-keys from a file outside your repository for example.
+**3. Build the installers.**
 
-The Windows installers are not signed, because signing needs your
-code-signing certificate. Until you sign them (with `signtool` on Windows,
-or `osslsigncode` on a Mac), Windows SmartScreen warns people who download
-them.
+```bash
+path/to/vero/scripts/package.sh --app vero-app.toml --version 1.2.3
+```
+
+This builds them into `dist/packages`: a `.deb` for each of amd64 and
+arm64, and a Windows installer for each of x64 and ARM64. Use
+`--targets linux` or `--targets windows` to build only one of them, and
+`--ldflags` to build more into your worker, such as API keys from a file
+outside your repository.
+
+**4. Build the site.**
+
+```bash
+vero-repo build --app vero-app.toml --key ~/.config/vero-repo/your-name-or-company \
+    --url https://example.com/myapp
+```
+
+This builds the site into `dist/site`. `--url` is where the site will be,
+because the commands on its page and its repository need to know.
+
+**5. Put it online.** Upload the contents of `dist/site` to any static web
+host, so that they appear at the `--url` you gave. Then send people to
+that address, where the page shows the commands for their system first.
+
+**6. Release an update.** Change your version, then repeat steps 3 to 5,
+building into the same `dist/site`. vero keeps the three newest versions
+of each installer; use `--keep` to change that. People using Debian or
+Ubuntu get the update with their usual updates. Your app can read
+`latest.json` from the site to tell Windows users that a new version is
+out.
+
+### What's in the site
+
+```
+dist/site/
+  index.html     how to install, on each system
+  install.sh     installs on Debian and Ubuntu in one command
+  key.asc        your public key
+  apt/           the Debian and Ubuntu repository, signed
+  windows/       the Windows installers
+  latest.json    the newest version, and where each installer is
+```
+
+### Notes
+
+The Windows installers aren't signed, because signing needs your own
+code-signing certificate. Until you sign them, with `signtool` on Windows
+or `osslsigncode` on a Mac, Windows SmartScreen warns people who download
+them. The site's page tells them how to get past the warning.
+
+`scripts/package.sh` runs [`package-linux.sh`](scripts/package-linux.sh)
+and [`package-windows.sh`](scripts/package-windows.sh), which you can also
+run on their own. Each script's header lists its options.
+[`run-linux.sh`](scripts/run-linux.sh) shows your Linux app running before
+you package it.
 
 ## Licence
 

@@ -10,13 +10,17 @@
 #       --icon icon.png --summary "One line about it" --description "A paragraph." \
 #       --maintainer "Your Name <you@example.com>" [--homepage URL] [--id org.example.myapp] \
 #       [--depends "python3-gi, gir1.2-gtk-4.0"] [--recommends "..."] \
-#       [--categories "Utility;"] [--section utils] [--out dist/packages]
+#       [--categories "Utility;"] [--section utils] [--display-name "My App"] \
+#       [--metainfo myapp.metainfo.xml] [--out dist/packages]
 #
 # Each package puts the app's folder (its Python, vero.py, and the worker)
 # in /usr/lib/NAME, NAME on the PATH, a menu entry, and the icon at the
 # sizes a desktop uses. The worker is built with main.version set.
 #
 # --ldflags adds to the worker's build flags: what your app builds into it.
+# --display-name is the name in the menu, NAME when not given; --metainfo
+# is an AppStream file, which software centres show (scripts/package.sh
+# makes one from vero-app.toml).
 #
 # Nothing here names anyone: the maintainer, homepage and the rest are
 # what you pass.
@@ -26,7 +30,7 @@ VERO=$(cd "$(dirname "$0")/.." && pwd)
 ROOT=$PWD
 [ -f "$ROOT/go.mod" ] || { echo "run this from beside your app's go.mod" >&2; exit 2; }
 
-NAME="" VERSION="" APP="" ENTRY="" WORKER="" WORKER_NAME="" ICON="" SUMMARY="" DESCRIPTION=""
+DISPLAY_NAME="" METAINFO="" NAME="" VERSION="" APP="" ENTRY="" WORKER="" WORKER_NAME="" ICON="" SUMMARY="" DESCRIPTION=""
 MAINTAINER="" HOMEPAGE="" ID="" DEPENDS="python3 (>= 3.10), python3-gi, gir1.2-gtk-4.0"
 RECOMMENDS="" CATEGORIES="Utility;" SECTION=utils OUT="$ROOT/dist/packages"
 while [ $# -gt 0 ]; do
@@ -37,6 +41,7 @@ while [ $# -gt 0 ]; do
         --homepage) HOMEPAGE=$2 ;; --id) ID=$2 ;; --depends) DEPENDS=$2 ;; --recommends) RECOMMENDS=$2 ;;
         --categories) CATEGORIES=$2 ;; --section) SECTION=$2 ;; --out) OUT=$2 ;;
         --ldflags) LDEXTRA=$2 ;;
+        --display-name) DISPLAY_NAME=$2 ;; --metainfo) METAINFO=$2 ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
     shift 2
@@ -45,6 +50,7 @@ for v in NAME VERSION APP ENTRY WORKER WORKER_NAME ICON SUMMARY MAINTAINER; do
     eval "[ -n \"\$$v\" ]" || { echo "--$(echo $v | tr 'A-Z_' 'a-z-') is needed" >&2; exit 2; }
 done
 ID=${ID:-$NAME}
+DISPLAY_NAME=${DISPLAY_NAME:-$NAME}
 APP=$(cd "$APP" && pwd)
 mkdir -p "$OUT"
 OUT=$(cd "$OUT" && pwd)
@@ -74,13 +80,17 @@ for arch in amd64 arm64; do
     cat > "$P/usr/share/applications/$ID.desktop" <<DESKTOP
 [Desktop Entry]
 Type=Application
-Name=$NAME
+Name=$DISPLAY_NAME
 Comment=$SUMMARY
 Exec=$NAME
 Icon=$ID
 Categories=$CATEGORIES
 StartupNotify=true
 DESKTOP
+    if [ -n "$METAINFO" ]; then
+        mkdir -p "$P/usr/share/metainfo"
+        cp "$METAINFO" "$P/usr/share/metainfo/$ID.metainfo.xml"
+    fi
     {
         echo "Package: $NAME"
         echo "Version: $VERSION"
