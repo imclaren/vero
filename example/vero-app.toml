@@ -104,6 +104,17 @@ depends = ["x11/gtk+4:gtk+4-*:gtk+4-4.0", "devel/py-gobject3:py3-gobject3-*:py3-
 folder = "wpf-app"
 exe = "VeroExample.exe"
 
+# An MSIX for the Microsoft Store, made only when asked for, with build =
+# true or --targets msix. Partner Center gives an app its identity_name
+# and publisher when you reserve its name there; the Store signs what you
+# submit. These are placeholders, which install only with a certificate
+# of your own that names this publisher, as test-repo.sh --vm windows
+# makes one.
+[wpf.msix]
+build = false
+identity_name = "ExamplePublisher.VeroExample"
+publisher = "CN=Example Publisher"
+
 # What the app asks of the system it runs on. Each installer turns these
 # into what its system needs. On Windows, autostart offers to open the app
 # at sign-in, and webview installs Microsoft Edge WebView2 where it's
@@ -118,3 +129,49 @@ keyring = false
 notifications = false
 autostart = false
 webview = false
+
+# The Mac app: a SwiftPM package (product), or an Xcode project (project
+# and scheme). prepare runs before each architecture is built, with GOARCH
+# and CC set for it: here, it builds the C archive the app links. The
+# worker goes in Contents/Resources, with any files resources lists. feed
+# is where the app checks for updates, and sparkle_public_key the key it
+# checks them with, which vero-repo key prints; both go in its Info.plist.
+[macos]
+folder = "menubar-app"
+product = "MenuBarExample"
+prepare = "CGO_ENABLED=1 go build -buildmode=c-archive -o libvero.a ../../cshim"
+menubar = true
+minimum = "13.0"
+
+# The page in a browser: what its build makes, which the site serves.
+[web]
+folder = "web-app"
+build = "./build.sh"
+files = ["index.html", "main.wasm", "wasm_exec.js"]
+
+# A terminal front end whose worker is one worker.wasm, run by wasmtime.
+[wasi]
+frontend = "wasi-app"
+worker = "wasi-app/worker"
+
+# The Android app: its build makes an aligned, unsigned .apk, which vero
+# signs with your keystore (VERO_ANDROID_KEYSTORE), or one it makes and
+# keeps beside your signing key. The build needs a JDK: Homebrew's openjdk
+# is used unless JAVA_HOME says otherwise.
+[android]
+folder = "android-app"
+build = "JAVA_HOME=${JAVA_HOME:-/opt/homebrew/opt/openjdk} PATH=$JAVA_HOME/bin:$PATH ./build.sh --build"
+apk = ".build/app-aligned.apk"
+
+# The iOS app: its build makes an app for the Simulator. An .ipa for the
+# App Store is made only with your Apple account's identity and profile
+# (VERO_IOS_IDENTITY and VERO_IOS_PROFILE), from the app device_app names.
+[ios]
+folder = "ios-app"
+build = "./build.sh --build"
+simulator_app = ".build/VeroExample.app"
+
+# Plan 9: the front end is a Go program that finds the worker beside it.
+[plan9]
+frontend = "plan9-app"
+arches = ["amd64", "386"]

@@ -82,6 +82,10 @@ type page struct {
 	Flatpak bool
 	AUR     bool
 	Windows []windowsDownload
+	// Mac is the newest disk image, if the site has one.
+	Mac *windowsDownload
+	// Others are the bundles for the web, Android, iOS, WASI and Plan 9.
+	Others []otherSection
 	// Unix are the BSDs and illumos the site has a repository for.
 	Unix []unixSection
 }
@@ -102,7 +106,7 @@ type windowsDownload struct {
 // writeSite writes the site's pages: latest.json, index.html with how to
 // install on each system, and install.sh, which does it on Debian and
 // Ubuntu. urls in latest are relative to the site until here.
-func writeSite(site, url string, a *App, latest Latest, s *signer) error {
+func writeSite(site, url string, a *App, latest Latest, s *signer, noPage bool) error {
 	url = strings.TrimRight(url, "/")
 	for k, d := range latest.Downloads {
 		d.URL = url + "/" + d.URL
@@ -117,6 +121,11 @@ func writeSite(site, url string, a *App, latest Latest, s *signer) error {
 	}
 	if err := os.WriteFile(filepath.Join(site, publicFile), s.public, 0o644); err != nil {
 		return err
+	}
+	if noPage {
+		os.Remove(filepath.Join(site, "index.html"))
+		os.Remove(filepath.Join(site, "install.sh"))
+		return nil
 	}
 	p := page{App: a, URL: url, Latest: latest}
 	for k := range latest.Downloads {
@@ -140,6 +149,10 @@ func writeSite(site, url string, a *App, latest Latest, s *signer) error {
 			}
 		}
 	}
+	if d, ok := latest.Downloads["macos-universal"]; ok {
+		p.Mac = &windowsDownload{"Mac (Apple silicon and Intel)", d.URL, d.Version}
+	}
+	p.Others = otherSections(p)
 	for _, arch := range []string{"x64", "arm64"} {
 		if d, ok := latest.Downloads["windows-"+arch]; ok {
 			label := map[string]string{"x64": "Most PCs (x64)", "arm64": "ARM PCs (ARM64)"}[arch]
@@ -370,6 +383,25 @@ var indexPage = template.Must(template.New("index").Funcs(funcs).Parse(`<!doctyp
 {{- end}}
 </section>
 {{- end}}
+{{- if .Mac}}
+<section data-system="macos">
+<h2>Mac</h2>
+<p><a href="{{.Mac.URL}}">Download {{.App.DisplayName}}</a> <span class="soft">version {{.Mac.Version}}</span>, open it, and drag {{.App.DisplayName}} to Applications. It checks for updates itself.</p>
+<p class="soft">If your Mac says it can't check the app, open System Settings, choose Privacy &amp; Security, and choose <b>Open Anyway</b>.</p>
+</section>
+{{- end}}
+{{- range .Others}}
+<section data-system="{{.System}}">
+<h2>{{.Label}}</h2>
+{{- range .Paragraphs}}
+<p>{{.}}</p>
+{{- end}}
+{{- if .Commands}}
+<pre>{{range .Commands}}{{.}}
+{{end}}</pre>
+{{- end}}
+</section>
+{{- end}}
 {{- if .Windows}}
 <section data-system="windows">
 <h2>Windows</h2>
@@ -385,7 +417,8 @@ var indexPage = template.Must(template.New("index").Funcs(funcs).Parse(`<!doctyp
 </main>
 <script>
   // The section for this computer first.
-  var ua = navigator.userAgent, system = /Windows/.test(ua) ? "windows" : /FreeBSD/.test(ua) ? "freebsd" : /OpenBSD/.test(ua) ? "openbsd" :
+  var ua = navigator.userAgent, system = /Windows/.test(ua) ? "windows" : /Android/.test(ua) ? "android" :
+    /iPhone|iPad/.test(ua) ? "ios" : /Macintosh/.test(ua) ? "macos" : /FreeBSD/.test(ua) ? "freebsd" : /OpenBSD/.test(ua) ? "openbsd" :
     /NetBSD/.test(ua) ? "netbsd" : /DragonFly/.test(ua) ? "dragonfly" : /SunOS|illumos/.test(ua) ? "illumos" :
     /Linux|X11/.test(ua) && !/Android/.test(ua) ? "linux" : "";
   var mine = system ? document.querySelectorAll('[data-system="' + system + '"]') : [];

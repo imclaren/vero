@@ -19,6 +19,8 @@
 package main
 
 import (
+	"crypto/ed25519"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -39,6 +41,8 @@ func main() {
 		err = packageCommand(os.Args[2:])
 	case "build":
 		err = buildCommand(os.Args[2:])
+	case "check":
+		err = checkCommand(os.Args[2:])
 	case "deb":
 		// What scripts/package-linux.sh builds its .deb with: a folder laid
 		// out for dpkg-deb, made into a .deb in Go.
@@ -58,8 +62,10 @@ func main() {
 func usage() {
 	fmt.Fprint(os.Stderr, `usage:
   vero-repo key --name "Your Name or Company" --email you@example.com [--dir DIR]
-  vero-repo package --app vero-app.toml --version 1.2.3 [--targets deb,rpm,flatpak,windows,freebsd,dragonfly,netbsd,illumos,openbsd] [--out dist/packages]
-  vero-repo build --app vero-app.toml --key DIR --url https://example.com/myapp [--packages dist/packages] [--out dist/site] [--keep 3]
+  vero-repo key --dir DIR --import-sparkle FILE
+  vero-repo check --app vero-app.toml --url https://example.com/myapp [--key DIR] [dist/site]
+  vero-repo package --app vero-app.toml --version 1.2.3 [--targets deb,rpm,flatpak,macos,windows,freebsd,dragonfly,netbsd,illumos,openbsd] [--out dist/packages]
+  vero-repo build --app vero-app.toml --key DIR --url https://example.com/myapp [--packages dist/packages] [--out dist/site] [--keep 3] [--no-page]
 `)
 	os.Exit(2)
 }
@@ -69,7 +75,14 @@ func keyCommand(args []string) error {
 	name := fs.String("name", "", "whose key it is: your name, or your company's")
 	email := fs.String("email", "", "an email address for the key")
 	dir := fs.String("dir", "", "where to keep it (default ~/.config/vero-repo/NAME)")
+	sparkle := fs.String("import-sparkle", "", "a Sparkle private key to keep, in a file, so that copies of a Mac app already installed keep updating")
 	fs.Parse(args)
+	if *sparkle != "" {
+		if *dir == "" {
+			return errors.New("--import-sparkle needs --dir, the key's folder")
+		}
+		return importSparkle(*dir, *sparkle)
+	}
 	if *name == "" || *email == "" {
 		return errors.New("key needs --name and --email")
 	}
@@ -97,6 +110,7 @@ func buildCommand(args []string) error {
 	url := fs.String("url", "", "where the site will be, such as https://example.com/myapp")
 	out := fs.String("out", "dist/site", "the site's folder; an update builds into the same one")
 	keep := fs.Int("keep", 3, "how many versions of each installer to keep")
+	noPage := fs.Bool("no-page", false, "no index.html or install.sh: for downloads you serve yourself, privately")
 	fs.Parse(args)
 	if *keyDir == "" || *url == "" {
 		return errors.New("build needs --key and --url")
@@ -112,13 +126,36 @@ func buildCommand(args []string) error {
 	var in packageFiles
 	in.debs, _ = filepath.Glob(filepath.Join(*packages, "*.deb"))
 	in.exes, _ = filepath.Glob(filepath.Join(*packages, "*.exe"))
+	in.dmgs, _ = filepath.Glob(filepath.Join(*packages, "*.dmg"))
+	for _, pattern := range []string{"*-android.apk", "*-wasi-*.tar.gz", "*-plan9-*.tgz", "*-web.tar.gz"} {
+		more, _ := filepath.Glob(filepath.Join(*packages, pattern))
+		in.bundles = append(in.bundles, more...)
+	}
 	in.rpms, _ = filepath.Glob(filepath.Join(*packages, "*.rpm"))
 	in.flatpaks, _ = filepath.Glob(filepath.Join(*packages, "*.flatpak"))
 	unix, _ := filepath.Glob(filepath.Join(*packages, "*.pkg"))
 	tgz, _ := filepath.Glob(filepath.Join(*packages, "*.tgz"))
 	in.unix = append(unix, tgz...)
+	in.noPage = *noPage
+	// What the site offered before, which this release mustn't go back from.
+	var previous *Latest
+	if data, err := os.ReadFile(filepath.Join(*out, "latest.json")); err == nil {
+		previous = &Latest{}
+		if json.Unmarshal(data, previous) != nil {
+			previous = nil
+		}
+	}
 	latest, err := build(*out, in, *keep, *url, a, s, *keyDir)
 	if err != nil {
+		return err
+	}
+	var sparkle ed25519.PublicKey
+	if _, err := os.Stat(filepath.Join(*out, "macos")); err == nil {
+		if k, err := s.sparkle(); err == nil {
+			sparkle = k.public
+		}
+	}
+	if err := checkSite(*out, *url, a, sparkle, previous); err != nil {
 		return err
 	}
 	fmt.Printf("built %s: %s %s\n", *out, a.Name, latest.Version)
@@ -128,9 +165,13 @@ func buildCommand(args []string) error {
 
 // packageFiles are the installers vero-repo package made, by kind.
 type packageFiles struct {
-	debs, exes, rpms, flatpaks []string
+	debs, exes, rpms, flatpaks, dmgs []string
+	// bundles are the web, Android, WASI and Plan 9 bundles.
+	bundles []string
 	// unix are the packages for the BSDs and illumos.
 	unix []string
+	// noPage leaves out the public page and install.sh.
+	noPage bool
 }
 
 // build adds new installers to the site in out, and writes its indexes
@@ -214,6 +255,22 @@ func build(out string, in packageFiles, keep int, url string, a *App, s *signer,
 			note(sys.name+"-"+arch, d)
 		}
 	}
+	if _, err := os.Stat(filepath.Join(out, "macos")); len(in.dmgs) > 0 || err == nil {
+		mac, err := buildMac(out, in.dmgs, keep, url, a, s)
+		if err != nil {
+			return latest, err
+		}
+		for arch, d := range mac {
+			note("macos-"+arch, d)
+		}
+	}
+	others, err := buildBundles(out, in.bundles, keep, a)
+	if err != nil {
+		return latest, err
+	}
+	for k, d := range others {
+		note(k, d)
+	}
 	windows, err := buildWindows(out, exes, keep, a)
 	if err != nil {
 		return latest, err
@@ -221,8 +278,11 @@ func build(out string, in packageFiles, keep int, url string, a *App, s *signer,
 	for arch, d := range windows {
 		note("windows-"+arch, d)
 	}
+	if err := writeWinget(out, url, a, windows); err != nil {
+		return latest, err
+	}
 	if len(latest.Downloads) == 0 {
 		return latest, errors.New("no installers to publish: run vero-repo package first")
 	}
-	return latest, writeSite(out, url, a, latest, s)
+	return latest, writeSite(out, url, a, latest, s, in.noPage)
 }

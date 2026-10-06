@@ -39,6 +39,17 @@ func buildWorker(a *App, root, worker, goos, goarch, ldflags, dir string) (strin
 	cmd := exec.Command("go", "build", "-trimpath", "-ldflags", flags, "-o", out, worker)
 	cmd.Dir, cmd.Stdout, cmd.Stderr = root, os.Stdout, os.Stderr
 	cmd.Env = append(os.Environ(), "GOOS="+goos, "GOARCH="+goarch, "CGO_ENABLED=0")
+	if goos == "darwin" && a.Worker.CGO {
+		arch := map[string]string{"amd64": "x86_64"}[goarch]
+		if arch == "" {
+			arch = goarch
+		}
+		minimum := "13.0"
+		if a.MacOS != nil {
+			minimum = macMinimum(a.MacOS)
+		}
+		cmd.Env = append(cmd.Env, "CGO_ENABLED=1", "CC=clang -arch "+arch, "MACOSX_DEPLOYMENT_TARGET="+minimum)
+	}
 	if err := cmd.Run(); err != nil {
 		return "", fmt.Errorf("building the worker for %s/%s: %w", goos, goarch, err)
 	}

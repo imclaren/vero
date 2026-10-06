@@ -19,10 +19,12 @@ func packageCommand(args []string) error {
 	fset := flag.NewFlagSet("package", flag.ExitOnError)
 	appPath := fset.String("app", "vero-app.toml", "the app's vero-app.toml")
 	version := fset.String("version", "", "the version to build; the file's when not given")
-	targets := fset.String("targets", "", "comma separated: deb, rpm, flatpak, windows, freebsd, dragonfly, netbsd, illumos, openbsd; linux for deb and rpm, bsd for the BSDs and illumos (default: all the app has)")
+	targets := fset.String("targets", "", "comma separated: deb, rpm, flatpak, macos, windows, msix, web, android, ios, wasi, plan9, freebsd, dragonfly, netbsd, illumos, openbsd; linux for deb and rpm, bsd for the BSDs and illumos (default: all the app has)")
 	out := fset.String("out", "dist/packages", "where the installers go")
 	ldflags := fset.String("ldflags", "", "more of the worker's build flags: what your app builds into it")
 	vero := fset.String("vero", "", "vero's folder (default: found from this program's source)")
+	buildNum := fset.String("build", "", "a Mac app's CFBundleVersion, when it numbers its builds apart from its versions")
+	keyDir := fset.String("key", "", "the signing key's folder, which keeps the Android app's keystore")
 	fset.Parse(args)
 	a, err := LoadApp(*appPath)
 	if err != nil {
@@ -34,6 +36,7 @@ func packageCommand(args []string) error {
 	if a.Version == "" {
 		return errors.New("which version? give --version, or version in vero-app.toml")
 	}
+	a.Build = *buildNum
 	root, err := a.ModuleRoot()
 	if err != nil {
 		return err
@@ -156,6 +159,37 @@ func packageCommand(args []string) error {
 		}
 		did = true
 	}
+	others := []struct {
+		target string
+		on     bool
+		make   func() error
+	}{
+		{"web", a.Web != nil, func() error { return packageWeb(a, outDir) }},
+		{"android", a.Android != nil, func() error { return packageAndroid(a, outDir, *keyDir) }},
+		{"ios", a.IOS != nil, func() error { return packageIOS(a, outDir) }},
+		{"wasi", a.WASI != nil, func() error { return packageWASI(a, root, outDir, *ldflags, dir) }},
+		{"plan9", a.Plan9 != nil, func() error { return packagePlan9(a, root, worker, outDir, *ldflags, dir) }},
+	}
+	for _, o := range others {
+		if o.on && (all || want[o.target]) {
+			if err := o.make(); err != nil {
+				return err
+			}
+			did = true
+		}
+	}
+	if a.MacOS != nil && (all || want["macos"]) {
+		if err := packageMac(a, root, worker, outDir, *ldflags, dir); err != nil {
+			return err
+		}
+		did = true
+	}
+	if a.WPF != nil && (want["msix"] || a.WPF.MSIX.Build && (all || want["windows"])) {
+		if err := packageStore(a, root, worker, outDir, *ldflags, dir); err != nil {
+			return err
+		}
+		did = true
+	}
 	if a.WPF != nil && (all || want["windows"]) {
 		if *vero == "" {
 			return errors.New("--vero is needed for Windows; scripts/package.sh gives it")
@@ -248,3 +282,36 @@ func appStream(a *App) []byte {
 	data, _ := xml.MarshalIndent(c, "", "  ")
 	return append([]byte(xml.Header), append(data, '\n')...)
 }
+
+// packageStore publishes the WPF app for x64 and ARM64 with dotnet, and
+// makes an MSIX of each, for the Microsoft Store.
+func packageStore(a *App, root, worker, out, ldflags, tmp string) error {
+	dotnet, err := exec.LookPath("dotnet")
+	if err != nil {
+		home, _ := os.UserHomeDir()
+		if dotnet = filepath.Join(home, ".dotnet", "dotnet"); !fileExists(dotnet) {
+			return errors.New("dotnet is missing - brew install dotnet")
+		}
+	}
+	for _, arch := range []struct{ msix, goarch string }{{"x64", "amd64"}, {"arm64", "arm64"}} {
+		w, err := buildWorker(a, root, worker, "windows", arch.goarch, ldflags, tmp)
+		if err != nil {
+			return err
+		}
+		pub := filepath.Join(tmp, "msix-"+arch.msix)
+		cmd := exec.Command(dotnet, "publish", a.Path(a.WPF.Folder), "-c", "Release", "-r", "win-"+arch.msix,
+			"--self-contained", "-p:EnableWindowsTargeting=true", "-p:Version="+a.Version, "-o", pub, "-v", "quiet")
+		cmd.Stdout, cmd.Stderr = os.Stderr, os.Stderr
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("dotnet publish for %s: %w", arch.msix, err)
+		}
+		path, err := packageMSIX(a, pub, w, arch.msix, out)
+		if err != nil {
+			return err
+		}
+		fmt.Println("built", path)
+	}
+	return nil
+}
+
+func fileExists(p string) bool { _, err := os.Stat(p); return err == nil }
