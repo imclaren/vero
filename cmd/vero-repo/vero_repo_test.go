@@ -175,7 +175,7 @@ func TestBuild(t *testing.T) {
 			os.WriteFile(exe, []byte("MZ "+version), 0o644)
 			exes = append(exes, exe)
 		}
-		latest, err := build(site, debs, exes, keep, "https://example.com/vero/", testApp(), s)
+		latest, err := build(site, packageFiles{debs: debs, exes: exes}, keep, "https://example.com/vero/", testApp(), s, keyDir)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -287,6 +287,28 @@ func TestBuild(t *testing.T) {
 			t.Errorf("index.html lacks %q", want)
 		}
 	}
+	// The AUR's recipe: the newest .debs, with their hashes.
+	pkgbuild, _ := os.ReadFile(filepath.Join(site, "aur", "PKGBUILD"))
+	srcinfo, _ := os.ReadFile(filepath.Join(site, "aur", ".SRCINFO"))
+	newestDeb, _ := os.ReadFile(filepath.Join(site, "apt", "pool", "main", "v", "vero-example", "vero-example_1.0.10_amd64.deb"))
+	debSum := sha256.Sum256(newestDeb)
+	for _, want := range []string{
+		"pkgname=vero-example-bin\npkgver=1.0.10\n",
+		"source_x86_64=('https://example.com/vero/apt/pool/main/v/vero-example/vero-example_1.0.10_amd64.deb')",
+		"sha256sums_x86_64=('" + hex.EncodeToString(debSum[:]) + "')",
+		"arch=('x86_64' 'aarch64')",
+	} {
+		if !strings.Contains(string(pkgbuild), want) {
+			t.Errorf("PKGBUILD lacks %q:\n%s", want, pkgbuild)
+		}
+	}
+	if !strings.Contains(string(srcinfo), "\tsha256sums_x86_64 = "+hex.EncodeToString(debSum[:])+"\n") || !strings.HasSuffix(string(srcinfo), "pkgname = vero-example-bin\n") {
+		t.Errorf(".SRCINFO:\n%s", srcinfo)
+	}
+	if !strings.Contains(string(page), "makepkg -si") {
+		t.Error("index.html lacks the Arch instructions")
+	}
+
 	script, _ := os.ReadFile(filepath.Join(site, "install.sh"))
 	if !strings.Contains(string(script), "sudo apt install -y vero-example") || !strings.HasPrefix(string(script), "#!/bin/sh") {
 		t.Errorf("install.sh:\n%s", script)
@@ -299,7 +321,7 @@ func TestAppStream(t *testing.T) {
 	a.Description = "One paragraph,\nwrapped.\n\nAnother."
 	x := string(appStream(a))
 	for _, want := range []string{"<id>dev.vero.example</id>", "<p>One paragraph, wrapped.</p>", "<p>Another.</p>",
-		`<launchable type="desktop-id">dev.vero.example.desktop</launchable>`, `<release version="1.0.0"></release>`} {
+		`<launchable type="desktop-id">dev.vero.example.desktop</launchable>`, `<release version="1.0.0" date="2026-10-06"></release>`} {
 		if !strings.Contains(x, want) {
 			t.Errorf("metainfo lacks %s:\n%s", want, x)
 		}

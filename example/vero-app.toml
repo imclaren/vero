@@ -38,7 +38,8 @@ icon = "icon.png"
 package = "worker"
 name = "worker"
 
-# The front end for Linux, and later the BSDs and illumos.
+# The front end for Linux - the .deb, the rpm, the Flatpak and the AUR
+# package - and later the BSDs and illumos.
 [gtk]
 folder = "gtk-app"
 entry = "main.py"
@@ -52,15 +53,35 @@ categories = "Utility;"
 depends = "python3 (>= 3.10), python3-gi, gir1.2-gtk-4.0"
 section = "utils"
 
+# What the rpm needs from Fedora and openSUSE. They name GTK 4 for Python
+# differently, so this asks, in brackets, for openSUSE's on openSUSE and
+# Fedora's everywhere else, as rpm lets a requirement depend on what's
+# installed.
+[gtk.rpm]
+requires = "python3 >= 3.10, python3-gobject, (typelib(Gtk) = 4.0 if openSUSE-release else (gtk4 and gobject-introspection))"
+
+# What the Arch Linux package needs from Arch.
+[gtk.arch]
+depends = "python, python-gobject, gtk4"
+
+# The runtime the Flatpak runs on, from Flathub. GNOME's has GTK 4,
+# WebKitGTK, Python and PyGObject. Leave these out for vero's default.
+[gtk.flatpak]
+runtime = "org.gnome.Platform"
+runtime_version = "51"
+
 # The front end for Windows: its project's folder, and the program it builds.
 [wpf]
 folder = "wpf-app"
 exe = "VeroExample.exe"
 
 # What the app asks of the system it runs on. Each installer turns these
-# into what its system needs: on Windows, autostart offers to open the app
+# into what its system needs. On Windows, autostart offers to open the app
 # at sign-in, and webview installs Microsoft Edge WebView2 where it's
-# missing. Later stages use the rest, such as a Flatpak's permissions.
+# missing. A Flatpak may reach the network only with network, the home
+# folder only with files, and the keyring only with keyring. A file chosen
+# in a file dialog, notifications, and opening at sign-in all go through
+# Flatpak's portals, which need nothing here.
 [needs]
 network = false
 files = false

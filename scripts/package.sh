@@ -1,16 +1,17 @@
 #!/bin/sh
-# Builds a vero app's installers from its vero-app.toml: a .deb for each of
-# Debian and Ubuntu's architectures from a GTK front end, and a Windows
-# installer for x64 and ARM64 from a WPF one, into dist/packages.
+# Builds a vero app's installers from its vero-app.toml, into
+# dist/packages: from a GTK front end, a .deb, an .rpm and a Flatpak, and
+# from a WPF one, a Windows installer, each for x86_64 and ARM64.
 #
 # From your app's folder:
 #
-#   path/to/vero/scripts/package.sh --app vero-app.toml --version 1.2.3 [--targets linux,windows]
+#   path/to/vero/scripts/package.sh --app vero-app.toml --version 1.2.3 [--targets deb,rpm,flatpak,windows]
 #
-# It reads the file with vero-repo, which then runs package-linux.sh and
-# package-windows.sh, so it needs what they do: Docker and colima for the
-# .deb, makensis and dotnet for Windows. Then vero-repo build makes the
-# site your users install from; the README says how.
+# It reads the file with vero-repo, which runs package-linux.sh for the
+# .deb and package-windows.sh for Windows, builds the .rpm itself, and
+# makes the Flatpak in a container. So it needs Docker and colima for
+# Linux, and makensis and dotnet for Windows. Then vero-repo build makes
+# the site your users install from; the README says how.
 set -e
 VERO=$(cd "$(dirname "$0")/.." && pwd)
 BIN="$HOME/.cache/vero/bin"

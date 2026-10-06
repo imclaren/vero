@@ -1,11 +1,12 @@
 // Command vero-repo makes the installers of a vero app, and the static
-// site its users install and update them from: Debian and Ubuntu's apt
-// repository, signed, the Windows installers, a page saying how to
-// install on each system, and latest.json for the app's own update check.
-// The site is plain files, to put on any web host.
+// site its users install and update them from: signed repositories for
+// Debian and Ubuntu (apt), Fedora and openSUSE (rpm) and Flatpak, a recipe
+// for Arch's AUR, the Windows installers, a page saying how to install on
+// each system, and latest.json for the app's own update check. The site
+// is plain files, to put on any web host.
 //
 //	vero-repo key --name "Example Publisher" --email you@example.com [--dir DIR]
-//	vero-repo package --app vero-app.toml --version 1.2.3 [--targets linux,windows]
+//	vero-repo package --app vero-app.toml --version 1.2.3 [--targets deb,rpm,flatpak,windows]
 //	vero-repo build --app vero-app.toml --key DIR --url https://example.com/myapp
 //
 // key makes the key that signs every release, once; keep it safe, and out
@@ -48,7 +49,7 @@ func main() {
 func usage() {
 	fmt.Fprint(os.Stderr, `usage:
   vero-repo key --name "Your Name or Company" --email you@example.com [--dir DIR]
-  vero-repo package --app vero-app.toml --version 1.2.3 [--targets linux,windows] [--out dist/packages]
+  vero-repo package --app vero-app.toml --version 1.2.3 [--targets deb,rpm,flatpak,windows] [--out dist/packages]
   vero-repo build --app vero-app.toml --key DIR --url https://example.com/myapp [--packages dist/packages] [--out dist/site] [--keep 3]
 `)
 	os.Exit(2)
@@ -99,9 +100,12 @@ func buildCommand(args []string) error {
 	if err != nil {
 		return err
 	}
-	debs, _ := filepath.Glob(filepath.Join(*packages, "*.deb"))
-	exes, _ := filepath.Glob(filepath.Join(*packages, "*.exe"))
-	latest, err := build(*out, debs, exes, *keep, *url, a, s)
+	var in packageFiles
+	in.debs, _ = filepath.Glob(filepath.Join(*packages, "*.deb"))
+	in.exes, _ = filepath.Glob(filepath.Join(*packages, "*.exe"))
+	in.rpms, _ = filepath.Glob(filepath.Join(*packages, "*.rpm"))
+	in.flatpaks, _ = filepath.Glob(filepath.Join(*packages, "*.flatpak"))
+	latest, err := build(*out, in, *keep, *url, a, s, *keyDir)
 	if err != nil {
 		return err
 	}
@@ -110,9 +114,16 @@ func buildCommand(args []string) error {
 	return nil
 }
 
+// packageFiles are the installers vero-repo package made, by kind.
+type packageFiles struct {
+	debs, exes, rpms, flatpaks []string
+}
+
 // build adds new installers to the site in out, and writes its indexes
-// and pages.
-func build(out string, debs, exes []string, keep int, url string, a *App, s *signer) (Latest, error) {
+// and pages. The rpm and Flatpak repositories are made in vero's tools
+// container, with the key in keyDir; the rest in Go.
+func build(out string, in packageFiles, keep int, url string, a *App, s *signer, keyDir string) (Latest, error) {
+	debs, exes := in.debs, in.exes
 	latest := Latest{Name: a.Name, Downloads: map[string]Download{}}
 	note := func(key string, d Download) {
 		latest.Downloads[key] = d
@@ -131,6 +142,31 @@ func build(out string, debs, exes []string, keep int, url string, a *App, s *sig
 				return latest, err
 			}
 			note("linux-"+arch, Download{d.control.Get("Version"), filepath.ToSlash(rel)})
+		}
+		if err := writeAUR(out, url, a, newest); err != nil {
+			return latest, err
+		}
+	}
+	_, rpmErr := os.Stat(filepath.Join(out, "rpm"))
+	_, flatpakErr := os.Stat(filepath.Join(out, "flatpak"))
+	if len(in.rpms) > 0 || len(in.flatpaks) > 0 || rpmErr == nil || flatpakErr == nil {
+		t, err := newTools(keyDir)
+		if err != nil {
+			return latest, err
+		}
+		rpms, err := buildRPM(out, in.rpms, keep, url, a, s, t)
+		if err != nil {
+			return latest, err
+		}
+		for arch, d := range rpms {
+			note("rpm-"+arch, d)
+		}
+		flatpaks, err := buildFlatpak(out, in.flatpaks, keep, url, a, s, t)
+		if err != nil {
+			return latest, err
+		}
+		for arch, d := range flatpaks {
+			note("flatpak-"+arch, d)
 		}
 	}
 	windows, err := buildWindows(out, exes, keep, a)

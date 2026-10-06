@@ -306,18 +306,28 @@ need Go.
 vero builds your app's installers, and the website your users install
 them from and get updates from. You describe your app once, in a file
 called `vero-app.toml`. vero then makes the installers, and a folder of
-plain files to put on any web host: a page telling people how to install
-your app on their system, a signed repository that Debian and Ubuntu
+plain files to put on any web host. It holds a page telling people how to
+install your app on their system, signed repositories that Linux systems
 update from, and the Windows installers.
 
-At the moment this covers Debian and Ubuntu, and Windows. macOS, Fedora,
-Flatpak, the BSDs and illumos are coming next, in the same way.
+At the moment this covers Linux and Windows:
+
+- Debian and Ubuntu, from an apt repository.
+- Fedora and openSUSE, from an rpm repository.
+- Any Linux with Flatpak, from a Flatpak repository.
+- Arch Linux, from a recipe for the Arch User Repository (AUR).
+- Windows, from an installer.
+
+macOS, the BSDs and illumos are coming next, in the same way.
 
 You need these on your Mac:
 
 - Go, which builds the worker and vero's packaging tool, `vero-repo`.
-- Docker and colima, for the Debian packages. Run
-  [`setup-linux.sh`](scripts/setup-linux.sh) to install them.
+- Docker and colima, for the Linux packages and repositories. Run
+  [`setup-linux.sh`](scripts/setup-linux.sh) to install them. The first
+  time it's needed, `vero-repo` makes a small container of the tools that
+  have no Go equivalent: Flatpak's, and those that make the rpm
+  repository.
 - `makensis` and `dotnet`, for the Windows installers:
   `brew install makensis dotnet`.
 
@@ -340,9 +350,16 @@ next time, start from `vero-repo build`.
 
 [`scripts/test-repo.sh`](scripts/test-repo.sh) checks all of it for real.
 It builds the example's site, serves it from your Mac, and installs the
-example from it in a clean Debian container, as the site tells people to.
-Then it releases version 1.0.1 and checks that `apt upgrade` brings it.
-Run it with `--image ubuntu:24.04` to try another system.
+example from it in a clean container, as the site tells people to. Then it
+releases version 1.0.1 and checks that the system's own updates bring it.
+It tries Debian unless you say otherwise:
+
+```bash
+scripts/test-repo.sh --image ubuntu:24.04
+scripts/test-repo.sh --image fedora:latest
+scripts/test-repo.sh --image archlinux
+scripts/test-repo.sh --flatpak
+```
 
 ### Your own app
 
@@ -371,11 +388,22 @@ Back it up, keep it out of your repository, and never publish it. Its
 path/to/vero/scripts/package.sh --app vero-app.toml --version 1.2.3
 ```
 
-This builds them into `dist/packages`: a `.deb` for each of amd64 and
-arm64, and a Windows installer for each of x64 and ARM64. Use
-`--targets linux` or `--targets windows` to build only one of them, and
-`--ldflags` to build more into your worker, such as API keys from a file
-outside your repository.
+This builds them into `dist/packages`, each for both x86_64 and ARM64
+processors:
+
+- a `.deb` and an `.rpm`;
+- a Flatpak, which `vero-repo build` puts in the Flatpak repository;
+- a Windows installer.
+
+Use `--targets` to build only some of them: `deb`, `rpm`, `flatpak`,
+`windows`, or `linux` for the first three. Use `--ldflags` to build more
+into your worker, such as API keys from a file outside your repository.
+
+Each Linux system names its packages differently, so `vero-app.toml` says
+what your app needs from each: `[gtk.deb]`, `[gtk.rpm]` and `[gtk.arch]`.
+The Flatpak needs nothing from the system, because it runs on GNOME's
+runtime from Flathub, which has GTK 4, Python and WebKitGTK.
+`[needs]` says what the Flatpak may reach, such as the network.
 
 **4. Build the site.**
 
@@ -393,22 +421,44 @@ that address, where the page shows the commands for their system first.
 
 **6. Release an update.** Change your version, then repeat steps 3 to 5,
 building into the same `dist/site`. vero keeps the three newest versions
-of each installer; use `--keep` to change that. People using Debian or
-Ubuntu get the update with their usual updates. Your app can read
+of each installer; use `--keep` to change that. People using Debian,
+Ubuntu, Fedora, openSUSE or Flatpak get the update with their usual
+updates. On Arch, they build the recipe again. Your app can read
 `latest.json` from the site to tell Windows users that a new version is
 out.
+
+**7. Put it on the AUR, if you like.** Arch users can build the recipe from
+your site, as its page says. To list your app on the Arch User
+Repository, so that AUR helpers find it, make an account at
+[aur.archlinux.org](https://aur.archlinux.org) and add your SSH key to it.
+Then publish `dist/site/aur` there, as `NAME-bin`:
+
+```bash
+git clone ssh://aur@aur.archlinux.org/myapp-bin.git
+cp dist/site/aur/PKGBUILD dist/site/aur/.SRCINFO myapp-bin/
+cd myapp-bin && git add PKGBUILD .SRCINFO && git commit -m "Release 1.2.3" && git push
+```
+
+Do the same after each release.
 
 ### What's in the site
 
 ```
 dist/site/
   index.html     how to install, on each system
-  install.sh     installs on Debian and Ubuntu in one command
+  install.sh     installs in one command on Debian, Ubuntu, Fedora, openSUSE, or with Flatpak
   key.asc        your public key
   apt/           the Debian and Ubuntu repository, signed
+  rpm/           the Fedora and openSUSE repository, signed, and the .repo file that adds it
+  flatpak/       the Flatpak repository, signed; the .flatpakref that installs from it in one
+                 click; and the newest Flatpaks as single files
+  aur/           the Arch recipe, PKGBUILD and .SRCINFO
   windows/       the Windows installers
   latest.json    the newest version, and where each installer is
 ```
+
+The Flatpak repository holds many small files, which your web host has to
+serve exactly as they are.
 
 ### Notes
 

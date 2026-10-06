@@ -18,7 +18,7 @@ func packageCommand(args []string) error {
 	fset := flag.NewFlagSet("package", flag.ExitOnError)
 	appPath := fset.String("app", "vero-app.toml", "the app's vero-app.toml")
 	version := fset.String("version", "", "the version to build; the file's when not given")
-	targets := fset.String("targets", "", "linux, windows, or both, comma separated (default: every front end the app has)")
+	targets := fset.String("targets", "", "deb, rpm, flatpak, windows, or linux for the first three, comma separated (default: all the app's front ends have)")
 	out := fset.String("out", "dist/packages", "where the installers go")
 	ldflags := fset.String("ldflags", "", "more of the worker's build flags: what your app builds into it")
 	vero := fset.String("vero", "", "vero's folder (default: found from this program's source)")
@@ -56,10 +56,41 @@ func packageCommand(args []string) error {
 		}
 	}
 	all := len(want) == 0
+	linux := func(kind string) bool { return a.GTK != nil && (all || want["linux"] || want[kind]) }
 	did := false
-	if a.GTK != nil && (all || want["linux"]) {
+	if linux("deb") {
 		if err := packageLinux(a, *vero, root, worker, outDir, *ldflags); err != nil {
 			return err
+		}
+		did = true
+	}
+	if linux("rpm") || linux("flatpak") {
+		// The worker for each architecture, built once for both.
+		home, _ := os.UserHomeDir()
+		dir, err := os.MkdirTemp(filepath.Join(home, ".cache"), "vero-workers.")
+		if err != nil {
+			return err
+		}
+		defer os.RemoveAll(dir)
+		workers := map[string]string{}
+		for _, arch := range linuxArches {
+			if workers[arch.goarch], err = buildWorker(a, root, worker, arch.goarch, *ldflags, dir); err != nil {
+				return err
+			}
+		}
+		if linux("rpm") {
+			if err := packageRPM(a, workers, outDir); err != nil {
+				return err
+			}
+		}
+		if linux("flatpak") {
+			t, err := newTools("")
+			if err != nil {
+				return err
+			}
+			if err := packageFlatpak(a, workers, outDir, t); err != nil {
+				return err
+			}
 		}
 		did = true
 	}
@@ -183,6 +214,7 @@ func appStream(a *App) []byte {
 	}
 	type release struct {
 		Version string `xml:"version,attr"`
+		Date    string `xml:"date,attr"`
 	}
 	type component struct {
 		XMLName         xml.Name `xml:"component"`
@@ -204,7 +236,7 @@ func appStream(a *App) []byte {
 	c := component{
 		Type: "desktop-application", ID: a.ID, MetadataLicense: "CC0-1.0", ProjectLicense: a.Licence,
 		Name: a.DisplayName, Summary: a.Summary, Launchable: tagged{"desktop-id", a.ID + ".desktop"},
-		Developer: a.PublisherName(), Releases: []release{{a.Version}}, Rating: tagged{Type: "oars-1.1"},
+		Developer: a.PublisherName(), Releases: []release{{a.Version, now().UTC().Format("2006-01-02")}}, Rating: tagged{Type: "oars-1.1"},
 	}
 	for _, p := range strings.Split(strings.TrimSpace(a.Description), "\n\n") {
 		if p = strings.Join(strings.Fields(p), " "); p != "" {

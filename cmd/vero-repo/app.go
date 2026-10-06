@@ -54,8 +54,50 @@ type GTK struct {
 	// Include are files copied beside the entry: vero.py, for one.
 	Include    []string `toml:"include"`
 	Categories string   `toml:"categories"`
-	// Deb is what the Debian package needs from Debian.
-	Deb Deb `toml:"deb"`
+	// Deb is what the Debian package needs from Debian; RPM what the rpm
+	// needs from Fedora or openSUSE; Arch what the AUR package needs from
+	// Arch Linux; and Flatpak, the runtime the Flatpak runs on.
+	Deb     Deb     `toml:"deb"`
+	RPM     RPM     `toml:"rpm"`
+	Arch    Arch    `toml:"arch"`
+	Flatpak Flatpak `toml:"flatpak"`
+}
+
+// RPM is what an rpm depends on: packages, comma separated, each with a
+// version if it needs one ("python3 >= 3.10").
+type RPM struct {
+	Requires   string `toml:"requires"`
+	Recommends string `toml:"recommends"`
+}
+
+// Arch is what an Arch Linux package depends on, comma separated.
+type Arch struct {
+	Depends string `toml:"depends"`
+}
+
+// Flatpak is the runtime a Flatpak runs on, from Flathub: GNOME's, which
+// has GTK 4, WebKitGTK, Python and PyGObject, unless it says otherwise.
+type Flatpak struct {
+	Runtime        string `toml:"runtime"`
+	RuntimeVersion string `toml:"runtime_version"`
+}
+
+// The runtime a Flatpak runs on when vero-app.toml doesn't say.
+const (
+	defaultRuntime        = "org.gnome.Platform"
+	defaultRuntimeVersion = "51"
+)
+
+// runtime is the Flatpak's runtime and its version.
+func (g *GTK) runtime() (string, string) {
+	r, v := g.Flatpak.Runtime, g.Flatpak.RuntimeVersion
+	if r == "" {
+		r = defaultRuntime
+	}
+	if v == "" {
+		v = defaultRuntimeVersion
+	}
+	return r, v
 }
 
 // Deb is what a Debian package depends on, and where it is filed.

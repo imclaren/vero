@@ -78,6 +78,9 @@ type page struct {
 	URL     string
 	Latest  Latest
 	Apt     bool
+	RPM     bool
+	Flatpak bool
+	AUR     bool
 	Windows []windowsDownload
 }
 
@@ -106,9 +109,17 @@ func writeSite(site, url string, a *App, latest Latest, s *signer) error {
 	}
 	p := page{App: a, URL: url, Latest: latest}
 	for k := range latest.Downloads {
-		if strings.HasPrefix(k, "linux-") {
+		switch {
+		case strings.HasPrefix(k, "linux-"):
 			p.Apt = true
+		case strings.HasPrefix(k, "rpm-"):
+			p.RPM = true
+		case strings.HasPrefix(k, "flatpak-"):
+			p.Flatpak = true
 		}
+	}
+	if _, err := os.Stat(filepath.Join(site, "aur", "PKGBUILD")); err == nil {
+		p.AUR = true
 	}
 	for _, arch := range []string{"x64", "arm64"} {
 		if d, ok := latest.Downloads["windows-"+arch]; ok {
@@ -123,7 +134,7 @@ func writeSite(site, url string, a *App, latest Latest, s *signer) error {
 	if err := os.WriteFile(filepath.Join(site, "index.html"), html.Bytes(), 0o644); err != nil {
 		return err
 	}
-	if !p.Apt {
+	if !p.Apt && !p.RPM && !p.Flatpak {
 		return nil
 	}
 	var sh bytes.Buffer
@@ -151,7 +162,46 @@ func aptSteps(p page, yes string) []string {
 	}
 }
 
-var funcs = template.FuncMap{"apt": aptCommands}
+// dnfCommands, zypperCommands, flatpakCommands and aurCommands are the
+// commands for Fedora, openSUSE, any Linux with Flatpak, and Arch.
+func dnfCommands(p page) []string { return dnfSteps(p, "") }
+
+func dnfSteps(p page, yes string) []string {
+	return []string{
+		fmt.Sprintf("sudo curl -fsSL %s/rpm/%s.repo -o /etc/yum.repos.d/%s.repo", p.URL, p.App.Name, p.App.Name),
+		"sudo dnf install" + yes + " " + p.App.Name,
+	}
+}
+
+func zypperCommands(p page) []string { return zypperSteps(p, "") }
+
+func zypperSteps(p page, yes string) []string {
+	if yes != "" {
+		return []string{
+			fmt.Sprintf("sudo zypper --non-interactive addrepo %s/rpm/%s.repo", p.URL, p.App.Name),
+			"sudo zypper --non-interactive --gpg-auto-import-keys install " + p.App.Name,
+		}
+	}
+	return []string{
+		fmt.Sprintf("sudo zypper addrepo %s/rpm/%s.repo", p.URL, p.App.Name),
+		"sudo zypper install " + p.App.Name,
+	}
+}
+
+func flatpakCommands(p page) []string { return flatpakSteps(p, "") }
+
+func flatpakSteps(p page, yes string) []string {
+	return []string{fmt.Sprintf("flatpak install%s %s/flatpak/%s.flatpakref", yes, p.URL, p.App.Name)}
+}
+
+func aurCommands(p page) []string {
+	return []string{
+		fmt.Sprintf("curl -fsSLO %s/aur/PKGBUILD", p.URL),
+		"makepkg -si",
+	}
+}
+
+var funcs = template.FuncMap{"apt": aptCommands, "dnf": dnfCommands, "zypper": zypperCommands, "flatpak": flatpakCommands, "aur": aurCommands}
 
 var indexPage = template.Must(template.New("index").Funcs(funcs).Parse(`<!doctype html>
 <html lang="en">
@@ -192,6 +242,36 @@ var indexPage = template.Must(template.New("index").Funcs(funcs).Parse(`<!doctyp
 <p class="soft">These need curl, which <code>sudo apt install curl</code> adds if it's missing.</p>
 </section>
 {{- end}}
+{{- if .RPM}}
+<section data-system="linux">
+<h2>Fedora and openSUSE</h2>
+<p>Add {{.App.DisplayName}}'s repository and install it. After that, your usual updates keep it up to date. The first time, you're asked to accept the key that signs it, which is at <a href="{{.URL}}/key.asc">{{.URL}}/key.asc</a>.</p>
+<p>On Fedora:</p>
+<pre>{{range dnf .}}{{.}}
+{{end}}</pre>
+<p>On openSUSE:</p>
+<pre>{{range zypper .}}{{.}}
+{{end}}</pre>
+</section>
+{{- end}}
+{{- if .Flatpak}}
+<section data-system="linux">
+<h2>Any Linux, with Flatpak</h2>
+<p><a href="{{.URL}}/flatpak/{{.App.Name}}.flatpakref">Install {{.App.DisplayName}} with Flatpak</a>, which opens it in your software centre, or run:</p>
+<pre>{{range flatpak .}}{{.}}
+{{end}}</pre>
+<p class="soft">Flatpak keeps it up to date, with your other Flatpak apps. If your system doesn't have Flatpak yet, <a href="https://flatpak.org/setup/">flatpak.org/setup</a> says how to add it.</p>
+</section>
+{{- end}}
+{{- if .AUR}}
+<section data-system="linux">
+<h2>Arch Linux</h2>
+<p>Download the package's recipe and build it with makepkg:</p>
+<pre>{{range aur .}}{{.}}
+{{end}}</pre>
+<p class="soft">To update it, do the same again.</p>
+</section>
+{{- end}}
 {{- if .Windows}}
 <section data-system="windows">
 <h2>Windows</h2>
@@ -208,29 +288,65 @@ var indexPage = template.Must(template.New("index").Funcs(funcs).Parse(`<!doctyp
 <script>
   // The section for this computer first.
   var ua = navigator.userAgent, system = /Windows/.test(ua) ? "windows" : /Linux|X11/.test(ua) && !/Android/.test(ua) ? "linux" : "";
-  var mine = system && document.querySelector('[data-system="' + system + '"]');
-  if (mine) {
-    var list = document.getElementById("systems");
-    list.insertBefore(mine, list.firstChild);
-    mine.querySelector("h2").insertAdjacentHTML("beforeend", '<span class="yours">For this computer</span>');
+  var mine = system ? document.querySelectorAll('[data-system="' + system + '"]') : [];
+  var list = document.getElementById("systems");
+  for (var i = mine.length - 1; i >= 0; i--) {
+    list.insertBefore(mine[i], list.firstChild);
+    mine[i].querySelector("h2").insertAdjacentHTML("beforeend", '<span class="yours">For this computer</span>');
   }
 </script>
 </body>
 </html>
 `))
 
-var installScript = textTemplate.Must(textTemplate.New("install").Funcs(textTemplate.FuncMap{"apt": scriptCommands}).Parse(`#!/bin/sh
-# Installs {{.App.DisplayName}} on Debian or Ubuntu from {{.URL}}: adds its
-# repository, signed by the key at {{.URL}}/key.asc, then installs it, so
-# that your usual updates keep it up to date.
+var installScript = textTemplate.Must(textTemplate.New("install").Funcs(textTemplate.FuncMap{
+	"apt":     scriptCommands,
+	"dnf":     func(p page) []string { return dnfSteps(p, " -y") },
+	"zypper":  func(p page) []string { return zypperSteps(p, " -y") },
+	"flatpak": func(p page) []string { return flatpakSteps(p, " -y") },
+}).Parse(`#!/bin/sh
+# Installs {{.App.DisplayName}} from {{.URL}}: from its repository on Debian,
+# Ubuntu{{if .RPM}}, Fedora and openSUSE{{end}}, signed by the key at {{.URL}}/key.asc,
+# so that your usual updates keep it up to date{{if .Flatpak}}; elsewhere, with Flatpak{{end}}.
 set -e
-if ! grep -qs -e '^ID=debian' -e '^ID=ubuntu' -e '^ID_LIKE=.*debian' /etc/os-release; then
-    echo "This script installs {{.App.DisplayName}} on Debian and Ubuntu. For other systems, see {{.URL}}" >&2
-    exit 1
-fi
-command -v curl > /dev/null || { echo "This needs curl: sudo apt install curl" >&2; exit 1; }
+command -v curl > /dev/null || { echo "This needs curl. Install it, then run this again." >&2; exit 1; }
 # Run as root, as in a container, there's no sudo, and no need for it.
 [ "$(id -u)" = 0 ] && sudo() { "$@"; }
-{{range apt .}}{{.}}
-{{end}}echo "{{.App.DisplayName}} is installed."
+os() { grep -qs -e "^ID=$1" -e "^ID_LIKE=.*$1" /etc/os-release; }
+{{- if .Apt}}
+if os debian || os ubuntu; then
+{{- range apt .}}
+    {{.}}
+{{- end}}
+    echo "{{.App.DisplayName}} is installed."
+    exit 0
+fi
+{{- end}}
+{{- if .RPM}}
+if command -v dnf > /dev/null; then
+{{- range dnf .}}
+    {{.}}
+{{- end}}
+    echo "{{.App.DisplayName}} is installed."
+    exit 0
+fi
+if command -v zypper > /dev/null; then
+{{- range zypper .}}
+    {{.}}
+{{- end}}
+    echo "{{.App.DisplayName}} is installed."
+    exit 0
+fi
+{{- end}}
+{{- if .Flatpak}}
+if command -v flatpak > /dev/null; then
+{{- range flatpak .}}
+    {{.}}
+{{- end}}
+    echo "{{.App.DisplayName}} is installed."
+    exit 0
+fi
+{{- end}}
+echo "This script doesn't know how to install {{.App.DisplayName}} here. See {{.URL}}" >&2
+exit 1
 `))
