@@ -104,6 +104,17 @@ depends = ["x11/gtk+4:gtk+4-*:gtk+4-4.0", "devel/py-gobject3:py3-gobject3-*:py3-
 folder = "wpf-app"
 exe = "VeroExample.exe"
 
+# An MSIX for the Microsoft Store, made only when asked for, with build =
+# true or --targets msix. Partner Center gives an app its identity_name
+# and publisher when you reserve its name there; the Store signs what you
+# submit. These are placeholders, which install only with a certificate
+# of your own that names this publisher, as test-repo.sh --vm windows
+# makes one.
+[wpf.msix]
+build = false
+identity_name = "ExamplePublisher.VeroExample"
+publisher = "CN=Example Publisher"
+
 # What the app asks of the system it runs on. Each installer turns these
 # into what its system needs. On Windows, autostart offers to open the app
 # at sign-in, and webview installs Microsoft Edge WebView2 where it's

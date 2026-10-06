@@ -673,7 +673,15 @@ func (c *checker) checkWinget() {
 // checkBundles checks that the Android, WASI and Plan 9 bundles, and the
 // web front end, hold what they should.
 func (c *checker) checkBundles(latest Latest) {
+	seen := map[string]bool{}
 	for key, d := range latest.Downloads {
+		switch kind, _, _ := strings.Cut(key, "-"); kind {
+		case "android", "wasi", "plan9", "web":
+			if !seen[kind] {
+				seen[kind] = true
+				c.ok(map[string]string{"android": "the Android app", "wasi": "the WASI bundles", "plan9": "the Plan 9 bundles", "web": "the web front end"}[kind])
+			}
+		}
 		rel := c.local(d.URL)
 		switch {
 		case key == "android":

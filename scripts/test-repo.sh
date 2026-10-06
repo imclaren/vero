@@ -17,6 +17,8 @@
 #   scripts/test-repo.sh --vm openbsd             # pkg_add, in vero's OpenBSD VM
 #   scripts/test-repo.sh --vm dragonfly           # pkg, in vero's DragonFly VM
 #   scripts/test-repo.sh --vm illumos             # pkgin, with pkgsrc, in vero's OpenIndiana VM
+#   scripts/test-repo.sh --mac                    # the disk image, on this Mac, and the appcast
+#   scripts/test-repo.sh --vm windows             # the installer and the MSIX, in vero's Windows VM
 #   [--port 8642]
 #
 # A VM test starts the system's VM with its run script (scripts/run-*.sh
@@ -31,17 +33,18 @@
 set -e
 VERO=$(cd "$(dirname "$0")/.." && pwd)
 . "$VERO/scripts/lib/docker.sh"
-IMAGE=debian:bookworm PORT=8642 FLATPAK="" VMSYS=""
+IMAGE=debian:bookworm PORT=8642 FLATPAK="" VMSYS="" MAC=""
 while [ $# -gt 0 ]; do
     case $1 in
         --image) IMAGE=$2; shift ;; --port) PORT=$2; shift ;;
         --flatpak) FLATPAK=yes ;;
         --vm) VMSYS=$2; shift ;;
+        --mac) MAC=yes ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
     shift
 done
-[ -n "$VMSYS" ] || vero_docker
+[ -n "$VMSYS$MAC" ] || vero_docker
 CACHE="$HOME/.cache/vero"
 KEY="$CACHE/example-key" SITE="$CACHE/example-site" PACKAGES="$CACHE/example-packages"
 # The container reaches this Mac by this name: colima and Docker Desktop
@@ -59,7 +62,18 @@ rm -rf "$SITE"
 GTK="import gi; gi.require_version('Gtk', '4.0'); from gi.repository import Gtk"
 
 # What to build, and how to install, check and update, on this system.
-if [ -n "$VMSYS" ]; then
+if [ -n "$MAC" ]; then
+    # The disk image, on this very Mac: mounted, the app copied out and
+    # started, as a person would; then the appcast's next entry checked,
+    # which is what the app's Sparkle would fetch.
+    URL="http://127.0.0.1:$PORT" TARGETS=macos
+elif [ "$VMSYS" = windows ]; then
+    # Windows, in vero's VM, which has no way in but a disc, and no way
+    # out but its screen: scripts/lib/windows-test.ps1 goes on the disc
+    # with the installers, is started by typing at the VM, and shows its
+    # results as big text, which a screenshot brings back.
+    URL="http://10.0.2.2:$PORT" TARGETS=windows,msix
+elif [ -n "$VMSYS" ]; then
     # A VM reaches this Mac at 10.0.2.2, as qemu's own network has it.
     URL="http://10.0.2.2:$PORT"
     TARGETS=$VMSYS
@@ -154,14 +168,22 @@ release() {
     (cd "$VERO" && scripts/package.sh --app example/vero-app.toml --version "$1" --targets "$TARGETS" --out "$PACKAGES")
     "$REPO" build --app "$VERO/example/vero-app.toml" --packages "$PACKAGES" --key "$KEY" --url "$URL" --out "$SITE"
 }
-if [ -n "$VMSYS" ]; then
+if [ -n "$MAC" ] || [ "$VMSYS" = windows ]; then
+    in_container() { sh -c "$1"; }
+elif [ -n "$VMSYS" ]; then
     SSH="ssh -i $VMDIR/key -p $SSH_PORT -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o IdentitiesOnly=yes root@127.0.0.1"
     in_container() { $SSH "$1"; }
 else
     in_container() { docker exec "$NAME" sh -c "$1"; }
 fi
 cleanup() {
-    if [ -n "$VMSYS" ]; then
+    if [ -n "$MAC" ]; then
+        pkill -f "$CACHE/mac-test/" 2>/dev/null || true
+        hdiutil detach -quiet "$CACHE/mac-test/mnt" 2>/dev/null || true
+        rm -rf "$CACHE/mac-test" "$HOME/Library/Application Support/Example"
+    elif [ "$VMSYS" = windows ]; then
+        [ -n "$QEMU" ] && kill "$QEMU" 2>/dev/null || true
+    elif [ -n "$VMSYS" ]; then
         if [ -f "$VMDIR/qemu.pid" ]; then
             $SSH 'PATH=/sbin:/usr/sbin:$PATH; poweroff 2>/dev/null || shutdown -p now' >/dev/null 2>&1 || true
             sleep 15
@@ -175,11 +197,98 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# mac_test: the disk image on this Mac, then the appcast after an update.
+mac_test() {
+    T="$CACHE/mac-test"
+    rm -rf "$T" && mkdir -p "$T/mnt"
+    DMG=$(ls "$SITE"/macos/vero-example-1.0.0-macos.dmg)
+    echo "== opening $DMG on this Mac"
+    hdiutil attach -quiet -nobrowse -mountpoint "$T/mnt" "$DMG"
+    APP=$(ls -d "$T/mnt"/*.app)
+    ditto "$APP" "$T/$(basename "$APP")"
+    hdiutil detach -quiet "$T/mnt"
+    APP="$T/$(basename "$APP")"
+    codesign --verify --deep --strict "$APP" || { echo "FAIL: the app's signature doesn't verify" >&2; exit 1; }
+    got=$("$APP/Contents/Resources/worker" -version)
+    [ "$got" = 1.0.0 ] || { echo "FAIL: the bundled worker says $got, not 1.0.0" >&2; exit 1; }
+    open "$APP"
+    sleep 6
+    pgrep -f "$APP/Contents/MacOS/" >/dev/null || { echo "FAIL: the app didn't stay running" >&2; exit 1; }
+    pgrep -f "Application Support/Example/bin/worker" >/dev/null || { echo "FAIL: the app didn't start its worker" >&2; exit 1; }
+    pkill -f "$APP/Contents/MacOS/"
+    echo "ok: 1.0.0 installed from the disk image, and the app started its worker"
+    echo "== releasing 1.0.1 into the same site"
+    release 1.0.1
+    # What Sparkle would fetch: the newest item, its signature checked
+    # with the key the app would carry.
+    "$REPO" check --app "$VERO/example/vero-app.toml" --url "$URL" --key "$KEY" "$SITE" >/dev/null
+    newest=$(curl -fsSL "$URL/macos/appcast.xml" | grep -o '<sparkle:version>[^<]*' | head -1 | cut -d'>' -f2)
+    [ "$newest" = 1.0.1 ] || { echo "FAIL: the appcast's newest is $newest, not 1.0.1" >&2; exit 1; }
+    curl -fsSL "$URL/homebrew/vero-example.rb" | grep -q 'version "1.0.1"' || { echo "FAIL: the cask isn't 1.0.1" >&2; exit 1; }
+    echo "ok: the appcast offers 1.0.1, signed, and the cask has it"
+    echo "PASS"
+}
+
+# windows_test: the installers in vero's Windows VM.
+windows_test() {
+    VMDIR="$HOME/vm/vero-windows"
+    [ -f "$VMDIR/disk.qcow2" ] || { echo "no Windows VM in $VMDIR: scripts/setup-windows.sh says how to make one" >&2; exit 1; }
+    PAY="$CACHE/windows-test"
+    rm -rf "$PAY" && mkdir -p "$PAY"
+    # The packages, before another test in another terminal rebuilds them.
+    cp "$PACKAGES"/*-setup.exe "$PACKAGES"/*.msix "$PAY/"
+    sed -e 's/"NAME"/"vero-example"/' -e 's/"EXE"/"VeroExample.exe"/' -e 's/"WORKER"/"worker.exe"/' \
+        -e 's/"IDENTITY"/"ExamplePublisher.VeroExample"/' -e 's/"PUBLISHER"/"CN=Example Publisher"/' \
+        "$VERO/scripts/lib/windows-test.ps1" > "$PAY/test.ps1"
+    QMP=/tmp/vero-qmp.sock
+    echo "== booting the Windows VM (a few minutes)"
+    "$VERO/scripts/run-windows.sh" --headless --payload "$PAY" >/dev/null 2>&1 &
+    QEMU=$!
+    sleep 120
+    # The disc is the first CD drive Windows shows: D: on this VM. Win+R,
+    # then the command, which runs the script from it.
+    python3 "$VERO/scripts/lib/qmp.py" $QMP keys meta_l-r
+    sleep 3
+    python3 "$VERO/scripts/lib/qmp.py" $QMP type "powershell -ExecutionPolicy Bypass -WindowStyle Hidden -File D:\\vero\\test.ps1"
+    SHOT="$PAY/result.ppm"
+    for i in $(seq 1 60); do
+        sleep 10
+        python3 "$VERO/scripts/lib/qmp.py" $QMP shot "$SHOT"
+        # The result window is white with black text; a mostly white screen
+        # means it's up.
+        if python3 -c "
+import sys
+d=open('$SHOT','rb').read()
+# a binary PPM: header, then RGB bytes
+parts=d.split(b'\\n',3)
+px=parts[3]
+white=sum(1 for i in range(0,len(px),3*97) if px[i]>240 and px[i+1]>240 and px[i+2]>240)
+sys.exit(0 if white*3*97 > len(px)*0.6 else 1)
+"; then
+            echo "the result is on the screen: $SHOT"
+            echo "read it (it says VERO-TEST-DONE when finished):"
+            echo "  open $SHOT"
+            return 0
+        fi
+    done
+    echo "FAIL: no result on the VM's screen after 10 minutes; see $SHOT" >&2
+    exit 1
+}
+
 echo "== releasing 1.0.0"
 release 1.0.0
 go build -o "$CACHE/bin/serve" "$VERO/scripts/lib/serve.go"
 "$CACHE/bin/serve" "$SITE" "$PORT" &
 SERVER=$!
+
+if [ -n "$MAC" ]; then
+    mac_test
+    exit 0
+fi
+if [ "$VMSYS" = windows ]; then
+    windows_test
+    exit 0
+fi
 if [ -n "$VMSYS" ]; then
     "$VERO/scripts/run-$VMSYS.sh" --shell --no-open >/dev/null
     IMAGE="the $VMSYS VM"
