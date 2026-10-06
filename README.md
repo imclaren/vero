@@ -451,6 +451,21 @@ never offered the update. It refuses to finish otherwise.
 host, so that they appear at the `--url` you gave. Then send people to
 that address, where the page shows the commands for their system first.
 
+If you'd rather run your own server, `vero-site` serves the folder by
+itself, with the page, the repositories, `/download?for=SYSTEM` links and
+`latest.json`. With `-domain` it gets an HTTPS certificate from Let's
+Encrypt for that name:
+
+```bash
+go install github.com/imclaren/vero/kit/cmd/vero-site@latest
+vero-site -dir /srv/myapp -domain downloads.example.com
+```
+
+To publish a release, copy the new `dist/site` over the old one, for
+example with `rsync -a --delete dist/site/ server:/srv/myapp/`. If your
+app already has a Go web server, serve the folder from it with
+`kit/site` instead.
+
 **6. Release an update.** Change your version, then repeat steps 3 to 5,
 building into the same `dist/site`. vero keeps the three newest versions
 of each installer; use `--keep` to change that. People get the update
