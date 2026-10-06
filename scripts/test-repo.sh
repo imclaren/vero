@@ -244,26 +244,30 @@ windows_test() {
     echo "== booting the Windows VM (a few minutes)"
     "$VERO/scripts/run-windows.sh" --headless --payload "$PAY" >/dev/null 2>&1 &
     QEMU=$!
-    sleep 120
-    # The disc is the first CD drive Windows shows: D: on this VM. Win+R,
-    # then the command, which runs the script from it.
-    python3 "$VERO/scripts/lib/qmp.py" $QMP keys meta_l-r
+    sleep 150
+    # The desktop first (Win+D: not Alt+F4, which on the desktop is
+    # Windows' shut-down dialog), so that it takes the keys. The disc is
+    # the first CD drive Windows shows: D: on this VM. Win+R, then the
+    # command, which runs the script from it.
+    Q="python3 $VERO/scripts/lib/qmp.py $QMP"
+    $Q keys meta_l-d
+    sleep 2
+    $Q keys meta_l-r
     sleep 3
-    python3 "$VERO/scripts/lib/qmp.py" $QMP type "powershell -ExecutionPolicy Bypass -WindowStyle Hidden -File D:\\vero\\test.ps1"
+    $Q type "powershell -ExecutionPolicy Bypass -WindowStyle Hidden -File D:\\vero\\test.ps1"
     SHOT="$PAY/result.ppm"
     for i in $(seq 1 60); do
         sleep 10
-        python3 "$VERO/scripts/lib/qmp.py" $QMP shot "$SHOT"
-        # The result window is white with black text; a mostly white screen
-        # means it's up.
+        $Q shot "$SHOT"
+        # The result window has a magenta band across its top, which
+        # nothing else on a Windows desktop has.
         if python3 -c "
 import sys
 d=open('$SHOT','rb').read()
-# a binary PPM: header, then RGB bytes
 parts=d.split(b'\\n',3)
 px=parts[3]
-white=sum(1 for i in range(0,len(px),3*97) if px[i]>240 and px[i+1]>240 and px[i+2]>240)
-sys.exit(0 if white*3*97 > len(px)*0.6 else 1)
+magenta=sum(1 for i in range(0,len(px)-3,3*31) if px[i]>230 and px[i+1]<30 and px[i+2]>230)
+sys.exit(0 if magenta*3*31 > len(px)*0.03 else 1)
 "; then
             echo "the result is on the screen: $SHOT"
             echo "read it (it says VERO-TEST-DONE when finished):"

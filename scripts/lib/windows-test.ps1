@@ -88,9 +88,17 @@ $form = New-Object System.Windows.Forms.Form
 $form.Text = "vero test"
 $form.WindowState = "Maximized"
 $form.BackColor = "White"
+# A magenta band, which the screenshot is searched for: no other window
+# has one.
+$band = New-Object System.Windows.Forms.Panel
+$band.Dock = "Top"
+$band.Height = 60
+$band.BackColor = [System.Drawing.Color]::FromArgb(255, 0, 255)
+$form.Controls.Add($band)
 $label = New-Object System.Windows.Forms.Label
 $label.Dock = "Fill"
 $label.Font = New-Object System.Drawing.Font("Consolas", 22)
 $label.Text = ($log -join "`n") + "`nVERO-TEST-DONE"
 $form.Controls.Add($label)
+$label.BringToFront()
 $form.ShowDialog() | Out-Null
