@@ -174,9 +174,15 @@ func (a *App) findWorker() error {
 			}
 		}
 	}
-	var stateName string
+	// The state's type: written in vero.NewState(w, Status{...}), or, for
+	// a worker that passes a variable, wherever it says vero.State[Status].
+	var stateName, declared string
 	for _, f := range files {
 		ast.Inspect(f, func(n ast.Node) bool {
+			if ix, ok := n.(*ast.IndexExpr); ok && typeName(ix.X) == "vero.State" {
+				declared = typeName(ix.Index)
+				return true
+			}
 			call, ok := n.(*ast.CallExpr)
 			if !ok {
 				return true
@@ -223,8 +229,11 @@ func (a *App) findWorker() error {
 			return true
 		})
 	}
+	if structs[stateName] == nil {
+		stateName = declared
+	}
 	if stateName == "" || structs[stateName] == nil {
-		return fmt.Errorf("no state found: a vero.NewState(w, YourStatus{...}) in %s", a.Worker)
+		return fmt.Errorf("no state found: a vero.NewState(w, YourStatus{...}), or a vero.State[YourStatus], in %s", a.Worker)
 	}
 	a.State = a.structOf(stateName, structs)
 	return nil

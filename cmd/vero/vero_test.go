@@ -115,3 +115,35 @@ func TestScan(t *testing.T) {
 		t.Errorf("notes: %v", titles)
 	}
 }
+
+// TestStateVariable: a worker that passes its state as a variable, keeping
+// it in a vero.State[Status] field, as audiobooks' does.
+func TestStateVariable(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/x\n"), 0o644)
+	os.MkdirAll(filepath.Join(dir, "cmd", "worker"), 0o755)
+	os.WriteFile(filepath.Join(dir, "cmd", "worker", "main.go"), []byte(`package main
+
+import "github.com/imclaren/vero"
+
+type Status struct {
+	Books int `+"`json:\"books\"`"+`
+}
+
+type app struct{ state *vero.State[Status] }
+
+func main() {
+	w := vero.NewWorker(vero.WorkerOptions{})
+	status := Status{}
+	a := app{state: vero.NewState(w, status)}
+	vero.Update(a.state, "sync", func(*Status) error { return nil })
+}
+`), 0o644)
+	app, err := analyse(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(app.State.Fields) != 1 || app.State.Fields[0].JSON != "books" || len(app.Requests) != 1 {
+		t.Errorf("state %+v, requests %+v", app.State, app.Requests)
+	}
+}
