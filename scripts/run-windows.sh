@@ -6,6 +6,7 @@
 #   scripts/run-windows.sh                                         # every time after
 #   scripts/run-windows.sh --headless                              # no window; QMP on the socket
 #   scripts/run-windows.sh --payload out                           # your own build, not the example
+#   scripts/run-windows.sh --ssh 2222                              # port 2222 on this Mac reaches the VM's SSH
 #
 # Needs: brew install qemu, and a Windows 11 ARM64 ISO from Microsoft:
 #   https://www.microsoft.com/en-us/software-download/windows11arm64
@@ -17,6 +18,7 @@ VM=${VM:-$HOME/vm/vero-windows}
 ISO=""
 INSTALL=no
 PAYLOAD=""
+SSH_PORT=""
 DISPLAY_ARGS="-display cocoa"
 QMP=/tmp/vero-qmp.sock          # short on purpose: unix paths cap at 104 bytes
 
@@ -27,6 +29,7 @@ while [ $# -gt 0 ]; do
         --install)  INSTALL=yes; shift ;;
         --headless) DISPLAY_ARGS="-display none -vnc 127.0.0.1:1"; shift ;;
         --payload)  PAYLOAD=${2:?--payload needs a directory}; shift 2 ;;
+        --ssh)      SSH_PORT=${2:?--ssh needs a port}; shift 2 ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
 done
@@ -97,7 +100,7 @@ set -- \
     -drive if=none,id=hd0,format=qcow2,file="$VM/disk.qcow2" \
     -device nvme,drive=hd0,serial=vero,bootindex=1 \
     -device ramfb -device usb-kbd -device usb-tablet \
-    -netdev user,id=n0 -device virtio-net-pci,netdev=n0 \
+    -netdev user,id=n0${SSH_PORT:+,hostfwd=tcp:127.0.0.1:$SSH_PORT-:22} -device virtio-net-pci,netdev=n0 \
     -qmp unix:"$QMP",server,nowait
 
 if [ "$INSTALL" = yes ]; then

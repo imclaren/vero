@@ -4,6 +4,7 @@ screenshots. vero's Windows VM has no other way in, so this is how
 test-repo.sh --vm windows runs its test there and reads the result.
 
     qmp.py SOCKET type "text"          types the text, then Enter
+    qmp.py SOCKET text "text"          types the text alone
     qmp.py SOCKET keys ctrl-alt-delete  sends a key combination
     qmp.py SOCKET shot out.ppm         saves a screenshot
 """
@@ -58,6 +59,8 @@ def main() -> None:
     if what == "type":
         q.type(sys.argv[3])
         q.keys("ret")
+    elif what == "text":
+        q.type(sys.argv[3])
     elif what == "keys":
         q.keys(*sys.argv[3].split("-"))
     elif what == "shot":
