@@ -146,10 +146,16 @@ secrets, sign-in items and notifications done one system's way, with the
 `kit` package to use instead. Each with the files and lines.
 
 On iOS and in a browser the worker runs inside the app, since neither
-lets an app start a program. For those two, give your worker a `Serve(in
-io.Reader, out io.Writer) error` in a package the front end can import -
-the body of its `main`, with `vero.WorkerOptions{In: in, Out: out}` - and
-point the starters at it where they say.
+lets an app start a program. For those two, `vero add` moves the worker's
+code into `internal/worker`, a package with a `Serve(in io.Reader, out
+io.Writer) error` that the two front ends call, and leaves the command as
+a few lines that parse the flags and call it; nothing else changes, and
+the other systems go on starting the command. It does this for a worker
+whose `main` makes a `vero.WorkerOptions`, calls `vero.NewWorker` with
+it and ends with `Serve`, which is what vero's example and its guide
+produce. For a `main` of another shape it says so, leaves the worker
+where it is, and the two front ends get a placeholder with a note saying
+what to point them at; `--keep-worker` asks for that in any case.
 
 ### 4. Ship helper programs for each system
 

@@ -78,7 +78,7 @@ func TestAdd(t *testing.T) {
 		t.Error("the GTK starter does not offer restartJob with its id")
 	}
 	porting, _ := os.ReadFile(filepath.Join(dir, "PORTING.md"))
-	if !strings.Contains(string(porting), "`restartJob`") || !strings.Contains(string(porting), "Serve(in io.Reader") {
+	if !strings.Contains(string(porting), "`restartJob`") || !strings.Contains(string(porting), "moved its code to `internal/worker/`") {
 		t.Errorf("PORTING.md:\n%s", porting)
 	}
 	// Asked again, nothing is added: each is there already.
@@ -199,5 +199,122 @@ func TestDescribe(t *testing.T) {
 	text, _ = os.ReadFile(f.path)
 	if !strings.Contains(string(text), `summary = ""`) || !strings.Contains(string(text), `publisher = "Your Name <you@example.com>"`) {
 		t.Errorf("blank description:\n%s", text)
+	}
+}
+
+// TestLift checks that adding a front end that runs the worker inside
+// itself moves the worker's code into a package with a Serve, leaves a
+// command that still builds and reports its version, and that the front
+// ends compile against it.
+func TestLift(t *testing.T) {
+	root, _ := filepath.Abs("../..")
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "cmd", "worker"), 0o755)
+	src, _ := os.ReadFile(filepath.Join(root, "example", "worker", "main.go"))
+	os.WriteFile(filepath.Join(dir, "cmd", "worker", "main.go"), src, 0o644)
+	os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/jobs\n\ngo 1.22\n\nrequire github.com/imclaren/vero v0.0.0\n\nreplace github.com/imclaren/vero => "+root+"\n"), 0o644)
+	run := func(name string, env []string, args ...string) string {
+		cmd := exec.Command(name, args...)
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(), env...)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("%s %v: %v\n%s", name, args, err, out)
+		}
+		return string(out)
+	}
+	run("go", nil, "mod", "tidy")
+
+	app, err := analyse(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := add(app, []string{"web", "ios"}, false); err != nil {
+		t.Fatal(err)
+	}
+	if app.ServeImport != "example.com/jobs/internal/worker" {
+		t.Fatalf("ServeImport = %q", app.ServeImport)
+	}
+	for _, f := range []string{"internal/worker/worker.go", "internal/worker/serve.go", "cmd/worker/main.go"} {
+		if _, err := os.Stat(filepath.Join(dir, f)); err != nil {
+			t.Errorf("%s was not written", f)
+		}
+	}
+	lifted, _ := os.ReadFile(filepath.Join(dir, "internal", "worker", "worker.go"))
+	for _, want := range []string{"package worker", "func Run(opts vero.WorkerOptions) error", "return w.Serve()"} {
+		if !strings.Contains(string(lifted), want) {
+			t.Errorf("worker.go lacks %q:\n%s", want, lifted)
+		}
+	}
+	for _, gone := range []string{"flag.Parse", "PrintVersionAndExit", "func main", `"flag"`} {
+		if strings.Contains(string(lifted), gone) {
+			t.Errorf("worker.go still has %q:\n%s", gone, lifted)
+		}
+	}
+	stub, _ := os.ReadFile(filepath.Join(dir, "cmd", "worker", "main.go"))
+	if !strings.Contains(string(stub), "worker.Run(opts)") || !strings.Contains(string(stub), `var version = "`) {
+		t.Errorf("the command:\n%s", stub)
+	}
+
+	// It all builds: the command, the package, the page for the browser,
+	// and the archive for iOS (as plain Go here, since the c-archive needs
+	// the Simulator SDK).
+	run("go", nil, "build", "./...")
+	run("go", nil, "vet", "./cmd/...", "./internal/...")
+	run("go", []string{"GOOS=js", "GOARCH=wasm"}, "build", "-o", os.DevNull, "./web")
+	run("go", nil, "vet", "-tags", "ios", "./ios/archive")
+	if v := strings.TrimSpace(run("go", nil, "run", "./cmd/worker", "-version")); v == "" {
+		t.Error("the command reports no version")
+	}
+
+	// The second run finds the lifted worker, reads its state from it, and
+	// leaves it alone.
+	app, err = analyse(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if app.Worker != "cmd/worker" || app.State == nil || app.State.Name != "Status" || len(app.Requests) != 2 || app.ServeImport == "" {
+		t.Errorf("after the lift: worker %q, state %v, %d requests, serve %q", app.Worker, app.State, len(app.Requests), app.ServeImport)
+	}
+	porting, _ := os.ReadFile(filepath.Join(dir, "PORTING.md"))
+	if !strings.Contains(string(porting), "[x] For iOS and the browser") {
+		t.Errorf("PORTING.md does not say the lift was done:\n%s", porting)
+	}
+
+	// A worker of another shape is left alone, and the front ends get the
+	// placeholder.
+	other := t.TempDir()
+	os.MkdirAll(filepath.Join(other, "worker"), 0o755)
+	os.WriteFile(filepath.Join(other, "go.mod"), []byte("module example.com/odd\n\ngo 1.22\n\nrequire github.com/imclaren/vero v0.0.0\n\nreplace github.com/imclaren/vero => "+root+"\n"), 0o644)
+	os.WriteFile(filepath.Join(other, "worker", "main.go"), []byte(`package main
+
+import "github.com/imclaren/vero"
+
+type Status struct{ N int `+"`json:\"n\"`"+` }
+
+func main() { start() }
+
+func start() {
+	w := vero.NewWorker(vero.WorkerOptions{})
+	vero.NewState(w, Status{})
+	w.Serve()
+}
+`), 0o644)
+	app, err = analyse(other)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := add(app, []string{"web"}, false); err != nil {
+		t.Fatal(err)
+	}
+	if app.ServeImport != "" || !app.KeepWorker {
+		t.Errorf("an odd worker was lifted: %q", app.ServeImport)
+	}
+	if _, err := os.Stat(filepath.Join(other, "internal")); err == nil {
+		t.Error("an odd worker was moved")
+	}
+	page, _ := os.ReadFile(filepath.Join(other, "web", "main.go"))
+	if !strings.Contains(string(page), "placeholder") {
+		t.Error("the page got no placeholder")
 	}
 }

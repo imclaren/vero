@@ -36,7 +36,13 @@ type App struct {
 	// Description is what vero-app.toml says about the app, when this run
 	// writes the file.
 	Description Description
-	toml        *tomlFile
+	// ServeImport is the worker as a package with a Serve, for the front
+	// ends that run it inside themselves; "" until lift makes one.
+	ServeImport string
+	// KeepWorker says not to move the worker's code for those front ends,
+	// and to leave them a placeholder instead.
+	KeepWorker bool
+	toml       *tomlFile
 }
 
 // Struct is a Go struct the front ends need the shape of.
@@ -106,6 +112,21 @@ func analyse(dir string) (*App, error) {
 	return app, nil
 }
 
+// fileHas is the name of the first Go file in a folder containing some
+// text, or "".
+func fileHas(dir, text string) string {
+	entries, _ := os.ReadDir(dir)
+	for _, e := range entries {
+		if !strings.HasSuffix(e.Name(), ".go") {
+			continue
+		}
+		if src, err := os.ReadFile(filepath.Join(dir, e.Name())); err == nil && strings.Contains(string(src), text) {
+			return e.Name()
+		}
+	}
+	return ""
+}
+
 // sectionOf is each front end's section in vero-app.toml.
 var sectionOf = map[string]string{"macos": "macos", "gtk": "gtk", "wpf": "wpf", "android": "android", "ios": "ios", "web": "web", "wasi": "wasi", "plan9": "plan9"}
 
@@ -135,8 +156,16 @@ func (a *App) findWorker() error {
 			return nil
 		}
 		src, err := os.ReadFile(path)
-		if err != nil || !strings.Contains(string(src), "vero.NewWorker(") {
+		if err != nil {
 			return nil
+		}
+		// The worker is the command that calls vero.NewWorker - or, once
+		// lift has moved that into a package, the command that imports it.
+		if !strings.Contains(string(src), "vero.NewWorker(") && !strings.Contains(string(src), `"`+a.Module+"/"+servePackage+`"`) {
+			return nil
+		}
+		if strings.Contains(string(src), "package worker") && filepath.Dir(path) == filepath.Join(a.Dir, filepath.FromSlash(servePackage)) {
+			return nil // the lifted package itself; the command is the worker
 		}
 		found = filepath.Dir(path)
 		return nil
@@ -146,6 +175,14 @@ func (a *App) findWorker() error {
 	}
 	rel, _ := filepath.Rel(a.Dir, found)
 	a.Worker = filepath.ToSlash(rel)
+	// The state and requests are read from wherever the code is.
+	scanDir := found
+	if lifted := filepath.Join(a.Dir, filepath.FromSlash(servePackage)); fileHas(found, "vero.NewWorker(") == "" {
+		if _, err := os.Stat(filepath.Join(lifted, "serve.go")); err == nil {
+			scanDir = lifted
+			a.ServeImport = a.Module + "/" + servePackage
+		}
+	}
 	a.WorkerName = a.toml.get("worker", "name")
 	if a.WorkerName == "" {
 		a.WorkerName = filepath.Base(found)
@@ -153,10 +190,10 @@ func (a *App) findWorker() error {
 			a.WorkerName = a.Name + "-worker"
 		}
 	}
-	entries, _ := os.ReadDir(found)
+	entries, _ := os.ReadDir(scanDir)
 	for _, e := range entries {
 		if strings.HasSuffix(e.Name(), ".go") && !strings.HasSuffix(e.Name(), "_test.go") {
-			f, err := parser.ParseFile(fset, filepath.Join(found, e.Name()), nil, parser.ParseComments)
+			f, err := parser.ParseFile(fset, filepath.Join(scanDir, e.Name()), nil, parser.ParseComments)
 			if err != nil {
 				return fmt.Errorf("%s: %v", e.Name(), err)
 			}

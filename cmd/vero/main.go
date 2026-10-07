@@ -41,7 +41,7 @@ var aliases = map[string]string{
 func main() {
 	if len(os.Args) < 2 || os.Args[1] != "add" {
 		fmt.Fprintln(os.Stderr, "usage: vero add [desktop|mobile|all|macos|gtk|wpf|android|ios|web|wasi|plan9 ...] [--except LIST] [--dir DIR]\n"+
-			"                [--summary TEXT] [--description TEXT] [--publisher \"Name <email>\"]")
+			"                [--summary TEXT] [--description TEXT] [--publisher \"Name <email>\"] [--keep-worker]")
 		os.Exit(2)
 	}
 	fs := flag.NewFlagSet("add", flag.ExitOnError)
@@ -51,6 +51,7 @@ func main() {
 	summary := fs.String("summary", "", "one line about the app, for vero-app.toml")
 	description := fs.String("description", "", "a sentence or two about the app, for vero-app.toml")
 	publisher := fs.String("publisher", "", "who publishes it, as \"Name <email>\", for vero-app.toml")
+	keepWorker := fs.Bool("keep-worker", false, "for iOS and the browser, leave the worker's code where it is and give them a placeholder, rather than moving it into a package they can run")
 	// Flags may come after the names.
 	var names, rest []string
 	for _, a := range os.Args[2:] {
@@ -74,6 +75,7 @@ func main() {
 	}
 	app.Description = describe(Description{Summary: *summary, Text: *description, Publisher: *publisher},
 		app.toml.text == "", os.Stdin, os.Stdout, terminal())
+	app.KeepWorker = *keepWorker
 	added, err := add(app, want, *force)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)

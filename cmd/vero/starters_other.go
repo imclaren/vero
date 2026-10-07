@@ -7,9 +7,9 @@ package main
 func init() {
 	starters["android"] = &starter{folder: "android", note: "an Android activity in Kotlin; needs the Android SDK, a JDK and kotlinc (vero's scripts/setup-android.sh)", files: map[string]string{
 		"README.md": androidReadme, "AndroidManifest.xml": androidManifest, "src/{{pkgPath .ID}}/MainActivity.kt": androidActivity, "build.sh": androidBuild}, bindings: []string{"bindings/kotlin/Vero.kt"}, toml: "# The Android front end, which vero add wrote.\n[android]\nfolder = \"android\"\n"}
-	starters["ios"] = &starter{folder: "ios", note: "a SwiftUI app for the iOS Simulator; the worker is compiled into it, so it needs a Serve function (see below); needs Xcode", limited: true, files: map[string]string{
+	starters["ios"] = &starter{folder: "ios", note: "a SwiftUI app for the iOS Simulator, with the worker compiled into it; needs Xcode", limited: true, files: map[string]string{
 		"README.md": iosReadme, "Sources/{{pascal .Name}}/App.swift": iosApp, "archive/archive.go": iosArchive, "archive/shim.go": iosShim, "build.sh": iosBuild}, toml: "# The iOS front end, which vero add wrote.\n[ios]\nfolder = \"ios\"\n"}
-	starters["web"] = &starter{folder: "web", note: "a page, with the worker compiled into the same wasm, so it needs a Serve function (see below); needs only Go", limited: true, files: map[string]string{
+	starters["web"] = &starter{folder: "web", note: "a page, with the worker compiled into the same wasm; needs only Go", limited: true, files: map[string]string{
 		"README.md": webReadme, "main.go": webMain, "index.html": webIndex, "serve.go": webServe, "build.sh": webBuild}, toml: "# The browser front end, which vero add wrote.\n[web]\nfolder = \"web\"\n"}
 	starters["wasi"] = &starter{folder: "wasi", note: "a terminal front end that runs the worker as worker.wasm under wasmtime, which answers one request at a time; needs Go and wasmtime", files: map[string]string{
 		"README.md": wasiReadme, "main.go": wasiMain, "build.sh": wasiBuild}, toml: "# The WASI front end, which vero add wrote.\n[wasi]\nfolder = \"wasi\"\n"}
@@ -255,11 +255,12 @@ for the iOS Simulator. It shows the state the worker pushes and offers each
 of its requests; make it your own from there.
 
 iOS does not let an app start a program, so the worker is compiled into
-the app and runs on a goroutine. That needs the worker as a package with a
+the app and runs on a goroutine. {{if .ServeImport}}It is the same code the other systems
+start as a program, from ` + "`{{.ServeImport}}`" + `, which ` + "`archive/archive.go`" + ` runs.{{else}}That needs the worker as a package with a
 ` + "`Serve(in io.Reader, out io.Writer) error`" + ` function that sets up the same
 worker as its ` + "`main`" + ` does, with ` + "`vero.WorkerOptions{In: in, Out: out}`" + `:
 ` + "`archive/archive.go`" + ` says where to call it. Until then the app runs a
-placeholder worker with an empty state.
+placeholder worker with an empty state.{{end}}
 
     ./build.sh            builds, installs in the Simulator and launches
     ./build.sh --build    builds only
@@ -276,6 +277,21 @@ const iosArchive = `//go:build ios
 // a program. shim.go is vero's cshim/main.go, which build.sh copies here;
 // it has the package's main.
 //
+{{if .ServeImport -}}
+// The worker is {{.ServeImport}}: the same code the other systems start
+// as a program.
+package main
+
+import (
+	"github.com/imclaren/vero"
+
+	worker "{{.ServeImport}}"
+)
+
+func init() {
+	vero.ServeInProcess(worker.Serve)
+}
+{{- else -}}
 // Make a package of your worker with a Serve function - the body of its
 // main, taking vero.WorkerOptions{In: in, Out: out} - and call it below.
 package main
@@ -294,6 +310,7 @@ func init() {
 		return w.Serve()
 	})
 }
+{{- end}}
 `
 
 const iosShim = `//go:build ignore
@@ -322,17 +339,39 @@ TARGET=arm64-apple-ios$MIN_IOS-simulator
 mkdir -p "$BUILD"
 
 echo "building libvero.a for the Simulator"
+# GOOS=ios builds for a device; the flags point the same build at the
+# Simulator SDK instead, which is what makes this runnable without a phone.
 cp "$VERO/cshim/main.go" archive/shim.go
-CGO_ENABLED=1 GOOS=ios GOARCH=arm64 CC="$(xcrun --sdk iphonesimulator -f clang) -isysroot $SDK -target $TARGET" \
+CGO_ENABLED=1 GOOS=ios GOARCH=arm64 \
+    CC="$(xcrun --sdk iphonesimulator --find clang)" \
+    CGO_CFLAGS="-isysroot $SDK -target $TARGET" \
+    CGO_LDFLAGS="-isysroot $SDK -target $TARGET" \
     go build -buildmode=c-archive -o "$BUILD/libvero.a" ./archive
 
 echo "building the app"
-swiftc -sdk "$SDK" -target "$TARGET" -parse-as-library -O \
-    -I "$VERO/Sources/Vero" "$VERO"/Sources/Vero/*.swift Sources/{{pascal .Name}}/App.swift \
-    -import-objc-header "$BUILD/libvero.h" "$BUILD/libvero.a" \
-    -o "$BUILD/{{pascal .Name}}"
+# CVero as a Clang module, so that ` + "`import Vero`" + ` finds the archive's symbols;
+# then vero's Swift package as a module of its own, so that the app imports
+# it exactly as it would through SwiftPM. Not libVero.a: the Mac's
+# filesystem does not tell that from the Go archive's libvero.a.
+cp "$VERO/Sources/CVero/include/CVero.h" "$BUILD/"
+cat > "$BUILD/module.modulemap" <<MAP
+module CVero {
+    header "CVero.h"
+    export *
+}
+MAP
+xcrun --sdk iphonesimulator swiftc -emit-module -emit-library -static -module-name Vero \
+    -target "$TARGET" -sdk "$SDK" -O \
+    -Xcc -fmodule-map-file="$PWD/$BUILD/module.modulemap" -I "$BUILD" \
+    "$VERO"/Sources/Vero/*.swift \
+    -emit-module-path "$BUILD/Vero.swiftmodule" -o "$BUILD/libVeroSwift.a"
 rm -rf "$APP" && mkdir -p "$APP"
-cp "$BUILD/{{pascal .Name}}" "$APP/"
+xcrun --sdk iphonesimulator swiftc -parse-as-library -target "$TARGET" -sdk "$SDK" -O \
+    -Xcc -fmodule-map-file="$PWD/$BUILD/module.modulemap" -I "$BUILD" \
+    Sources/{{pascal .Name}}/*.swift \
+    -L "$BUILD" -lVeroSwift -lvero \
+    -Xlinker -syslibroot -Xlinker "$SDK" \
+    -o "$APP/{{pascal .Name}}"
 cat > "$APP/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -513,11 +552,12 @@ A page, written by ` + "`vero add`" + ` for the worker in ` + "`../{{.Worker}}`"
 state the worker pushes and offers each of its requests; make it your own.
 
 A page cannot start a program, so the worker is compiled into the same wasm
-as the page and runs on a goroutine. That needs the worker as a package
+as the page and runs on a goroutine. {{if .ServeImport}}It is the same code the other systems
+start as a program, from ` + "`{{.ServeImport}}`" + `, which ` + "`main.go`" + ` runs.{{else}}That needs the worker as a package
 with a ` + "`Serve(in io.Reader, out io.Writer) error`" + ` function that sets up the
 same worker as its ` + "`main`" + ` does, with ` + "`vero.WorkerOptions{In: in, Out: out}`" + `:
 ` + "`main.go`" + ` says where to call it. Until then the page runs a placeholder
-worker with an empty state.
+worker with an empty state.{{end}}
 
     ./build.sh && go run serve.go    builds main.wasm and serves the page at http://localhost:8080
 `
@@ -591,6 +631,10 @@ import (
 	"syscall/js"
 
 	"github.com/imclaren/vero"
+{{- if .ServeImport}}
+
+	worker "{{.ServeImport}}"
+{{- end}}
 )
 
 var document = js.Global().Get("document")
@@ -738,6 +782,13 @@ func text(v any) string {
 	return fmt.Sprint(v)
 }
 
+{{if .ServeImport -}}
+// serve is the worker, run in this program: the same code the other
+// systems start as a program, from {{.ServeImport}}.
+func serve(in io.Reader, out io.Writer) error {
+	return worker.Serve(in, out)
+}
+{{- else -}}
 // serve is the worker, run in this program. Replace this placeholder with
 // your worker's Serve.
 func serve(in io.Reader, out io.Writer) error {
@@ -745,6 +796,7 @@ func serve(in io.Reader, out io.Writer) error {
 	vero.NewState(w, struct{}{})
 	return w.Serve()
 }
+{{- end}}
 `
 
 // --- WASI ------------------------------------------------------------------

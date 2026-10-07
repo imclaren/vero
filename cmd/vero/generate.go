@@ -27,6 +27,20 @@ type starter struct {
 // add writes the front ends asked for that the app has not got, and
 // returns their names.
 func add(app *App, want []string, force bool) ([]string, error) {
+	// A front end that runs the worker inside itself needs it as a package
+	// with a Serve. Make one from the command, unless told to leave it.
+	for _, p := range want {
+		if s := starters[p]; s != nil && s.limited && !app.Existing[p] && !app.KeepWorker && app.ServeImport == "" {
+			path, err := lift(app)
+			if err != nil {
+				fmt.Printf("%s: the worker stays as it is, and gets a placeholder, because its main is not the shape vero add can move: %v\n", p, err)
+				app.KeepWorker = true
+				break
+			}
+			app.ServeImport = path
+			break
+		}
+	}
 	var added []string
 	for _, p := range want {
 		s := starters[p]
@@ -135,8 +149,10 @@ func writePorting(app *App, added []string) error {
 	b.WriteString("- [ ] Build each front end as its README says, and run it against the worker.\n")
 	b.WriteString("- [ ] Make the starter windows your own: they show every field of the state and a control for every request, which is a start, not a design.\n")
 	b.WriteString("- [ ] Fill in `vero-app.toml`: the summary, description, publisher, homepage, licence and icon, and what each system's package needs.\n")
-	if limited {
-		b.WriteString("- [ ] For iOS and the browser, the worker runs inside the app: give it a `Serve(in io.Reader, out io.Writer) error` that sets up the same worker as `main` does, in a package the front end can import, and point the starters at it where they say.\n")
+	if limited && app.ServeImport != "" {
+		fmt.Fprintf(&b, "- [x] For iOS and the browser, the worker runs inside the app. `vero add` moved its code to `%s/`, which has a `Serve` those front ends call, and left `%s/main.go` to start it for the rest. Nothing else changed; check it builds and keep working in `%s/`.\n", servePackage, app.Worker, servePackage)
+	} else if limited {
+		b.WriteString("- [ ] For iOS and the browser, the worker runs inside the app: give it a `Serve(in io.Reader, out io.Writer) error` that sets up the same worker as `main` does, in a package the front end can import, and point the starters at it where they say. (`vero add` does this itself for a worker whose main makes a vero.WorkerOptions, calls vero.NewWorker with it, and ends with Serve.)\n")
 	}
 	b.WriteString("- [ ] Release: `scripts/package.sh --app vero-app.toml --version X`, `vero-repo build`, upload.\n")
 	return os.WriteFile(filepath.Join(app.Dir, "PORTING.md"), []byte(b.String()), 0o644)
