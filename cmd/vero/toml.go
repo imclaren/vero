@@ -44,18 +44,27 @@ func (t *tomlFile) get(section, key string) string {
 	return ""
 }
 
+// quote is s as a TOML basic string.
+func quote(s string) string {
+	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`, "\n", `\n`, "\t", `\t`).Replace(s) + `"`
+}
+
 // write adds text to the end of the file, making the file - with the
 // app's basics - when there is none.
 func (t *tomlFile) write(app *App, add string) error {
 	if t.text == "" {
+		d := app.Description
+		if d.Publisher == "" {
+			d.Publisher = "Your Name <you@example.com>"
+		}
 		t.text = "# vero-app.toml describes this app to vero's packaging: see vero's\n" +
 			"# PACKAGING.md, \"Creating app installers\". Paths are relative to this file.\n\n" +
 			"name = \"" + app.Name + "\"\n" +
 			"display_name = \"" + app.Display + "\"\n" +
 			"id = \"" + app.ID + "\"\n" +
-			"summary = \"\"\n" +
-			"description = \"\"\n" +
-			"publisher = \"Your Name <you@example.com>\"\n" +
+			"summary = " + quote(d.Summary) + "\n" +
+			"description = " + quote(d.Text) + "\n" +
+			"publisher = " + quote(d.Publisher) + "\n" +
 			"homepage = \"\"\n" +
 			"licence = \"\"\n" +
 			"icon = \"icon.png\"\n\n" +

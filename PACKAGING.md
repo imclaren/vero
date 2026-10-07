@@ -49,8 +49,10 @@ own app.
 vero add desktop
 ```
 
-Open `vero-app.toml` and fill in `summary` and `description`: one line
-about the app, and a few more.
+It asks for the three things the packaging needs that the worker cannot
+tell it - a one-line summary, a description, and your name and email as
+the publisher - and writes them into `vero-app.toml`. (`--summary`,
+`--description` and `--publisher` answer from a script.)
 
 **4. Make a signing key, then build the installers.** The key signs every
 release, so that people's systems trust your updates. This builds the
@@ -70,8 +72,10 @@ vero-repo build --app vero-app.toml --key ~/vero-keys/hello --url http://localho
 vero-site -dir dist/site -addr localhost:8080
 ```
 
-Open <http://localhost:8080>. The page shows the install commands for the
-visitor's system, and `/download?for=mac` hands out the disk image.
+Open the address `vero-site` prints: <http://localhost:8080>, or another
+port if something on your Mac has that one. The page shows the install
+commands for the visitor's system, and `/download?for=mac` hands out the
+disk image.
 
 **6. Release an update.** Change the app, then run steps 4 and 5 again
 with `--version 1.0.1`, skipping `vero-repo key`. On a real server,

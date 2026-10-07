@@ -7,6 +7,9 @@
 //	vero-site -dir dist/site -addr :8080
 //	vero-site -dir /srv/myapp -domain downloads.example.com   # HTTPS on :443
 //
+// It prints the address to open. If the port asked for is taken, it picks
+// a free one and says so, rather than failing to start.
+//
 // With -domain it gets a certificate from Let's Encrypt for that name, keeps
 // it in -certs, and redirects plain HTTP to HTTPS; the name has to point at
 // this server, and ports 80 and 443 have to reach it. To publish a release,
@@ -18,9 +21,11 @@ import (
 	"crypto/tls"
 	"flag"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/imclaren/vero/kit/site"
@@ -40,8 +45,12 @@ func main() {
 	handler := logged(site.Handler(site.Options{Dir: *dir}))
 
 	if *domain == "" {
-		log.Printf("serving %s on %s", *dir, *addr)
-		log.Fatal(server(*addr, handler).ListenAndServe())
+		ln, err := listen(*addr)
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Printf("serving %s: open http://%s/", *dir, shown(ln.Addr().(*net.TCPAddr)))
+		log.Fatal(server(ln.Addr().String(), handler).Serve(ln))
 	}
 	if *certs == "" {
 		*certs = filepath.Join(filepath.Dir(filepath.Clean(*dir)), "vero-site-certs")
@@ -52,6 +61,36 @@ func main() {
 	s.TLSConfig = &tls.Config{GetCertificate: m.GetCertificate, MinVersion: tls.VersionTLS12}
 	log.Printf("serving %s as https://%s", *dir, *domain)
 	log.Fatal(s.ListenAndServeTLS("", ""))
+}
+
+// listen takes the address asked for, or, when its port is in use by
+// something else - as 8080 so often is on a developer's machine - a free
+// port on the same host, saying so. The address printed is the one to open
+// either way.
+func listen(addr string) (net.Listener, error) {
+	ln, err := net.Listen("tcp", addr)
+	if err == nil {
+		return ln, nil
+	}
+	host, port, splitErr := net.SplitHostPort(addr)
+	if splitErr != nil || port == "0" {
+		return nil, err
+	}
+	ln, retry := net.Listen("tcp", net.JoinHostPort(host, "0"))
+	if retry != nil {
+		return nil, err
+	}
+	log.Printf("%s is in use, so a free port was picked instead", addr)
+	return ln, nil
+}
+
+// shown is the address as a browser wants it: an unspecified host as
+// localhost.
+func shown(a *net.TCPAddr) string {
+	if a.IP == nil || a.IP.IsUnspecified() {
+		return net.JoinHostPort("localhost", strconv.Itoa(a.Port))
+	}
+	return a.String()
 }
 
 func server(addr string, h http.Handler) *http.Server {

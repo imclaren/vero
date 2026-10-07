@@ -33,7 +33,10 @@ type App struct {
 	Notes []Note
 	// Existing are the front ends found already: "gtk", "wpf", ...
 	Existing map[string]bool
-	toml     *tomlFile
+	// Description is what vero-app.toml says about the app, when this run
+	// writes the file.
+	Description Description
+	toml        *tomlFile
 }
 
 // Struct is a Go struct the front ends need the shape of.

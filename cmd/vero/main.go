@@ -40,13 +40,17 @@ var aliases = map[string]string{
 
 func main() {
 	if len(os.Args) < 2 || os.Args[1] != "add" {
-		fmt.Fprintln(os.Stderr, "usage: vero add [desktop|mobile|all|macos|gtk|wpf|android|ios|web|wasi|plan9 ...] [--except LIST] [--dir DIR]")
+		fmt.Fprintln(os.Stderr, "usage: vero add [desktop|mobile|all|macos|gtk|wpf|android|ios|web|wasi|plan9 ...] [--except LIST] [--dir DIR]\n"+
+			"                [--summary TEXT] [--description TEXT] [--publisher \"Name <email>\"]")
 		os.Exit(2)
 	}
 	fs := flag.NewFlagSet("add", flag.ExitOnError)
 	except := fs.String("except", "", "front ends to leave out, comma-separated")
 	dir := fs.String("dir", ".", "the app's folder")
 	force := fs.Bool("force", false, "write a starter even where a front end's folder exists")
+	summary := fs.String("summary", "", "one line about the app, for vero-app.toml")
+	description := fs.String("description", "", "a sentence or two about the app, for vero-app.toml")
+	publisher := fs.String("publisher", "", "who publishes it, as \"Name <email>\", for vero-app.toml")
 	// Flags may come after the names.
 	var names, rest []string
 	for _, a := range os.Args[2:] {
@@ -68,6 +72,8 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+	app.Description = describe(Description{Summary: *summary, Text: *description, Publisher: *publisher},
+		app.toml.text == "", os.Stdin, os.Stdout, terminal())
 	added, err := add(app, want, *force)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)

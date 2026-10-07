@@ -145,9 +145,15 @@ PY
     git -C "$ROOT" add Package.swift
     git -C "$ROOT" commit -m "Point the Swift package at $VERSION"
     git -C "$ROOT" tag -f "$VERSION"
+    # The tools and the kit are modules of their own, so each needs a tag
+    # of its own for "go install ...@latest" to mean this release rather
+    # than whatever main is today.
+    for m in cmd/vero cmd/vero-repo kit; do
+        git -C "$ROOT" tag -f "$m/$VERSION"
+    done
     git -C "$ROOT" push origin main
-    git -C "$ROOT" push -f origin "$VERSION"
-    echo "  tagged $VERSION with a Package.swift that matches the artefact"
+    git -C "$ROOT" push -f origin "$VERSION" "cmd/vero/$VERSION" "cmd/vero-repo/$VERSION" "kit/$VERSION"
+    echo "  tagged $VERSION, and the tools and kit with it, with a Package.swift that matches the artefact"
 else
     echo
     echo "not published. To do that:  ./scripts/release.sh $VERSION --publish"

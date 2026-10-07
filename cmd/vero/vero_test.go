@@ -147,3 +147,57 @@ func main() {
 		t.Errorf("state %+v, requests %+v", app.State, app.Requests)
 	}
 }
+
+// TestDescribe checks that vero add asks for the words vero-app.toml needs
+// only at a terminal, only when writing the file, and only for what the
+// flags left blank - and that what it is told lands in the file, quoted.
+func TestDescribe(t *testing.T) {
+	in := strings.NewReader("A small app\nIt says \"hello\".\nAnn <ann@example.com>\n")
+	var out strings.Builder
+	got := describe(Description{}, true, in, &out, true)
+	if got.Summary != "A small app" || got.Text != `It says "hello".` || got.Publisher != "Ann <ann@example.com>" {
+		t.Errorf("asked and got %+v", got)
+	}
+	if !strings.Contains(out.String(), "summary") {
+		t.Errorf("no prompt was shown:\n%s", out.String())
+	}
+
+	// Not at a terminal: nothing is read, nothing is asked.
+	out.Reset()
+	in = strings.NewReader("should not be read\n")
+	got = describe(Description{Summary: "from a flag"}, true, in, &out, false)
+	if got.Summary != "from a flag" || got.Text != "" || out.Len() != 0 || in.Len() == 0 {
+		t.Errorf("off a terminal: %+v, prompt %q", got, out.String())
+	}
+
+	// The file exists already: its words are its own, so nothing is asked.
+	out.Reset()
+	got = describe(Description{}, false, strings.NewReader("x\n"), &out, true)
+	if got.Summary != "" || out.Len() != 0 {
+		t.Errorf("with a file already: %+v, prompt %q", got, out.String())
+	}
+
+	// What was said is what the file gets, with quotes escaped.
+	dir := t.TempDir()
+	f := readToml(filepath.Join(dir, "vero-app.toml"))
+	app := &App{Name: "hello", Display: "Hello", ID: "com.example.hello", Worker: "cmd/worker", WorkerName: "hello-worker",
+		Description: Description{Summary: "A small app", Text: `It says "hello".`, Publisher: "Ann <ann@example.com>"}}
+	if err := f.write(app, "[gtk]\nfolder = \"gtk\"\n"); err != nil {
+		t.Fatal(err)
+	}
+	text, _ := os.ReadFile(f.path)
+	for _, want := range []string{`summary = "A small app"`, `description = "It says \"hello\"."`, `publisher = "Ann <ann@example.com>"`} {
+		if !strings.Contains(string(text), want) {
+			t.Errorf("vero-app.toml lacks %s:\n%s", want, text)
+		}
+	}
+	// And blanks stay blank, with the placeholder publisher that vero-repo
+	// accepts until it is changed.
+	f = readToml(filepath.Join(dir, "other.toml"))
+	app.Description = Description{}
+	f.write(app, "")
+	text, _ = os.ReadFile(f.path)
+	if !strings.Contains(string(text), `summary = ""`) || !strings.Contains(string(text), `publisher = "Your Name <you@example.com>"`) {
+		t.Errorf("blank description:\n%s", text)
+	}
+}

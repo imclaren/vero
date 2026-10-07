@@ -44,16 +44,29 @@ requests; make it your own from there.
     ./main.py       runs it
 
 It needs Python 3.10 or later with PyGObject and GTK 4: on Debian and Ubuntu,
-` + "`python3-gi gir1.2-gtk-4.0`" + `. To see it on a Linux from a Mac,
+` + "`python3-gi gir1.2-gtk-4.0`" + `. On a Mac, ` + "`build.sh`" + ` installs them with Homebrew and
+says which Python to run it with. To see it on a Linux from a Mac instead,
 ` + "`path/to/vero/scripts/run-linux.sh --app gtk --entry main.py --worker ./{{.Worker}} --worker-name {{.WorkerName}}`" + `.
 `
 
 const gtkBuild = `#!/bin/sh
-# Builds the worker beside main.py, and copies the Python binding here.
+# Builds the worker beside main.py. On a Mac it also installs GTK 4 and
+# PyGObject with Homebrew if they are missing, so that main.py runs here
+# as it would on Linux.
 set -e
 cd "$(dirname "$0")"
 go build -o {{.WorkerName}} ../{{.Worker}}
-echo "built: ./main.py runs it"
+
+PYTHON=python3
+if [ "$(uname)" = Darwin ] && command -v brew >/dev/null 2>&1; then
+    # Homebrew's PyGObject is built for Homebrew's Python, not Xcode's.
+    PYTHON="$(brew --prefix)/bin/python3"
+    if ! "$PYTHON" -c 'import gi; gi.require_version("Gtk", "4.0"); from gi.repository import Gtk' >/dev/null 2>&1; then
+        echo "installing GTK 4 and PyGObject with Homebrew (once)"
+        brew install pygobject3 gtk4
+    fi
+fi
+echo "built: $PYTHON main.py runs it"
 `
 
 const gtkMain = `#!/usr/bin/env python3
