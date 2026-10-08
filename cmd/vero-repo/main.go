@@ -41,6 +41,12 @@ func main() {
 		err = packageCommand(os.Args[2:])
 	case "build":
 		err = buildCommand(os.Args[2:])
+	case "release":
+		err = releaseCommand(os.Args[2:])
+	case "credentials":
+		err = credentialsCommand(os.Args[2:])
+	case "publish":
+		err = publishCommand(os.Args[2:])
 	case "check":
 		err = checkCommand(os.Args[2:])
 	case "deb":
@@ -61,6 +67,9 @@ func main() {
 
 func usage() {
 	fmt.Fprint(os.Stderr, `usage:
+  vero-repo release [--app vero-app.toml] [--version 1.2.3] [--targets ...] [--notes "..."] [--upload user@host:/path]
+  vero-repo credentials [--app vero-app.toml]
+  vero-repo publish --homebrew | --winget | --aur | --all [--site dist/site]
   vero-repo key --name "Your Name or Company" --email you@example.com [--dir DIR]
   vero-repo key --dir DIR --import-sparkle FILE
   vero-repo check --app vero-app.toml --url https://example.com/myapp [--key DIR] [dist/site]

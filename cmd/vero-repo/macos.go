@@ -545,9 +545,15 @@ func buildSwiftPMApp(a *App, tmp string) (string, error) {
 		}
 		scratch := filepath.Join(tmp, "swift-"+arch.swift)
 		args := []string{"build", "-c", "release", "--arch", arch.swift, "--scratch-path", scratch, "--product", m.Product}
-		if err := runIn(folder, "swift", args...); err != nil {
-			return "", err
+		// SwiftPM narrates every fetch and compile; that is shown only when
+		// the build fails.
+		build := exec.Command("swift", args...)
+		build.Dir = folder
+		if out, err := build.CombinedOutput(); err != nil {
+			os.Stderr.Write(out)
+			return "", fmt.Errorf("swift build for %s: %w", arch.swift, err)
 		}
+		fmt.Printf("built the Mac app for %s\n", arch.swift)
 		path, err := exec.Command("swift", append(args, "--show-bin-path")...).Output()
 		if err != nil {
 			return "", err

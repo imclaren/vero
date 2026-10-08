@@ -84,6 +84,15 @@ func add(app *App, want []string, force bool) ([]string, error) {
 				fmt.Printf("%s: %v\n", p, err)
 			}
 		}
+		// A starter that is a module of its own needs its go.sum, which
+		// only Go can write.
+		if _, ok := s.files["go.mod"]; ok {
+			tidy := exec.Command("go", "mod", "tidy")
+			tidy.Dir = dir
+			if out, err := tidy.CombinedOutput(); err != nil {
+				fmt.Printf("%s: go mod tidy in %s/ did not finish (%v); run it there before building:\n%s", p, s.folder, err, out)
+			}
+		}
 		if s.toml != "" && !app.Existing[p] {
 			section, err := render(s.toml, app)
 			if err != nil {

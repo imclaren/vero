@@ -658,7 +658,10 @@ func joinHTML(items []template.HTML) string {
 // that find Java by JAVA_HOME.
 func runJava(name string, args ...string) error {
 	cmd := exec.Command(name, args...)
-	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+	// Shown only when it fails: a new JDK warns about every native call
+	// apksigner makes, which is nothing to the person releasing.
+	var out bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &out, &out
 	home := os.Getenv("JAVA_HOME")
 	if home == "" && fileExists("/opt/homebrew/opt/openjdk/bin/java") {
 		home = "/opt/homebrew/opt/openjdk"
@@ -667,6 +670,7 @@ func runJava(name string, args ...string) error {
 		cmd.Env = append(os.Environ(), "JAVA_HOME="+home, "PATH="+filepath.Join(home, "bin")+":"+os.Getenv("PATH"))
 	}
 	if err := cmd.Run(); err != nil {
+		os.Stderr.Write(out.Bytes())
 		return fmt.Errorf("%s: %w", filepath.Base(name), err)
 	}
 	return nil

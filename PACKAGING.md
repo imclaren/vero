@@ -18,15 +18,14 @@ macOS gains front ends for Linux and Windows, gets packaged, and gets an
 install page. vero's example worker stands in for your app's. The rest of
 this guide explains each step and the options.
 
-**1. Install vero's tools,** and fetch vero itself for its packaging script.
-Go puts the tools in `$(go env GOPATH)/bin`, which needs to be on your
-`PATH`.
+**1. Install vero's tool.** Go puts it in `$(go env GOPATH)/bin`, which
+needs to be on your `PATH`. (`vero` installs `vero-repo`, the packaging,
+the first time it needs it; `vero-site` serves a site, for looking at
+one.)
 
 ```bash
 go install github.com/imclaren/vero/cmd/vero@latest
-go install github.com/imclaren/vero/cmd/vero-repo@latest
 go install github.com/imclaren/vero/kit/cmd/vero-site@latest
-git clone https://github.com/imclaren/vero ~/vero
 ```
 
 **2. Make the app:** a Go module with a worker and an icon.
@@ -54,32 +53,47 @@ tell it - a one-line summary, a description, and your name and email as
 the publisher - and writes them into `vero-app.toml`. (`--summary`,
 `--description` and `--publisher` answer from a script.)
 
-**4. Make a signing key, then build the installers.** The key signs every
-release, so that people's systems trust your updates. This builds the
-Debian packages and the Mac disk image; leave out `--targets` to build
-everything your Mac has the tools for.
+**4. Release.** One command: it makes the signing key the first time
+(which signs this and every later release, so that people's systems trust
+your updates: back the folder up), builds every installer your Mac has
+the tools for - here the Debian packages, the rpms, the Mac disk image and
+the Windows installers - and builds the install site into `dist/site`,
+checked.
 
 ```bash
-vero-repo key --dir ~/vero-keys/hello --name "Your Name" --email you@example.com
-~/vero/scripts/package.sh --app vero-app.toml --version 1.0.0 --targets deb,macos
+vero release
 ```
 
-**5. Build the install site, and look at it.** `vero-repo build` makes
-`dist/site` and checks it. `vero-site` serves it.
+It ends by saying how each installer was signed. Nothing in it needs an
+account with anyone: the Mac app is signed ad hoc and the Windows
+installer not at all, and the site's page tells people the one click each
+asks for; the Linux packages are signed with your key, as they must be.
+[Signing, stores and listings](#signing-stores-and-listings) is for when
+you want more.
+
+**5. Look at it.** `vero-site` serves the site.
 
 ```bash
-vero-repo build --app vero-app.toml --key ~/vero-keys/hello --url http://localhost:8080
-vero-site -dir dist/site -addr localhost:8080
+vero-site -dir dist/site
 ```
 
-Open the address `vero-site` prints: <http://localhost:8080>, or another
-port if something on your Mac has that one. The page shows the install
-commands for the visitor's system, and `/download?for=mac` hands out the
-disk image.
+Open the address it prints. The page shows the install commands for the
+visitor's system, and `/download?for=mac` hands out the disk image.
 
-**6. Release an update.** Change the app, then run steps 4 and 5 again
-with `--version 1.0.1`, skipping `vero-repo key`. On a real server,
-upload `dist/site` and use its address as `--url`.
+**6. Put it online.** Put the site's address in `vero-app.toml`, so the
+page and the repositories point there, and release again; then upload
+`dist/site` to that address, or let `vero release` do it.
+
+```toml
+site = "https://example.com/hello"
+```
+
+```bash
+vero release --upload you@host:/srv/hello
+```
+
+**7. Release an update.** Change the app, run `vero release` again: the
+version goes up by one, and people get it with their usual updates.
 
 ## Taking your app to more platforms
 
@@ -166,10 +180,8 @@ coming.)
 
 ### 5. Release as usual
 
-`scripts/package.sh --app vero-app.toml --version X`, then `vero-repo
-build`, then upload the site: see [Creating app
-installers](#creating-app-installers), below. The new systems' packages and
-instructions are in the same site.
+`vero release`: see [Creating app installers](#creating-app-installers),
+below. The new systems' packages and instructions are in the same site.
 
 ### From SwiftUI to the others
 
@@ -229,17 +241,16 @@ every one of its front ends. From vero's folder, this builds its
 installers into `dist/packages`, then its site into `dist/site`:
 
 ```bash
-scripts/package.sh --app example/vero-app.toml --version 1.0.0
-(cd cmd/vero-repo && go install .)
-vero-repo key --name "Example Publisher" --email you@example.com --dir ~/.cache/vero/example-key
-vero-repo build --app example/vero-app.toml --key ~/.cache/vero/example-key --url https://example.com/vero-example
+(cd cmd/vero && go install .)
+vero release --app example/vero-app.toml
 ```
 
-`go install` puts `vero-repo` in Go's `bin` folder, which needs to be on
-your `PATH`. `vero-repo key` won't replace a key it made before, so the
-next time, start from `vero-repo build`. Use `--targets` to build only
-some systems, which is handy on a Mac without the Android SDK, say:
-`scripts/package.sh --app example/vero-app.toml --version 1.0.0 --targets deb,macos`.
+`go install` puts `vero` in Go's `bin` folder, which needs to be on your
+`PATH`. Use `--targets` to build only some systems, which is handy on a
+Mac without the Android SDK, say: `vero release --app
+example/vero-app.toml --targets deb,macos`. The three steps it runs are
+there on their own as well - `vero-repo key`, `scripts/package.sh` and
+`vero-repo build` - and [Your own app](#your-own-app) goes through them.
 
 [`scripts/test-repo.sh`](scripts/test-repo.sh) checks all of it for real.
 It builds the example's site, serves it from your Mac, and installs the
@@ -266,7 +277,23 @@ its results for you to read.
 
 ### Your own app
 
-Run these from your app's folder, the one with its `go.mod`.
+From your app's folder, the one with its `go.mod`, a release is one
+command, and the steps below are what it does, each of which can be run
+on its own.
+
+```bash
+vero release                                   # the next patch version, everything your Mac can build
+vero release --version 2.0.0 --notes "..."     # a version you choose, with what's new for the Mac's update prompt
+vero release --targets deb,macos               # some of it
+vero release --upload you@host:/srv/myapp      # and put it online
+```
+
+It works out the version (the next after the newest the site has), makes
+the signing key the first time, builds the installers, builds and checks
+the site, and says how each installer was signed. With no credentials
+set it releases everything but an iOS app for phones, which only Apple's
+store can carry: see [Signing, stores and
+listings](#signing-stores-and-listings).
 
 **1. Describe your app.** Copy
 [`example/vero-app.toml`](example/vero-app.toml) beside your `go.mod`, and
@@ -359,6 +386,35 @@ by themselves, a Mac app with Sparkle reads the appcast, and OpenBSD's
 `pkg_add -u` does with the folder the page says to give it. On Arch, they
 build the recipe again. Your app can read `latest.json` from the site to
 tell Windows and Android users that a new version is out.
+
+### Signing, stores and listings
+
+A release needs no account with anyone, and the site's page tells people
+the one click an unsigned app asks of them: on a Mac, Open Anyway in
+Privacy & Security; on Windows, More info, then Run anyway. The Linux
+and BSD repositories are signed with your key and ask nothing. For the
+rest, `vero credentials` is the checklist: it says what is set up, finds
+what it can on your Mac (a Developer ID in your keychain, say, and the
+export line that uses it), and prints the exact commands for what isn't.
+
+```bash
+vero credentials
+```
+
+| For | What it takes | Then |
+|---|---|---|
+| macOS: no Open Anyway | the Apple Developer Program; a Developer ID Application certificate in your keychain; `xcrun notarytool store-credentials` once | `VERO_MAC_IDENTITY`, `VERO_NOTARY_PROFILE` (and `VERO_MAC_INSTALLER` for a `.pkg`) in your shell |
+| Windows: no SmartScreen | a code-signing certificate, as a `.pfx`; `brew install osslsigncode` | `VERO_WINDOWS_CERT`, `VERO_WINDOWS_CERT_PASSWORD` |
+| Android: a keystore you already ship with | the keystore | `VERO_ANDROID_KEYSTORE`, `VERO_ANDROID_KEY_ALIAS`, `VERO_ANDROID_PASSWORD`; without them vero makes one and keeps it beside your key |
+| iOS: phones | the Apple Developer Program; an Apple Distribution certificate and an App Store profile | `VERO_IOS_IDENTITY`, `VERO_IOS_PROFILE`; the `.ipa` goes up with Transporter |
+| Homebrew | `gh` signed in | `vero publish --homebrew`: a tap of your own, `USER/homebrew-tap`, made the first time |
+| winget | `gh` signed in | `vero publish --winget`: a pull request to microsoft/winget-pkgs from a fork of yours |
+| the AUR | an account at aur.archlinux.org with your SSH key | `vero publish --aur`: `NAME-bin`, made the first time |
+| the Microsoft Store, Google Play, Flathub | an account with each; Flathub reviews by hand | upload the `.msix` or `.aab` vero built; a pull request to flathub/flathub |
+
+The environment variables are read by the next `vero release`; the
+publishing is a command each after it. `vero publish --all` does
+whichever of the three the site has files for.
 
 ### macOS
 

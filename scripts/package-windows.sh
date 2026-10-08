@@ -62,7 +62,7 @@ trap 'rm -rf "$STAGE"' EXIT
 echo "building the worker"
 DIST="$ROOT/dist"
 WORKER=$WORKER CSHIM=none WPF_APP=none TARGETS="windows/amd64 windows/arm64" \
-    LDFLAGS="-s -w -X main.version=$VERSION ${LDEXTRA:-}" "$VERO/scripts/build-all.sh" >/dev/null
+    LDFLAGS="-s -w -X main.version=$VERSION ${LDEXTRA:-}" sh "$VERO/scripts/build-all.sh" >/dev/null
 python3 "$VERO/scripts/lib/ico.py" "$ICON" "$STAGE/app.ico"
 if [ -n "$WEBVIEW2" ]; then
     # Microsoft's Evergreen bootstrapper, which Microsoft lets apps ship:
@@ -83,5 +83,17 @@ for arch in x64 arm64; do
     [ -n "$STARTUP" ] && set -- "$@" -DSTARTUP="$STARTUP"
     [ -n "$WEBVIEW2" ] && set -- "$@" -DWEBVIEW2="$STAGE/MicrosoftEdgeWebview2Setup.exe"
     makensis "$@" "$VERO/scripts/lib/installer.nsi"
+    # Signed with the publisher's certificate when there is one, from the
+    # environment, as the Mac's identity is. Without, Windows SmartScreen
+    # asks once, and the site's page says what to choose.
+    if [ -n "${VERO_WINDOWS_CERT:-}" ]; then
+        command -v osslsigncode >/dev/null || { echo "VERO_WINDOWS_CERT is set, but osslsigncode is missing - brew install osslsigncode" >&2; exit 1; }
+        exe="$OUT/$NAME-$VERSION-$arch-setup.exe"
+        osslsigncode sign -pkcs12 "$VERO_WINDOWS_CERT" ${VERO_WINDOWS_CERT_PASSWORD:+-pass "$VERO_WINDOWS_CERT_PASSWORD"} \
+            -n "$NAME" ${URL:+-i "$URL"} -h sha256 -t http://timestamp.digicert.com \
+            -in "$exe" -out "$exe.signed" >/dev/null
+        mv "$exe.signed" "$exe"
+        echo "signed $exe"
+    fi
     echo "built $OUT/$NAME-$VERSION-$arch-setup.exe"
 done

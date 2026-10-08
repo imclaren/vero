@@ -6,15 +6,15 @@ package main
 
 func init() {
 	starters["android"] = &starter{folder: "android", note: "an Android activity in Kotlin; needs the Android SDK, a JDK and kotlinc (vero's scripts/setup-android.sh)", files: map[string]string{
-		"README.md": androidReadme, "AndroidManifest.xml": androidManifest, "src/{{pkgPath .ID}}/MainActivity.kt": androidActivity, "build.sh": androidBuild}, bindings: []string{"bindings/kotlin/Vero.kt"}, toml: "# The Android front end, which vero add wrote.\n[android]\nfolder = \"android\"\n"}
+		"README.md": androidReadme, "AndroidManifest.xml": androidManifest, "src/{{pkgPath .ID}}/MainActivity.kt": androidActivity, "build.sh": androidBuild}, bindings: []string{"bindings/kotlin/Vero.kt"}, toml: "# The Android front end, which vero add wrote: its build makes an aligned,\n# unsigned .apk, which vero signs.\n[android]\nfolder = \"android\"\nbuild = \"./build.sh --build\"\napk = \".build/app-aligned.apk\"\n"}
 	starters["ios"] = &starter{folder: "ios", note: "a SwiftUI app for the iOS Simulator, with the worker compiled into it; needs Xcode", limited: true, files: map[string]string{
-		"README.md": iosReadme, "Sources/{{pascal .Name}}/App.swift": iosApp, "archive/archive.go": iosArchive, "archive/shim.go": iosShim, "build.sh": iosBuild}, toml: "# The iOS front end, which vero add wrote.\n[ios]\nfolder = \"ios\"\n"}
+		"README.md": iosReadme, "Sources/{{pascal .Name}}/App.swift": iosApp, "archive/archive.go": iosArchive, "archive/shim.go": iosShim, "build.sh": iosBuild}, toml: "# The iOS front end, which vero add wrote: its build makes an app for the\n# Simulator; an .ipa needs your Apple identity (vero-repo credentials).\n[ios]\nfolder = \"ios\"\nbuild = \"./build.sh --build\"\nsimulator_app = \".build/{{pascal .Name}}.app\"\n"}
 	starters["web"] = &starter{folder: "web", note: "a page, with the worker compiled into the same wasm; needs only Go", limited: true, files: map[string]string{
-		"README.md": webReadme, "main.go": webMain, "index.html": webIndex, "serve.go": webServe, "build.sh": webBuild}, toml: "# The browser front end, which vero add wrote.\n[web]\nfolder = \"web\"\n"}
+		"README.md": webReadme, "main.go": webMain, "index.html": webIndex, "serve.go": webServe, "build.sh": webBuild}, toml: "# The browser front end, which vero add wrote: the site serves what its\n# build makes.\n[web]\nfolder = \"web\"\nbuild = \"./build.sh\"\nfiles = [\"index.html\", \"main.wasm\", \"wasm_exec.js\"]\n"}
 	starters["wasi"] = &starter{folder: "wasi", note: "a terminal front end that runs the worker as worker.wasm under wasmtime, which answers one request at a time; needs Go and wasmtime", files: map[string]string{
-		"README.md": wasiReadme, "main.go": wasiMain, "build.sh": wasiBuild}, toml: "# The WASI front end, which vero add wrote.\n[wasi]\nfolder = \"wasi\"\n"}
+		"README.md": wasiReadme, "main.go": wasiMain, "build.sh": wasiBuild}, toml: "# The WASI front end, which vero add wrote: the worker built as worker.wasm,\n# bundled with the front end for each desktop.\n[wasi]\nfrontend = \"wasi\"\nworker = \"{{.Worker}}\"\n"}
 	starters["plan9"] = &starter{folder: "plan9", note: "a rio window drawn with libdraw, in Go; its own module, since it needs a Plan 9 drawing library; needs Go, and a Plan 9 to run it on (vero's scripts/run-plan9.sh)", files: map[string]string{
-		"README.md": plan9Readme, "main.go": plan9Main, "go.mod": plan9Mod}, toml: "# The Plan 9 front end, which vero add wrote.\n[plan9]\nfolder = \"plan9\"\n"}
+		"README.md": plan9Readme, "main.go": plan9Main, "go.mod": plan9Mod}, toml: "# The Plan 9 front end, which vero add wrote: bundled with the worker and\n# an install script.\n[plan9]\nfrontend = \"plan9\"\n"}
 }
 
 // --- Android ---------------------------------------------------------------
@@ -194,6 +194,13 @@ const androidBuild = `#!/bin/sh
 set -e
 cd "$(dirname "$0")"
 
+# Homebrew keeps its JDK off the PATH, and macOS's own java is a stub that
+# only says so; kotlinc and d8 need a real one.
+if [ -z "${JAVA_HOME:-}" ] && [ -x /opt/homebrew/opt/openjdk/bin/java ]; then
+    export JAVA_HOME=/opt/homebrew/opt/openjdk
+fi
+[ -n "${JAVA_HOME:-}" ] && PATH="$JAVA_HOME/bin:$PATH"
+
 SDK=${ANDROID_HOME:-$HOME/Library/Android/sdk}
 API=${ANDROID_API:-35}
 ABI=arm64-v8a
@@ -221,7 +228,10 @@ kotlinc -nowarn -classpath "$JAR" Vero.kt src/{{pkgPath .ID}}/MainActivity.kt \
 echo "dexing"
 STDLIB=$(dirname "$(readlink "$(command -v kotlinc)" || command -v kotlinc)")/../lib/kotlin-stdlib.jar
 [ -f "$STDLIB" ] || STDLIB=/opt/homebrew/opt/kotlin/libexec/lib/kotlin-stdlib.jar
-"$TOOLS/d8" --lib "$JAR" --min-api 24 --output "$BUILD/dex" "$STDLIB" $(find "$BUILD/classes" -name '*.class')
+# d8's and apksigner's warnings about Kotlin metadata and Java's native
+# access are noise; their output is shown only when they fail.
+quietly() { if ! "$@" >"$BUILD/tool.log" 2>&1; then cat "$BUILD/tool.log" >&2; exit 1; fi; }
+quietly "$TOOLS/d8" --lib "$JAR" --min-api 24 --output "$BUILD/dex" "$STDLIB" $(find "$BUILD/classes" -name '*.class')
 
 echo "packaging"
 "$TOOLS/aapt2" link -I "$JAR" --manifest AndroidManifest.xml --min-sdk-version 24 --target-sdk-version "$API" -o "$BUILD/app.apk"
@@ -235,7 +245,7 @@ if [ ! -f "$KEYSTORE" ]; then
         -alias androiddebugkey -dname "CN=Android Debug,O=Android,C=US" -keyalg RSA -keysize 2048 -validity 10000 >/dev/null
 fi
 "$TOOLS/zipalign" -f 4 "$BUILD/app.apk" "$BUILD/app-aligned.apk"
-"$TOOLS/apksigner" sign --ks "$KEYSTORE" --ks-pass pass:android --out "$BUILD/{{.Name}}.apk" "$BUILD/app-aligned.apk"
+quietly "$TOOLS/apksigner" sign --ks "$KEYSTORE" --ks-pass pass:android --out "$BUILD/{{.Name}}.apk" "$BUILD/app-aligned.apk"
 echo "  $BUILD/{{.Name}}.apk"
 
 [ "$1" = "--build" ] && exit 0
@@ -341,7 +351,9 @@ mkdir -p "$BUILD"
 echo "building libvero.a for the Simulator"
 # GOOS=ios builds for a device; the flags point the same build at the
 # Simulator SDK instead, which is what makes this runnable without a phone.
-cp "$VERO/cshim/main.go" archive/shim.go
+# install rather than cp: the module cache is read-only, and a copy made
+# from it on the last run would refuse the next.
+install -m 644 "$VERO/cshim/main.go" archive/shim.go
 CGO_ENABLED=1 GOOS=ios GOARCH=arm64 \
     CC="$(xcrun --sdk iphonesimulator --find clang)" \
     CGO_CFLAGS="-isysroot $SDK -target $TARGET" \
@@ -353,7 +365,7 @@ echo "building the app"
 # then vero's Swift package as a module of its own, so that the app imports
 # it exactly as it would through SwiftPM. Not libVero.a: the Mac's
 # filesystem does not tell that from the Go archive's libvero.a.
-cp "$VERO/Sources/CVero/include/CVero.h" "$BUILD/"
+install -m 644 "$VERO/Sources/CVero/include/CVero.h" "$BUILD/"
 cat > "$BUILD/module.modulemap" <<MAP
 module CVero {
     header "CVero.h"
@@ -567,7 +579,7 @@ const webBuild = `#!/bin/sh
 set -e
 cd "$(dirname "$0")"
 GOOS=js GOARCH=wasm go build -o main.wasm .
-cp "$(go env GOROOT)/lib/wasm/wasm_exec.js" .
+install -m 644 "$(go env GOROOT)/lib/wasm/wasm_exec.js" .
 echo "built main.wasm ($(du -h main.wasm | cut -f1)): go run serve.go"
 `
 

@@ -27,6 +27,10 @@ through it is.
 # and the Debian package names this as its maintainer.
 publisher = "Example Publisher <you@example.com>"
 homepage = "https://github.com/imclaren/vero"
+# Where the install site will be: the folder vero release builds is
+# uploaded here, and its page and repositories point here. Leave it out
+# to build a site for looking at locally.
+site = "https://example.com/vero-example"
 # An SPDX licence identifier.
 licence = "MIT"
 # A square PNG, 512 or 1024 pixels.

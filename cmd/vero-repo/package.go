@@ -227,7 +227,9 @@ func packageWindows(a *App, vero, root, worker, out, ldflags string) error {
 }
 
 func run(dir, script string, args []string) error {
-	cmd := exec.Command(script, args...)
+	// Through sh: a script in Go's module cache, where release finds
+	// vero's, is not executable.
+	cmd := exec.Command("sh", append([]string{script}, args...)...)
 	cmd.Dir, cmd.Stdout, cmd.Stderr = dir, os.Stdout, os.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("%s: %w", filepath.Base(script), err)

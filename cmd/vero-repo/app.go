@@ -27,8 +27,11 @@ type App struct {
 	// Publisher is who publishes it, as "Name <email>".
 	Publisher string `toml:"publisher"`
 	Homepage  string `toml:"homepage"`
-	Licence   string `toml:"licence"`
-	Icon      string `toml:"icon"`
+	// Site is where the install site will be, such as
+	// https://example.com/myapp: what release builds it for.
+	Site    string `toml:"site"`
+	Licence string `toml:"licence"`
+	Icon    string `toml:"icon"`
 
 	Worker Worker `toml:"worker"`
 	GTK    *GTK   `toml:"gtk"`
