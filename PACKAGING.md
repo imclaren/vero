@@ -235,7 +235,7 @@ The environment variables are read by the next `vero release`; the
 publishing is a command each after it. `vero publish --all` does
 whichever of the three the site has files for.
 
-## Looking things up
+## References
 
 - [cmd/vero/README.md](cmd/vero/README.md) - `vero add`: every form of the command, the starter it writes for each system, and a table showing how a SwiftUI window is built in GTK and in WPF.
 - [cmd/vero-repo/README.md](cmd/vero-repo/README.md) - `vero release`: what each system's users get, the settings in `vero-app.toml` for each system, the files in the site, and the three commands that `vero release` runs.
