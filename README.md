@@ -9,7 +9,7 @@ Run a Go binary embedded in a native (e.g. macOS SwiftUI) app. The Go binary and
 [Build and run the macOS example](#build-and-run-the-macos-example) ·
 [Create a vero macOS app](#create-a-vero-macos-app) ·
 [Build and run the example on all platforms using your Mac](#build-and-run-the-example-on-all-platforms-using-your-mac) ·
-[Taking your app to more platforms, and packaging it](PACKAGING.md)
+[Taking your app to more platforms, and packaging it](#taking-your-app-to-more-platforms-and-packaging-it)
 
 | Operating system | Example | Required on your Mac to build and run | Build and run on your Mac |
 |---|:---:|---|---|
