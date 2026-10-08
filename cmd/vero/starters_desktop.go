@@ -9,13 +9,45 @@ var starters = map[string]*starter{}
 
 func init() {
 	starters["gtk"] = &starter{folder: "gtk", note: "a GTK 4 window in Python, for Linux, the BSDs and illumos; needs python3-gi and GTK 4", files: map[string]string{
-		"README.md": gtkReadme, "main.py": gtkMain, "build.sh": gtkBuild}, bindings: []string{"bindings/python/vero.py"}, toml: gtkToml}
+		"README.md": gtkReadme, "main.py": gtkMain, "build.sh": gtkBuild, ".gitignore": gtkIgnore}, bindings: []string{"bindings/python/vero.py"}, toml: gtkToml}
 	starters["wpf"] = &starter{folder: "windows", note: "a WPF window in C#, for Windows; needs the .NET SDK (dotnet)", files: map[string]string{
 		"README.md": wpfReadme, "App.xaml": wpfAppXaml, "App.xaml.cs": wpfAppCs, "MainWindow.xaml": wpfWindowXaml, "MainWindow.xaml.cs": wpfWindowCs,
-		"{{pascal .Name}}.csproj": wpfProj}, bindings: []string{"bindings/csharp/Vero.cs"}, toml: wpfToml}
+		"{{pascal .Name}}.csproj": wpfProj, ".gitignore": wpfIgnore}, bindings: []string{"bindings/csharp/Vero.cs"}, toml: wpfToml}
 	starters["macos"] = &starter{folder: "macos", note: "a SwiftUI menu bar app, for macOS; needs Xcode's command line tools", files: map[string]string{
-		"README.md": macReadme, "Package.swift": macPackage, "Sources/{{pascal .Name}}/App.swift": macApp, "build.sh": macBuild}, toml: macToml}
+		"README.md": macReadme, "Package.swift": macPackage, "Sources/{{pascal .Name}}/App.swift": macApp, "build.sh": macBuild, ".gitignore": macIgnore}, toml: macToml}
 }
+
+// What each starter's build makes, which doesn't belong in git: the worker
+// built beside the front end, and the toolkit's own output.
+const gtkIgnore = `{{.WorkerName}}
+__pycache__/
+*.pyc
+`
+
+const wpfIgnore = `bin/
+obj/
+{{.WorkerName}}.exe
+`
+
+const macIgnore = `.build/
+.swiftpm/
+{{.WorkerName}}
+`
+
+const buildIgnore = `.build/
+`
+
+const webIgnore = `main.wasm
+wasm_exec.js
+`
+
+const wasiIgnore = `worker.wasm
+{{.Name}}-wasi
+`
+
+const plan9Ignore = `{{.WorkerName}}
+{{.Name}}-plan9
+`
 
 const gtkToml = `# The GTK front end, which vero add wrote: Linux, the BSDs and illumos.
 [gtk]
