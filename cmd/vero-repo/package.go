@@ -147,7 +147,7 @@ func packageCommand(args []string) error {
 			continue
 		}
 		var goarches []string
-		for _, arch := range sys.arches {
+		for _, arch := range a.archesFor(sys) {
 			goarches = append(goarches, arch.goarch)
 		}
 		w, err := needWorkers(sys.goos, goarches...)

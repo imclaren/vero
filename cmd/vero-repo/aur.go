@@ -22,7 +22,7 @@ func writeAUR(site, url string, a *App, debs map[string]*debFile) error {
 	type source struct{ arch, url, sum string }
 	var sources []source
 	version := ""
-	for _, arch := range linuxArches {
+	for _, arch := range a.linuxArches("arch") {
 		d := debs[arch.goarch]
 		if d == nil {
 			continue

@@ -17,7 +17,7 @@ import (
 // openSUSE, in Go: the same files as the .deb, under /usr. workers are the
 // worker built for each of Go's architectures.
 func packageRPM(a *App, workers map[string]string, out string) error {
-	for _, arch := range linuxArches {
+	for _, arch := range a.linuxArches("rpm") {
 		files, err := linuxTree(a, "/usr", workers[arch.goarch], a.Name)
 		if err != nil {
 			return err

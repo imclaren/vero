@@ -81,6 +81,13 @@ runtime_version = "51"
 # python is the command that starts the app there, where python3 isn't
 # one.
 #
+# This section, and the Linux ones above, may also narrow the
+# architectures packaged, where the system's own packages lack something
+# the app needs on one of them. Without it, every architecture vero builds
+# for there is packaged:
+#
+#   arches = ["x86_64"]
+#
 # FreeBSD and DragonFly: each package the app needs, with the port it
 # comes from.
 [gtk.freebsd]

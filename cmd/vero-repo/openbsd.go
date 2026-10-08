@@ -214,7 +214,7 @@ func buildOpenBSDRepo(site string, sys *unixSystem, newPkgs []string, keep int, 
 	var k *signifyKey
 	newest := map[string]Download{}
 	keyName := a.Name + "-pkg"
-	for _, arch := range sys.arches {
+	for _, arch := range a.archesFor(sys) {
 		dir := filepath.Join(site, sys.name, arch.name)
 		suffix := "-" + sys.name + "-" + arch.name + ".tgz"
 		for _, p := range newPkgs {

@@ -22,7 +22,7 @@ import (
 // Ubuntu, in Go: the same files as the rpm, under /usr. workers are the
 // worker built for each of Go's architectures, which Debian names the same.
 func packageDeb(a *App, workers map[string]string, out string) error {
-	for _, arch := range linuxArches {
+	for _, arch := range a.linuxArches("deb") {
 		files, err := linuxTree(a, "/usr", workers[arch.goarch], a.Name)
 		if err != nil {
 			return err

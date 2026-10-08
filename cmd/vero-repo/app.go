@@ -96,6 +96,10 @@ type GTK struct {
 type BSDPkg struct {
 	Deps   map[string]string `toml:"deps"`
 	Python string            `toml:"python"`
+	// Arches narrows the architectures packaged, such as ["x86_64"] where
+	// the system's own packages lack something on ARM; all of them when
+	// it's empty.
+	Arches []string `toml:"arches"`
 }
 
 // Pkgsrc is what a pkgsrc package, for NetBSD or illumos, depends on:
@@ -103,6 +107,10 @@ type BSDPkg struct {
 type Pkgsrc struct {
 	Depends []string `toml:"depends"`
 	Python  string   `toml:"python"`
+	// Arches narrows the architectures packaged, such as ["x86_64"] where
+	// the system's own packages lack something on ARM; all of them when
+	// it's empty.
+	Arches []string `toml:"arches"`
 }
 
 // OpenBSD is what an OpenBSD package depends on: each as pkg_add names
@@ -110,6 +118,10 @@ type Pkgsrc struct {
 type OpenBSD struct {
 	Depends []string `toml:"depends"`
 	Python  string   `toml:"python"`
+	// Arches narrows the architectures packaged, such as ["x86_64"] where
+	// the system's own packages lack something on ARM; all of them when
+	// it's empty.
+	Arches []string `toml:"arches"`
 }
 
 // python is the command the app is started with on a system whose own
@@ -129,11 +141,19 @@ func (g *GTK) python(system string) string {
 type RPM struct {
 	Requires   string `toml:"requires"`
 	Recommends string `toml:"recommends"`
+	// Arches narrows the architectures packaged, such as ["x86_64"] where
+	// the system's own packages lack something on ARM; all of them when
+	// it's empty.
+	Arches []string `toml:"arches"`
 }
 
 // Arch is what an Arch Linux package depends on, comma separated.
 type Arch struct {
 	Depends string `toml:"depends"`
+	// Arches narrows the architectures packaged, such as ["x86_64"] where
+	// the system's own packages lack something on ARM; all of them when
+	// it's empty.
+	Arches []string `toml:"arches"`
 }
 
 // Flatpak is the runtime a Flatpak runs on, from Flathub: GNOME's, which
@@ -145,6 +165,10 @@ type Flatpak struct {
 	Build          bool   `toml:"build"`
 	Runtime        string `toml:"runtime"`
 	RuntimeVersion string `toml:"runtime_version"`
+	// Arches narrows the architectures packaged, such as ["x86_64"] where
+	// the system's own packages lack something on ARM; all of them when
+	// it's empty.
+	Arches []string `toml:"arches"`
 }
 
 // The runtime a Flatpak runs on when vero-app.toml doesn't say.
@@ -170,6 +194,10 @@ type Deb struct {
 	Depends    string `toml:"depends"`
 	Recommends string `toml:"recommends"`
 	Section    string `toml:"section"`
+	// Arches narrows the architectures packaged, such as ["x86_64"] where
+	// the system's own packages lack something on ARM; all of them when
+	// it's empty.
+	Arches []string `toml:"arches"`
 }
 
 // WPF is the front end for Windows.
@@ -238,6 +266,11 @@ func (a *App) check(path string) error {
 	}
 	if a.GTK != nil && (a.GTK.Folder == "" || a.GTK.Entry == "") {
 		return problem("[gtk] needs folder and entry")
+	}
+	if a.GTK != nil {
+		if err := a.GTK.checkArches(); err != nil {
+			return problem("%v", err)
+		}
 	}
 	if m := a.MacOS; m != nil && (m.Folder == "" || (m.Product == "") == (m.Project == "" || m.Scheme == "")) {
 		return problem("[macos] needs folder, and either product (SwiftPM) or project and scheme (Xcode)")

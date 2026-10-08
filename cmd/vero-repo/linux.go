@@ -187,3 +187,109 @@ func iconSizes(file string, sizes ...int) (map[int][]byte, error) {
 	}
 	return out, nil
 }
+
+// goarchOf is an architecture as Go names it, from any name vero-app.toml
+// may give it: Go's own, or a system's.
+func goarchOf(name string) string {
+	switch strings.ToLower(name) {
+	case "amd64", "x86_64", "x86-64", "x64", "x86:64":
+		return "amd64"
+	case "arm64", "aarch64":
+		return "arm64"
+	}
+	return ""
+}
+
+// allows says whether arches, from a section of vero-app.toml, takes in
+// goarch: all of them, when it's empty.
+func allows(arches []string, goarch string) bool {
+	if len(arches) == 0 {
+		return true
+	}
+	for _, a := range arches {
+		if goarchOf(a) == goarch {
+			return true
+		}
+	}
+	return false
+}
+
+// linuxArchesOf are linuxArches, less any a section leaves out.
+func linuxArchesOf(arches []string) []struct{ goarch, name string } {
+	var out []struct{ goarch, name string }
+	for _, a := range linuxArches {
+		if allows(arches, a.goarch) {
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+// linuxArches are the architectures the app's Linux packages of a kind -
+// deb, rpm, arch or flatpak - are made for: all, less any its section
+// leaves out.
+func (a *App) linuxArches(section string) []struct{ goarch, name string } {
+	if a.GTK == nil {
+		return linuxArches
+	}
+	return linuxArchesOf(a.GTK.sectionArches()[section])
+}
+
+// sectionArches are the arches each of the GTK front end's sections names,
+// by section.
+func (g *GTK) sectionArches() map[string][]string {
+	m := map[string][]string{"deb": g.Deb.Arches, "rpm": g.RPM.Arches, "arch": g.Arch.Arches, "flatpak": g.Flatpak.Arches}
+	if g.FreeBSD != nil {
+		m["freebsd"] = g.FreeBSD.Arches
+	}
+	if g.DragonFly != nil {
+		m["dragonfly"] = g.DragonFly.Arches
+	}
+	if g.NetBSD != nil {
+		m["netbsd"] = g.NetBSD.Arches
+	}
+	if g.Illumos != nil {
+		m["illumos"] = g.Illumos.Arches
+	}
+	if g.OpenBSD != nil {
+		m["openbsd"] = g.OpenBSD.Arches
+	}
+	return m
+}
+
+// checkArches says whether every section's arches are ones its system has.
+func (g *GTK) checkArches() error {
+	for section, arches := range g.sectionArches() {
+		has := map[string]bool{"amd64": true, "arm64": true}
+		if sys := system(section); sys != nil {
+			has = map[string]bool{}
+			for _, a := range sys.arches {
+				has[a.goarch] = true
+			}
+		}
+		for _, a := range arches {
+			if g := goarchOf(a); g == "" || !has[g] {
+				return fmt.Errorf("[gtk.%s] arches: %s isn't one vero packages for there", section, a)
+			}
+		}
+	}
+	return nil
+}
+
+// archesFor are the architectures the app is packaged for on sys: the
+// system's, less any its [gtk.NAME] section leaves out. Where sys's
+// repositories go still follows sys.arches, so that narrowing them doesn't
+// move a repository.
+func (a *App) archesFor(sys *unixSystem) []unixArch {
+	var arches []string
+	if a.GTK != nil {
+		arches = a.GTK.sectionArches()[sys.name]
+	}
+	var out []unixArch
+	for _, arch := range sys.arches {
+		if allows(arches, arch.goarch) {
+			out = append(out, arch)
+		}
+	}
+	return out
+}

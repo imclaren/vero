@@ -43,7 +43,7 @@ func packageFlatpak(a *App, workers map[string]string, out string, t *tools) err
 	}
 	script := ""
 	var built []string
-	for _, arch := range linuxArches {
+	for _, arch := range a.linuxArches("flatpak") {
 		build := filepath.Join(stage, "build-"+arch.name)
 		if err := flatpakBuildFolder(a, workers[arch.goarch], arch.name, build); err != nil {
 			return err

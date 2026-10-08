@@ -115,7 +115,7 @@ func unixPackage(name string) *regexp.Regexp {
 // packageUnix builds the app's package for sys, for each architecture:
 // workers are the worker built for each of Go's architectures there.
 func packageUnix(a *App, sys *unixSystem, workers map[string]string, out string) error {
-	for _, arch := range sys.arches {
+	for _, arch := range a.archesFor(sys) {
 		files, err := unixTree(a, sys.prefix, workers[arch.goarch], a.Name, a.GTK.python(systemPython(a.GTK, sys.name)))
 		if err != nil {
 			return err
@@ -260,7 +260,7 @@ func bsdTarFile(tw *tar.Writer, name string, data []byte, mode fs.FileMode, mtim
 // architecture.
 func buildPkgRepo(site string, sys *unixSystem, newPkgs []string, keep int, url string, a *App, s *signer) (map[string]Download, error) {
 	newest := map[string]Download{}
-	for _, arch := range sys.arches {
+	for _, arch := range a.archesFor(sys) {
 		dir := pkgRepoDir(site, sys, arch)
 		all := filepath.Join(dir, "All")
 		suffix := "-" + sys.name + "-" + fileArch(arch) + ".pkg"
@@ -609,7 +609,7 @@ func pkgsrcBuildInfo(a *App, sys *unixSystem, arch unixArch) []byte {
 // architecture.
 func buildPkgsrcRepo(site string, sys *unixSystem, newPkgs []string, keep int, a *App, s *signer) (map[string]Download, error) {
 	newest := map[string]Download{}
-	for _, arch := range sys.arches {
+	for _, arch := range a.archesFor(sys) {
 		all := filepath.Join(site, sys.name, arch.name, "All")
 		suffix := "-" + sys.name + "-" + arch.name + ".tgz"
 		for _, p := range newPkgs {

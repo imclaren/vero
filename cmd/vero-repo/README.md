@@ -223,6 +223,13 @@ end; give `--key` and it checks the appcast's signatures too.
 
 ## Notes
 
+Each system is packaged for every architecture vero builds for there,
+x86-64 and ARM64 for most, unless its section in `vero-app.toml` narrows
+them with `arches = ["x86_64"]`, as when the system's own packages lack
+something the app needs on ARM. `vero-repo` refuses an architecture the
+system doesn't have. Narrowing them doesn't move a repository, so adding
+one back later needs nothing from the people who installed the app.
+
 The illumos packages are signed, because pkgsrc there, as SmartOS sets it
 up, installs only signed packages: the page's commands add your key to its
 keyring first. The NetBSD packages aren't signed, since NetBSD's pkgsrc
