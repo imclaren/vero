@@ -8,6 +8,13 @@
 #   scripts/run-windows.sh --payload out                           # your own build, not the example
 #   scripts/run-windows.sh --ssh 2222                              # port 2222 on this Mac reaches the VM's SSH
 #
+# --ssh needs SSH set up in the VM: --install sets it up, with the virtio
+# drivers that give Windows on ARM a network in qemu, and
+# scripts/setup-windows-ssh.sh sets it up in a VM installed before that.
+# The key is ~/.ssh/vero-windows:
+#
+#   ssh -i ~/.ssh/vero-windows -p 2222 vero@127.0.0.1
+#
 # Needs: brew install qemu, and a Windows 11 ARM64 ISO from Microsoft:
 #   https://www.microsoft.com/en-us/software-download/windows11arm64
 # Run scripts/build-all.sh first - the disc is made from dist/.
@@ -33,6 +40,9 @@ while [ $# -gt 0 ]; do
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
 done
+
+# Installing sets up SSH, so its port is forwarded unless another is asked for.
+[ "$INSTALL" = yes ] && [ -z "$SSH_PORT" ] && SSH_PORT=2222
 
 command -v qemu-system-aarch64 >/dev/null 2>&1 || { echo "qemu is missing - brew install qemu" >&2; exit 1; }
 FW=$(brew --prefix)/share/qemu
@@ -109,8 +119,15 @@ if [ "$INSTALL" = yes ]; then
         echo "  https://www.microsoft.com/en-us/software-download/windows11arm64" >&2
         exit 2; }
     # The answer file installs Windows without anyone sitting in front of it.
+    # Beside it go the virtio drivers, OpenSSH and your key, which its
+    # first logon sets up, so the VM has a network and SSH from the start.
+    . "$ROOT/scripts/lib/windows-disc.sh"
+    ANSWERS=$(mktemp -d)
+    cp "$ROOT/.windows/unattend/autounattend.xml" "$ROOT/.windows/unattend/setup.ps1" "$ANSWERS/"
+    windows_ssh_disc "$ANSWERS" "$ROOT"
     rm -f "$VM/unattend.iso"
-    hdiutil makehybrid -iso -joliet -o "$VM/unattend.iso" "$ROOT/.windows/unattend" -quiet
+    hdiutil makehybrid -iso -joliet -o "$VM/unattend.iso" "$ANSWERS" -quiet
+    rm -rf "$ANSWERS"
     set -- "$@" \
         -drive if=none,id=cd0,format=raw,readonly=on,media=cdrom,file="$ISO" \
         -device usb-storage,drive=cd0,removable=true,bus=usb.0,bootindex=0 \

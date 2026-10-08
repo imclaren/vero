@@ -141,8 +141,8 @@ them how to get past it.
   `[needs]` has `autostart`, and the internet when it has `network`. The
   package is stored uncompressed, as the Store expects, so it's bigger
   than the installer. To install one yourself for testing, sign it with
-  `signtool` and a certificate your PC trusts, as
-  `scripts/test-repo.sh --vm windows` does.
+  `signtool` and a certificate your PC trusts, or register its files in
+  developer mode, as `scripts/test-repo.sh --vm windows` does.
 
 ## Android, iPhone and iPad
 
@@ -318,11 +318,15 @@ scripts/test-repo.sh --image archlinux
 scripts/test-repo.sh --flatpak
 scripts/test-repo.sh --vm freebsd         # also netbsd, openbsd, dragonfly, illumos
 scripts/test-repo.sh --mac                # the disk image, on this Mac, and the appcast after an update
-scripts/test-repo.sh --vm windows         # the installer and the MSIX, in vero's Windows VM
+scripts/test-repo.sh --vm windows         # the installer and the MSIX, in vero's Windows VM, over SSH
 ```
 
 The containers need Docker and colima. A `--vm` test uses the system's VM,
 which its `run-*.sh` script makes the first time; that downloads the
-system and its GTK, a few gigabytes. The Windows VM has no way in but a
-disc and no way out but its screen, so that test leaves a screenshot of
-its results for you to read.
+system and its GTK, a few gigabytes. The Windows test reaches vero's
+Windows VM over SSH: it installs, starts, updates and uninstalls the
+installer, registers the MSIX's files in developer mode and starts the
+app, and leaves a screenshot of the desktop. A VM made with
+`scripts/run-windows.sh --install` has SSH; one made before that gets it
+with `scripts/setup-windows-ssh.sh`, which the
+[VM's notes](../../.windows/unattend/README.md) describe.

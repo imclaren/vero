@@ -1,104 +1,126 @@
-# Checks vero's Windows installers inside vero's Windows VM, which has no
-# way in but a disc and no way out but its screen: test-repo.sh --vm
-# windows puts this script and the installers on the disc, types the
-# command that runs it, and reads the results off a screenshot. So each
-# result is a line of big text in a window of its own.
+# Checks vero's Windows installers inside vero's Windows VM, a phase at a
+# time: test-repo.sh --vm windows copies this script and the installers in
+# over SSH, and runs each phase, reading the lines it prints, each
+# "what: result".
 #
-# It installs the NSIS installer silently, checks the app and its worker,
-# then does the same with the MSIX, signed here with a certificate made
-# for the purpose, and finally uninstalls both.
+#   nsis          installs the NSIS installer silently, checks the app and
+#                 its worker, and starts the app on the desktop
+#   nsis-update   installs the next version's installer over it
+#   nsis-done     stops the app and uninstalls it silently
+#   msix          registers the MSIX's files in developer mode (the VM has
+#                 no Windows SDK to sign the package), checks the worker,
+#                 and starts the app
+#   msix-done     stops it and removes it
+#
+# The app is started by a scheduled task, which runs it on the desktop of
+# whoever is logged in: started from SSH it would have no desktop.
+param(
+    [Parameter(Mandatory = $true)][string]$Phase,
+    [string]$Name, [string]$Exe, [string]$Worker, [string]$Identity
+)
 $ErrorActionPreference = "Continue"
-$disc = Split-Path -Parent $MyInvocation.MyCommand.Path
-$name = "NAME"        # replaced by test-repo.sh
-$exe = "EXE"
-$worker = "WORKER"
-$identity = "IDENTITY"
-$publisher = "PUBLISHER"
-$arch = if ([Environment]::Is64BitOperatingSystem -and (Get-CimInstance Win32_Processor).Architecture -eq 12) { "arm64" } else { "x64" }
-$log = @()
-function note($s) { $script:log += $s; Add-Content -Path "$env:TEMP\vero-test.txt" -Value $s }
+$here = $PSScriptRoot
+$arch = if ((Get-CimInstance Win32_Processor).Architecture -eq 12) { "arm64" } else { "x64" }
+$dir = "$env:LOCALAPPDATA\Programs\$Name"
+function note($what, $result) { "${what}: $result" }
 
-# The NSIS installer, silently, for this user.
-$setup = Get-ChildItem "$disc\*-$arch-setup.exe" | Select-Object -First 1
-if ($setup) {
-    Start-Process -Wait -FilePath $setup.FullName -ArgumentList "/S"
-    $dir = "$env:LOCALAPPDATA\Programs\$name"
-    $v = & "$dir\$worker" -version 2>&1
-    note "nsis-worker: $v"
-    note "nsis-app: $(Test-Path "$dir\$exe")"
-    note "nsis-startmenu: $(Test-Path "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\$name.lnk")"
-    $p = Start-Process -PassThru -FilePath "$dir\$exe"
-    Start-Sleep 6
-    note "nsis-runs: $(-not $p.HasExited)"
-    Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
-    Get-Process -Name ($worker -replace '\.exe$','') -ErrorAction SilentlyContinue | Stop-Process -Force
-    Start-Process -Wait -FilePath "$dir\uninstall.exe" -ArgumentList "/S"
+# onDesktop: runs a command on the logged-in desktop, as a scheduled task.
+function onDesktop($command, $arguments) {
+    $action = if ($arguments) { New-ScheduledTaskAction -Execute $command -Argument $arguments } else { New-ScheduledTaskAction -Execute $command }
+    $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive
+    Register-ScheduledTask -TaskName "vero-test" -Action $action -Principal $principal -Force | Out-Null
+    Start-ScheduledTask -TaskName "vero-test"
+    Start-Sleep 8
+    Unregister-ScheduledTask -TaskName "vero-test" -Confirm:$false
+}
+
+# asUser: runs PowerShell commands in the logged-in user's session, and
+# returns what they print. Installing an app package needs that session:
+# from SSH, Windows refuses ("Access is denied").
+function asUser($commands) {
+    $script = "$env:TEMP\vero-as-user.ps1"
+    $out = "$env:TEMP\vero-as-user.txt"
+    Remove-Item $out, "$out.done" -ErrorAction SilentlyContinue
+    Set-Content -Path $script -Value "& { $commands } *> '$out'; 'vero-done' | Out-File '$out.done'"
+    $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File $script"
+    $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive
+    Register-ScheduledTask -TaskName "vero-test-user" -Action $action -Principal $principal -Force | Out-Null
+    Start-ScheduledTask -TaskName "vero-test-user"
+    for ($i = 0; $i -lt 120 -and -not (Test-Path "$out.done"); $i++) { Start-Sleep 1 }
+    Unregister-ScheduledTask -TaskName "vero-test-user" -Confirm:$false
+    if (Test-Path $out) { Get-Content $out }
+}
+
+# stopApp: stops the app and its workers, wherever they run from.
+function stopApp($folder) {
+    Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($folder) } | Stop-Process -Force -ErrorAction SilentlyContinue
     Start-Sleep 2
-    note "nsis-uninstalled: $(-not (Test-Path "$dir\$exe"))"
-} else {
-    note "nsis: no installer for $arch"
 }
 
-# The MSIX: signed with a certificate made here, trusted here, then
-# installed as the Store would install it.
-$msix = Get-ChildItem "$disc\*-$arch.msix" | Select-Object -First 1
-if ($msix) {
-    $cert = New-SelfSignedCertificate -Type Custom -Subject $publisher -KeyUsage DigitalSignature `
-        -FriendlyName "vero test" -CertStoreLocation "Cert:\CurrentUser\My" `
-        -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}")
-    $pfx = "$env:TEMP\vero-test.pfx"
-    $pw = ConvertTo-SecureString -String "vero" -Force -AsPlainText
-    Export-PfxCertificate -Cert $cert -FilePath $pfx -Password $pw | Out-Null
-    Import-PfxCertificate -FilePath $pfx -CertStoreLocation "Cert:\CurrentUser\Root" -Password $pw | Out-Null
-    $signtool = Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\$arch\signtool.exe" -ErrorAction SilentlyContinue | Select-Object -Last 1
-    $copy = "$env:TEMP\" + $msix.Name
-    Copy-Item $msix.FullName $copy -Force
-    if ($signtool) {
-        & $signtool.FullName sign /fd SHA256 /a /f $pfx /p vero $copy 2>&1 | Out-Null
-        note "msix-signed: $LASTEXITCODE"
-    } else {
-        # No Windows SDK: the package can't be signed, so it can't be
-        # installed; what can be checked is that Windows reads it.
-        note "msix-signed: no signtool"
-    }
-    try {
-        Add-AppxPackage -Path $copy -ErrorAction Stop
-        note "msix-installed: True"
-        $pkg = Get-AppxPackage -Name $identity
-        note "msix-version: $($pkg.Version)"
-        $v = & "$($pkg.InstallLocation)\$worker" -version 2>&1
-        note "msix-worker: $v"
-        $p = Start-Process -PassThru -FilePath "explorer.exe" -ArgumentList "shell:AppsFolder\$($pkg.PackageFamilyName)!App"
-        Start-Sleep 8
-        $running = Get-Process | Where-Object { $_.Path -like "$($pkg.InstallLocation)\*" }
-        note "msix-runs: $($null -ne $running)"
-        $running | Stop-Process -Force -ErrorAction SilentlyContinue
-        Remove-AppxPackage -Package $pkg.PackageFullName
-        note "msix-uninstalled: $(-not (Get-AppxPackage -Name $identity))"
-    } catch {
-        note "msix-installed: False $($_.Exception.Message -replace '\s+',' ')"
-    }
-} else {
-    note "msix: no package for $arch"
+# install: an NSIS installer for this machine, VERSION's, silently.
+function install($version) {
+    $setup = Get-ChildItem "$here\$Name-$version-$arch-setup.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $setup) { note "nsis" "no $version installer for $arch"; return $false }
+    Start-Process -Wait -FilePath $setup.FullName -ArgumentList "/S"
+    return $true
 }
 
-# The results, as big text on the screen, for the screenshot.
-Add-Type -AssemblyName System.Windows.Forms
-$form = New-Object System.Windows.Forms.Form
-$form.Text = "vero test"
-$form.WindowState = "Maximized"
-$form.BackColor = "White"
-# A magenta band, which the screenshot is searched for: no other window
-# has one.
-$band = New-Object System.Windows.Forms.Panel
-$band.Dock = "Top"
-$band.Height = 60
-$band.BackColor = [System.Drawing.Color]::FromArgb(255, 0, 255)
-$form.Controls.Add($band)
-$label = New-Object System.Windows.Forms.Label
-$label.Dock = "Fill"
-$label.Font = New-Object System.Drawing.Font("Consolas", 22)
-$label.Text = ($log -join "`n") + "`nVERO-TEST-DONE"
-$form.Controls.Add($label)
-$label.BringToFront()
-$form.ShowDialog() | Out-Null
+switch ($Phase) {
+    "nsis" {
+        if (install "1.0.0") {
+            note "nsis-worker" (& "$dir\$Worker" -version 2>&1)
+            note "nsis-app" (Test-Path "$dir\$Exe")
+            note "nsis-startmenu" (Test-Path "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\$Name.lnk")
+            note "nsis-uninstaller" (Test-Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\$Name")
+            onDesktop "$dir\$Exe" ""
+            note "nsis-runs" ($null -ne (Get-Process | Where-Object { $_.Path -eq "$dir\$Exe" }))
+        }
+    }
+    "nsis-update" {
+        stopApp $dir
+        if (install "1.0.1") { note "nsis-updated" (& "$dir\$Worker" -version 2>&1) }
+    }
+    "nsis-done" {
+        stopApp $dir
+        if (Test-Path "$dir\uninstall.exe") { Start-Process -Wait -FilePath "$dir\uninstall.exe" -ArgumentList "/S" }
+        Start-Sleep 3
+        note "nsis-uninstalled" (-not (Test-Path "$dir\$Exe"))
+        note "nsis-uninstall-entry-gone" (-not (Test-Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\$Name"))
+    }
+    "msix" {
+        $msix = Get-ChildItem "$here\*-$arch.msix" | Select-Object -First 1
+        if (-not $msix) { note "msix" "no package for $arch"; break }
+        # Its files, as the package has them, registered in developer mode:
+        # what the Store would install, but without the signature only the
+        # Store (or your certificate) gives it.
+        $unlock = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock"
+        New-Item -Path $unlock -Force | Out-Null
+        Set-ItemProperty -Path $unlock -Name AllowDevelopmentWithoutDevLicense -Value 1 -Type DWord
+        $files = "C:\vero-test-msix"
+        Remove-Item -Recurse -Force $files -ErrorAction SilentlyContinue
+        Copy-Item $msix.FullName "$env:TEMP\vero-test.zip" -Force
+        Expand-Archive -Path "$env:TEMP\vero-test.zip" -DestinationPath $files -Force
+        Remove-Item "$files\AppxBlockMap.xml", "$files\[Content_Types].xml", "$files\AppxSignature.p7x" -ErrorAction SilentlyContinue
+        $said = asUser "Add-AppxPackage -Register '$files\AppxManifest.xml'"
+        $pkg = Get-AppxPackage -Name $Identity
+        if ($pkg) {
+            note "msix-installed" $true
+            note "msix-version" $pkg.Version
+            note "msix-worker" (& "$($pkg.InstallLocation)\$Worker" -version 2>&1)
+            onDesktop "explorer.exe" "shell:AppsFolder\$($pkg.PackageFamilyName)!App"
+            note "msix-runs" ($null -ne (Get-Process | Where-Object { $_.Path -and $_.Path.StartsWith($pkg.InstallLocation) }))
+        } else {
+            note "msix-installed" "False $(($said -join ' ') -replace '\s+',' ')"
+        }
+    }
+    "msix-done" {
+        $pkg = Get-AppxPackage -Name $Identity
+        if ($pkg) {
+            stopApp $pkg.InstallLocation
+            asUser "Remove-AppxPackage -Package '$($pkg.PackageFullName)'" | Out-Null
+        }
+        note "msix-removed" (-not (Get-AppxPackage -Name $Identity))
+        Remove-Item -Recurse -Force "C:\vero-test-msix" -ErrorAction SilentlyContinue
+        Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock" -Name AllowDevelopmentWithoutDevLicense -Value 0 -Type DWord
+    }
+}

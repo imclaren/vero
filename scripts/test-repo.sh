@@ -18,7 +18,7 @@
 #   scripts/test-repo.sh --vm dragonfly           # pkg, in vero's DragonFly VM
 #   scripts/test-repo.sh --vm illumos             # pkgin, with pkgsrc, in vero's OpenIndiana VM
 #   scripts/test-repo.sh --mac                    # the disk image, on this Mac, and the appcast
-#   scripts/test-repo.sh --vm windows             # the installer and the MSIX, in vero's Windows VM
+#   scripts/test-repo.sh --vm windows             # the installer and the MSIX, in vero's Windows VM, over SSH
 #   [--port 8642]
 #
 # A VM test starts the system's VM with its run script (scripts/run-*.sh
@@ -68,10 +68,10 @@ if [ -n "$MAC" ]; then
     # which is what the app's Sparkle would fetch.
     URL="http://127.0.0.1:$PORT" TARGETS=macos
 elif [ "$VMSYS" = windows ]; then
-    # Windows, in vero's VM, which has no way in but a disc, and no way
-    # out but its screen: scripts/lib/windows-test.ps1 goes on the disc
-    # with the installers, is started by typing at the VM, and shows its
-    # results as big text, which a screenshot brings back.
+    # Windows, in vero's VM, over SSH: scripts/lib/windows-test.ps1 and
+    # the installers are copied in, and run there a phase at a time. The
+    # VM needs SSH set up, which run-windows.sh --install does, or
+    # scripts/setup-windows-ssh.sh in a VM installed before.
     URL="http://10.0.2.2:$PORT" TARGETS=windows,msix
 elif [ -n "$VMSYS" ]; then
     # A VM reaches this Mac at 10.0.2.2, as qemu's own network has it.
@@ -184,7 +184,7 @@ cleanup() {
         hdiutil detach -quiet "$CACHE/mac-test/mnt" 2>/dev/null || true
         rm -rf "$CACHE/mac-test" "$HOME/Library/Application Support/Example"
     elif [ "$VMSYS" = windows ]; then
-        [ -n "$QEMU" ] && kill "$QEMU" 2>/dev/null || true
+        [ -n "$QEMU" ] && windows_stop
     elif [ -n "$VMSYS" ]; then
         if [ -f "$VMDIR/qemu.pid" ]; then
             $SSH 'PATH=/sbin:/usr/sbin:$PATH; poweroff 2>/dev/null || shutdown -p now' >/dev/null 2>&1 || true
@@ -259,54 +259,52 @@ mac_test() {
     echo "PASS"
 }
 
-# windows_test: the installers in vero's Windows VM.
+# windows_test: the installers in vero's Windows VM, over SSH: the NSIS
+# installer, installed, started on the desktop, updated to 1.0.1 and
+# uninstalled; then the MSIX's files, registered, started and removed.
 windows_test() {
+    . "$VERO/scripts/lib/windows-disc.sh"
     VMDIR="$HOME/vm/vero-windows"
-    [ -f "$VMDIR/disk.qcow2" ] || { echo "no Windows VM in $VMDIR: scripts/setup-windows.sh says how to make one" >&2; exit 1; }
+    SSHPORT=2222
+    [ -f "$VMDIR/disk.qcow2" ] || { echo "no Windows VM in $VMDIR: scripts/run-windows.sh --install makes one" >&2; exit 1; }
+    [ -f "$WINDOWS_KEY" ] || { echo "no $WINDOWS_KEY: scripts/setup-windows-ssh.sh sets up SSH into the VM" >&2; exit 1; }
+    windows_running && { echo "the Windows VM is running already: stop it first" >&2; exit 1; }
     PAY="$CACHE/windows-test"
     rm -rf "$PAY" && mkdir -p "$PAY"
-    # The packages, before another test in another terminal rebuilds them.
-    cp "$PACKAGES"/*-setup.exe "$PACKAGES"/*.msix "$PAY/"
-    sed -e 's/"NAME"/"vero-example"/' -e 's/"EXE"/"VeroExample.exe"/' -e 's/"WORKER"/"worker.exe"/' \
-        -e 's/"IDENTITY"/"ExamplePublisher.VeroExample"/' -e 's/"PUBLISHER"/"CN=Example Publisher"/' \
-        "$VERO/scripts/lib/windows-test.ps1" > "$PAY/test.ps1"
-    QMP=/tmp/vero-qmp.sock
-    echo "== booting the Windows VM (a few minutes)"
-    "$VERO/scripts/run-windows.sh" --headless --payload "$PAY" >/dev/null 2>&1 &
+    cp "$PACKAGES"/*-setup.exe "$PACKAGES"/*.msix "$VERO/scripts/lib/windows-test.ps1" "$PAY/"
+    echo "== booting the Windows VM (about a minute)"
+    "$VERO/scripts/run-windows.sh" --headless --payload "$PAY" --ssh "$SSHPORT" >"$CACHE/windows-vm.log" 2>&1 &
     QEMU=$!
-    sleep 150
-    # The desktop first (Win+D: not Alt+F4, which on the desktop is
-    # Windows' shut-down dialog), so that it takes the keys. The disc is
-    # the first CD drive Windows shows: D: on this VM. Win+R, then the
-    # command, which runs the script from it.
-    Q="python3 $VERO/scripts/lib/qmp.py $QMP"
-    $Q keys meta_l-d
-    sleep 2
-    $Q keys meta_l-r
-    sleep 3
-    $Q type "powershell -ExecutionPolicy Bypass -WindowStyle Hidden -File D:\\vero\\test.ps1"
-    SHOT="$PAY/result.ppm"
-    for i in $(seq 1 60); do
-        sleep 10
-        $Q shot "$SHOT"
-        # The result window has a magenta band across its top, which
-        # nothing else on a Windows desktop has.
-        if python3 -c "
-import sys
-d=open('$SHOT','rb').read()
-parts=d.split(b'\\n',3)
-px=parts[3]
-magenta=sum(1 for i in range(0,len(px)-3,3*31) if px[i]>230 and px[i+1]<30 and px[i+2]>230)
-sys.exit(0 if magenta*3*31 > len(px)*0.03 else 1)
-"; then
-            echo "the result is on the screen: $SHOT"
-            echo "read it (it says VERO-TEST-DONE when finished):"
-            echo "  open $SHOT"
-            return 0
-        fi
-    done
-    echo "FAIL: no result on the VM's screen after 10 minutes; see $SHOT" >&2
-    exit 1
+    windows_wait "$SSHPORT" 300 || { echo "FAIL: the VM never answered over SSH: scripts/setup-windows-ssh.sh sets it up" >&2; exit 1; }
+    windows_ssh "$SSHPORT" "New-Item -ItemType Directory -Force C:/vero-test | Out-Null; Remove-Item -Recurse -Force C:/vero-test/*"
+    windows_scp "$SSHPORT" "$PAY"/* vero@127.0.0.1:C:/vero-test/
+    # phase NAME: one of windows-test.ps1's phases, its lines printed.
+    phase() {
+        windows_ssh "$SSHPORT" "powershell -NoProfile -ExecutionPolicy Bypass -File C:/vero-test/windows-test.ps1 -Phase $1 -Name vero-example -Exe VeroExample.exe -Worker worker.exe -Identity ExamplePublisher.VeroExample" | tr -d '\r' | tee -a "$PAY/results.txt"
+    }
+    # expect LINE: windows-test.ps1 printed that line.
+    expect() { grep -qx "$1" "$PAY/results.txt" || { echo "FAIL: no \"$1\" from the VM" >&2; exit 1; }; }
+    echo "== the NSIS installer"
+    phase nsis
+    for line in "nsis-worker: 1.0.0" "nsis-app: True" "nsis-startmenu: True" "nsis-uninstaller: True" "nsis-runs: True"; do expect "$line"; done
+    python3 "$VERO/scripts/lib/qmp.py" /tmp/vero-qmp.sock shot "$PAY/nsis.ppm" && sips -s format png "$PAY/nsis.ppm" --out "$PAY/nsis.png" >/dev/null
+    echo "ok: 1.0.0 installed and running (the desktop: $PAY/nsis.png)"
+    echo "== releasing 1.0.1, and installing it over 1.0.0"
+    release 1.0.1
+    cp "$PACKAGES"/*-1.0.1-*-setup.exe "$PAY/"
+    windows_scp "$SSHPORT" "$PAY"/*-1.0.1-*-setup.exe vero@127.0.0.1:C:/vero-test/
+    phase nsis-update
+    expect "nsis-updated: 1.0.1"
+    phase nsis-done
+    expect "nsis-uninstalled: True"; expect "nsis-uninstall-entry-gone: True"
+    echo "ok: 1.0.1 installed over it, and uninstalled cleanly"
+    echo "== the MSIX"
+    phase msix
+    for line in "msix-installed: True" "msix-worker: 1.0.0" "msix-runs: True"; do expect "$line"; done
+    phase msix-done
+    expect "msix-removed: True"
+    echo "ok: the MSIX's app ran, and was removed"
+    echo "PASS"
 }
 
 echo "== releasing 1.0.0"

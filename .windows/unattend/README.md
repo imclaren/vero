@@ -1,46 +1,37 @@
-# Building and recording the Windows example
+# vero's Windows VM
 
-The WPF example cannot be built on a Mac — WPF is Windows-only — so this is
-what is needed to build it, run it, and record it the way the macOS and Linux
-examples were recorded.
+WPF is Windows-only, so vero runs its Windows example, and tests its
+Windows installers, in a Windows 11 ARM VM under qemu:
+[`scripts/run-windows.sh`](../../scripts/run-windows.sh).
 
 ## What is here
 
-- `autounattend.xml` — installs Windows without the forty minutes of clicking.
-  It bypasses the TPM, Secure Boot and RAM checks a VM cannot satisfy, creates
-  a local account (Windows 11 otherwise insists on a Microsoft account, and
-  there is no way past that screen without one), enables auto-login, and runs
-  `setup.ps1` at first login.
-- `setup.ps1` — installs Go, the .NET 8 SDK, git and a C compiler. cgo needs a
-  compiler and the Go toolchain does not include one.
+- `autounattend.xml`: installs Windows without the forty minutes of
+  clicking. It bypasses the TPM, Secure Boot and RAM checks a VM can't
+  satisfy, makes a local account (Windows 11 otherwise insists on a
+  Microsoft account), logs in by itself, and at first login runs
+  `setup-ssh.ps1`, then `setup.ps1`.
+- `setup.ps1`: installs Go, the .NET 8 SDK, git and a C compiler with
+  winget. cgo needs a compiler, and Go doesn't include one.
 
-## Making the answer disk
+`setup-ssh.ps1` isn't kept here: it's
+[`scripts/lib/windows-ssh.ps1`](../../scripts/lib/windows-ssh.ps1), which
+`run-windows.sh --install` puts on the answer disc with what it needs
+beside it. It installs the virtio drivers, without which Windows on ARM
+has no network in qemu, and Microsoft's OpenSSH for Windows, which lets in
+only your key, `~/.ssh/vero-windows`.
 
-The two files go on a small ISO that is attached as a second drive, so the
-installer finds the answer file and the setup script:
-
-```bash
-cd .windows/unattend
-hdiutil makehybrid -iso -joliet -default-volume-name UNATTEND -o unattend.iso .
-```
-
-## In UTM
-
-1. New virtual machine, Virtualise, Windows.
-2. Point it at the Windows 11 ARM64 ISO.
-3. Give it 4 GB of memory and a 24 GB disk. Windows needs about 20 GB, so
-   watch the free space on the host - this is the part most likely to bite.
-4. Add `unattend.iso` as a second drive.
-5. Start it, and leave it alone. It installs, reboots, logs in and installs the
-   toolchain by itself.
-
-## Then
-
-From the Mac, with the VM running:
+## Making the VM
 
 ```bash
-utmctl exec "Windows 11" --cmd "go version"
+scripts/run-windows.sh --iso ~/Downloads/win11.iso --install   # once: about 20 minutes
+scripts/run-windows.sh --ssh 2222                              # every time after
+ssh -i ~/.ssh/vero-windows -p 2222 vero@127.0.0.1              # a PowerShell in the VM
 ```
 
-`utmctl` can copy files in and run commands, which is enough to build the
-example and take the screenshots without touching the VM's own desktop.
+A VM installed before the answer disc set up SSH gets it with
+[`scripts/setup-windows-ssh.sh`](../../scripts/setup-windows-ssh.sh),
+which types the one command that needs typing at the VM.
+
+With SSH, a script copies files in with `scp` and runs commands without
+touching the VM's desktop, as `scripts/test-repo.sh --vm windows` does.

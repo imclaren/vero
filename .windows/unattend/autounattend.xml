@@ -145,6 +145,11 @@
         </SynchronousCommand>
         <SynchronousCommand wcm:action="add">
           <Order>2</Order>
+          <Description>The virtio drivers, for a network, and SSH from the Mac</Description>
+          <CommandLine>powershell -ExecutionPolicy Bypass -File E:\setup-ssh.ps1</CommandLine>
+        </SynchronousCommand>
+        <SynchronousCommand wcm:action="add">
+          <Order>3</Order>
           <Description>Install Go and the .NET SDK</Description>
           <CommandLine>powershell -ExecutionPolicy Bypass -File E:\setup.ps1</CommandLine>
         </SynchronousCommand>
