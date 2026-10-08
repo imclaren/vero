@@ -2,9 +2,12 @@
 
 [Back to vero's README](README.md)
 
-Start with [a worked example](#a-worked-example), which takes a small app
-from macOS to an install page in a few commands. The rest of the guide has
-two parts. [Taking your app to more
+Three commands do all of it: `vero add` writes a front end for each
+system, `vero release` builds the installers and the site, and `vero
+credentials` is the checklist for signing and the stores, when you want
+them. Start with [a worked example](#a-worked-example), which takes a
+small app from macOS to an install page with them. The rest of the guide
+has two parts, and a [reference](#reference) at the end. [Taking your app to more
 platforms](#taking-your-app-to-more-platforms) adds front ends for the
 systems you want; skip it if your app already runs everywhere you want it
 to. [Creating app installers](#creating-app-installers) then builds the
@@ -33,9 +36,10 @@ go install github.com/imclaren/vero/kit/cmd/vero-site@latest
 ```bash
 mkdir hello && cd hello
 go mod init example.com/hello
-mkdir -p cmd/worker && cp ~/vero/example/worker/main.go cmd/worker/
-cp ~/vero/example/icon.png .
 go get github.com/imclaren/vero@latest
+VERO=$(go list -m -f '{{.Dir}}' github.com/imclaren/vero)
+mkdir -p cmd/worker && cp "$VERO/example/worker/main.go" cmd/worker/
+cp "$VERO/example/icon.png" .
 ```
 
 **3. Add front ends for macOS, Linux and Windows.** `vero add` reads the
@@ -160,16 +164,13 @@ secrets, sign-in items and notifications done one system's way, with the
 `kit` package to use instead. Each with the files and lines.
 
 On iOS and in a browser the worker runs inside the app, since neither
-lets an app start a program. For those two, `vero add` moves the worker's
-code into `internal/worker`, a package with a `Serve(in io.Reader, out
-io.Writer) error` that the two front ends call, and leaves the command as
-a few lines that parse the flags and call it; nothing else changes, and
-the other systems go on starting the command. It does this for a worker
-whose `main` makes a `vero.WorkerOptions`, calls `vero.NewWorker` with
-it and ends with `Serve`, which is what vero's example and its guide
-produce. For a `main` of another shape it says so, leaves the worker
-where it is, and the two front ends get a placeholder with a note saying
-what to point them at; `--keep-worker` asks for that in any case.
+lets an app start a program. `vero add` arranges that: it moves the
+worker's code into `internal/worker`, a package those two front ends
+call, and leaves the command as a few lines that start it. That works
+for a worker shaped like vero's example - a `main` that makes a
+`vero.WorkerOptions`, calls `vero.NewWorker` and ends with `Serve`. For
+any other shape it says so and leaves a placeholder, with a note on what
+to point it at; `--keep-worker` asks for that in any case.
 
 ### 4. Ship helper programs for each system
 
@@ -248,58 +249,18 @@ vero release --app example/vero-app.toml
 `go install` puts `vero` in Go's `bin` folder, which needs to be on your
 `PATH`. Use `--targets` to build only some systems, which is handy on a
 Mac without the Android SDK, say: `vero release --app
-example/vero-app.toml --targets deb,macos`. The three steps it runs are
-there on their own as well - `vero-repo key`, `scripts/package.sh` and
-`vero-repo build` - and [Your own app](#your-own-app) goes through them.
-
-[`scripts/test-repo.sh`](scripts/test-repo.sh) checks all of it for real.
-It builds the example's site, serves it from your Mac, and installs the
-example from it on a clean system, as the site tells people to. Then it
-releases version 1.0.1 and checks that the system's own updates bring it.
-It tries Debian, in a container, unless you say otherwise:
-
-```bash
-scripts/test-repo.sh --image ubuntu:24.04
-scripts/test-repo.sh --image fedora:latest
-scripts/test-repo.sh --image opensuse/tumbleweed
-scripts/test-repo.sh --image archlinux
-scripts/test-repo.sh --flatpak
-scripts/test-repo.sh --vm freebsd         # also netbsd, openbsd, dragonfly, illumos
-scripts/test-repo.sh --mac                # the disk image, on this Mac, and the appcast after an update
-scripts/test-repo.sh --vm windows         # the installer and the MSIX, in vero's Windows VM
-```
-
-The containers need Docker and colima. A `--vm` test uses the system's VM,
-which its `run-*.sh` script makes the first time; that downloads the
-system and its GTK, a few gigabytes. The Windows VM has no way in but a
-disc and no way out but its screen, so that test leaves a screenshot of
-its results for you to read.
+example/vero-app.toml --targets deb,macos`.
 
 ### Your own app
 
-From your app's folder, the one with its `go.mod`, a release is one
-command, and the steps below are what it does, each of which can be run
-on its own.
-
-```bash
-vero release                                   # the next patch version, everything your Mac can build
-vero release --version 2.0.0 --notes "..."     # a version you choose, with what's new for the Mac's update prompt
-vero release --targets deb,macos               # some of it
-vero release --upload you@host:/srv/myapp      # and put it online
-```
-
-It works out the version (the next after the newest the site has), makes
-the signing key the first time, builds the installers, builds and checks
-the site, and says how each installer was signed. With no credentials
-set it releases everything but an iOS app for phones, which only Apple's
-store can carry: see [Signing, stores and
-listings](#signing-stores-and-listings).
+From your app's folder, the one with its `go.mod`:
 
 **1. Describe your app.** Copy
 [`example/vero-app.toml`](example/vero-app.toml) beside your `go.mod`, and
 change it to describe your app. The comments in it explain each setting.
-Paths in it are relative to the file. Your worker's main package needs a
-`var version`, which the build sets.
+Paths in it are relative to the file, and `site` is where the install
+site will be. Your worker's main package needs a `var version`, which
+the build sets.
 
 Each system names its packages differently, so `vero-app.toml` says what
 your app needs from each, in its own section: `[gtk.deb]`, `[gtk.rpm]`,
@@ -308,84 +269,49 @@ systems you don't want; a system is packaged for only when its section is
 there. `[needs]` says what the app asks of the system, such as the
 network.
 
-**2. Make a signing key, once.**
+**2. Release.**
 
 ```bash
-vero-repo key --dir ~/vero-keys/myapp --name "Your Name or Company" --email you@example.com
+vero release
 ```
 
-This makes the folder you name with `--dir`. Without `--dir`, it's a
-folder named after you in `~/Library/Application Support/vero-repo` on a
-Mac, or `~/.config/vero-repo` on Linux. Its `private.asc` signs every
-release, so that people's systems can tell your updates are really yours;
-`signify.sec` signs the OpenBSD packages; `sparkle.sec` signs Mac updates;
-and `android.keystore`, made the first time an Android app is built, signs
-it. Back the folder up, keep it out of your repository, and never publish
-anything in it but `key.asc`, the public half, which your site publishes.
-
-If your Mac app already updates itself with Sparkle, keep its key, so that
-copies already installed go on updating: `vero-repo key --dir DIR
---import-sparkle FILE`, where FILE holds the private key Sparkle's
-`generate_keys -x` exported. Older Sparkle keys, which were kept
-expanded rather than as a seed, are taken too.
-
-**3. Build the installers.**
+It works out the version (the next after the newest the site has), makes
+the signing key the first time, builds every installer your Mac has the
+tools for, builds the site into `dist/site` and checks it, and says how
+each installer was signed. With no credentials set it releases everything
+but an iOS app for phones, which only Apple's store can carry: see
+[Signing, stores and listings](#signing-stores-and-listings).
 
 ```bash
-path/to/vero/scripts/package.sh --app vero-app.toml --version 1.2.3
+vero release --version 2.0.0 --notes "..."     # a version you choose, with what's new for the Mac's update prompt
+vero release --targets deb,macos               # some of it
 ```
 
-This builds them into `dist/packages`, each for both x86_64 and ARM64
-processors where the system has both. Use `--targets` to build only some
-of them: `deb`, `rpm`, `flatpak`, `freebsd`, `dragonfly`, `netbsd`,
-`illumos`, `openbsd`, `macos`, `windows`, `msix`, `android`, `ios`, `web`,
-`wasi`, `plan9`; or `linux` for the `.deb` and `.rpm`, and `bsd` for the
-BSDs and illumos. Use `--ldflags` to build more into your worker, such as
-API keys from a file outside your repository.
-
-**4. Build the site.**
+**3. Put it online.** Upload `dist/site` to the address `site` gives -
+any static web host does, or `--upload` does it for you:
 
 ```bash
-vero-repo build --app vero-app.toml --key ~/vero-keys/myapp \
-    --url https://example.com/myapp
+vero release --upload you@host:/srv/myapp
 ```
-
-This builds the site into `dist/site`. `--url` is where the site will be,
-because the commands on its page and its repositories need to know. At the
-end, `build` checks the site as `vero-repo check` would: that every
-signature verifies with the keys the site publishes, that every index's
-sizes and hashes match its files, that every link and manifest points at
-a file that's there, that each package holds your worker and front end,
-and that no system's version has gone backwards, which would leave people
-never offered the update. It refuses to finish otherwise.
-
-**5. Put it online.** Upload the contents of `dist/site` to any static web
-host, so that they appear at the `--url` you gave. Then send people to
-that address, where the page shows the commands for their system first.
 
 If you'd rather run your own server, `vero-site` serves the folder by
 itself, with the page, the repositories, `/download?for=SYSTEM` links and
-`latest.json`. With `-domain` it gets an HTTPS certificate from Let's
-Encrypt for that name:
+`latest.json`; with `-domain` it gets an HTTPS certificate from Let's
+Encrypt for that name. If your app already has a Go web server, serve the
+folder from it with `kit/site` instead.
 
 ```bash
 go install github.com/imclaren/vero/kit/cmd/vero-site@latest
 vero-site -dir /srv/myapp -domain downloads.example.com
 ```
 
-To publish a release, copy the new `dist/site` over the old one, for
-example with `rsync -a --delete dist/site/ server:/srv/myapp/`. If your
-app already has a Go web server, serve the folder from it with
-`kit/site` instead.
-
-**6. Release an update.** Change your version, then repeat steps 3 to 5,
-building into the same `dist/site`. vero keeps the three newest versions
-of each installer; use `--keep` to change that. People get the update
-with their usual updates: apt, dnf, zypper, pkg, pkgin and Flatpak find it
-by themselves, a Mac app with Sparkle reads the appcast, and OpenBSD's
-`pkg_add -u` does with the folder the page says to give it. On Arch, they
-build the recipe again. Your app can read `latest.json` from the site to
-tell Windows and Android users that a new version is out.
+**4. Release an update.** Change the app and run `vero release` again.
+People get it with their usual updates: apt, dnf, zypper, pkg, pkgin and
+Flatpak find it by themselves, a Mac app with Sparkle reads the appcast,
+and OpenBSD's `pkg_add -u` does with the folder the page says to give it.
+On Arch, they build the recipe again. Your app can read `latest.json`
+from the site to tell Windows and Android users that a new version is
+out.
 
 ### Signing, stores and listings
 
@@ -415,6 +341,12 @@ vero credentials
 The environment variables are read by the next `vero release`; the
 publishing is a command each after it. `vero publish --all` does
 whichever of the three the site has files for.
+
+## Reference
+
+What follows is for looking things up: each system's settings in
+`vero-app.toml` and the environment, what the site holds, the steps
+`vero release` is made of, and vero's own tests of the lot.
 
 ### macOS
 
@@ -598,3 +530,87 @@ installers with [`package-windows.sh`](scripts/package-windows.sh).
 own, from flags rather than `vero-app.toml`. Each script's header lists
 its options. [`run-linux.sh`](scripts/run-linux.sh) shows your Linux app
 running before you package it.
+
+### Step by step
+
+`vero release` runs three commands, each of which can be run on its own:
+`vero-repo key` once, then `scripts/package.sh` and `vero-repo build` for
+each release. `vero` hands `key`, `package`, `build` and `check` on to
+`vero-repo`, so `vero key ...` is the same thing.
+
+**The signing key.**
+
+```bash
+vero-repo key --dir ~/vero-keys/myapp --name "Your Name or Company" --email you@example.com
+```
+
+This makes the folder you name with `--dir`. Without `--dir`, it's a
+folder named after you in `~/Library/Application Support/vero-repo` on a
+Mac, or `~/.config/vero-repo` on Linux. Its `private.asc` signs every
+release, so that people's systems can tell your updates are really yours;
+`signify.sec` signs the OpenBSD packages; `sparkle.sec` signs Mac updates;
+and `android.keystore`, made the first time an Android app is built, signs
+it. Back the folder up, keep it out of your repository, and never publish
+anything in it but `key.asc`, the public half, which your site publishes.
+
+If your Mac app already updates itself with Sparkle, keep its key, so that
+copies already installed go on updating: `vero-repo key --dir DIR
+--import-sparkle FILE`, where FILE holds the private key Sparkle's
+`generate_keys -x` exported. Older Sparkle keys, which were kept
+expanded rather than as a seed, are taken too.
+
+**The installers.**
+
+```bash
+path/to/vero/scripts/package.sh --app vero-app.toml --version 1.2.3
+```
+
+This builds them into `dist/packages`, each for both x86_64 and ARM64
+processors where the system has both. Use `--targets` to build only some
+of them: `deb`, `rpm`, `flatpak`, `freebsd`, `dragonfly`, `netbsd`,
+`illumos`, `openbsd`, `macos`, `windows`, `msix`, `android`, `ios`, `web`,
+`wasi`, `plan9`; or `linux` for the `.deb` and `.rpm`, and `bsd` for the
+BSDs and illumos. Use `--ldflags` to build more into your worker, such as
+API keys from a file outside your repository.
+
+**The site.**
+
+```bash
+vero-repo build --app vero-app.toml --key ~/vero-keys/myapp \
+    --url https://example.com/myapp
+```
+
+This builds the site into `dist/site`; `--url` is where it will be,
+because the commands on its page and its repositories need to know, and
+`--keep` is how many versions of each installer to keep, three unless
+said. At the end, `build` checks the site as `vero-repo check` would: that every
+signature verifies with the keys the site publishes, that every index's
+sizes and hashes match its files, that every link and manifest points at
+a file that's there, that each package holds your worker and front end,
+and that no system's version has gone backwards, which would leave people
+never offered the update. It refuses to finish otherwise.
+
+### vero's own tests
+
+[`scripts/test-repo.sh`](scripts/test-repo.sh) checks all of it for real.
+It builds the example's site, serves it from your Mac, and installs the
+example from it on a clean system, as the site tells people to. Then it
+releases version 1.0.1 and checks that the system's own updates bring it.
+It tries Debian, in a container, unless you say otherwise:
+
+```bash
+scripts/test-repo.sh --image ubuntu:24.04
+scripts/test-repo.sh --image fedora:latest
+scripts/test-repo.sh --image opensuse/tumbleweed
+scripts/test-repo.sh --image archlinux
+scripts/test-repo.sh --flatpak
+scripts/test-repo.sh --vm freebsd         # also netbsd, openbsd, dragonfly, illumos
+scripts/test-repo.sh --mac                # the disk image, on this Mac, and the appcast after an update
+scripts/test-repo.sh --vm windows         # the installer and the MSIX, in vero's Windows VM
+```
+
+The containers need Docker and colima. A `--vm` test uses the system's VM,
+which its `run-*.sh` script makes the first time; that downloads the
+system and its GTK, a few gigabytes. The Windows VM has no way in but a
+disc and no way out but its screen, so that test leaves a screenshot of
+its results for you to read.
