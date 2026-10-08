@@ -237,6 +237,6 @@ whichever of the three the site has files for.
 
 ## Looking things up
 
-- [cmd/vero/README.md](cmd/vero/README.md): what `vero add` writes, and the same ideas in each toolkit
-- [cmd/vero-repo/README.md](cmd/vero-repo/README.md): what each system gets, each system's settings, what's in the site, and the steps `vero release` is made of
-- [kit/README.md](kit/README.md): the packages a worker uses instead of one system's way
+- [cmd/vero/README.md](cmd/vero/README.md) - `vero add`: every form of the command, the starter it writes for each system, and a table showing how a SwiftUI window is built in GTK and in WPF.
+- [cmd/vero-repo/README.md](cmd/vero-repo/README.md) - `vero release`: what each system's users get, the settings in `vero-app.toml` for each system, the files in the site, and the three commands that `vero release` runs.
+- [kit/README.md](kit/README.md) - the `kit` packages: one Go API for secrets, autostart, notifications and updates on every system.
