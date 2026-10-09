@@ -97,9 +97,20 @@ func TestPackageRPM(t *testing.T) {
 func TestFlatpakBuildFolder(t *testing.T) {
 	a, workers := linuxApp(t)
 	a.Needs = Needs{Network: true, Keyring: true}
+	// The app's own ffmpeg for each architecture, and its licence.
+	os.MkdirAll(filepath.Join(a.dir, "ffmpeg", "aarch64"), 0o755)
+	os.WriteFile(filepath.Join(a.dir, "ffmpeg", "aarch64", "ffmpeg"), []byte("ELF ffmpeg"), 0o755)
+	os.WriteFile(filepath.Join(a.dir, "ffmpeg", "LICENSE.txt"), []byte("LGPL"), 0o644)
+	a.GTK.Flatpak.Resources = []string{"ffmpeg/{arch}/ffmpeg", "ffmpeg/LICENSE.txt"}
 	dir := t.TempDir()
 	if err := flatpakBuildFolder(a, workers["arm64"], "aarch64", dir); err != nil {
 		t.Fatal(err)
+	}
+	if info, err := os.Stat(filepath.Join(dir, "files/lib/vero-example/ffmpeg")); err != nil || info.Mode()&0o111 == 0 {
+		t.Errorf("the app's ffmpeg isn't beside the worker, runnable: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "files/lib/vero-example/LICENSE.txt")); err != nil {
+		t.Error(err)
 	}
 	read := func(rel string) string {
 		data, err := os.ReadFile(filepath.Join(dir, rel))

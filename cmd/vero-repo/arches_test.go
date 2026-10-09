@@ -147,3 +147,23 @@ func TestLinuxArches(t *testing.T) {
 		t.Fatal(c.problems)
 	}
 }
+
+// TestWindowsArches: x64 and arm64 unless [wpf] says, x86 when it's named,
+// by Windows' or Go's name, and nothing else.
+func TestWindowsArches(t *testing.T) {
+	w := &WPF{}
+	if got, _ := w.arches(); strings.Join(got, " ") != "x64 arm64" {
+		t.Errorf("without arches: %v", got)
+	}
+	w.Arches = []string{"amd64", "arm64", "386"}
+	if got, err := w.arches(); err != nil || strings.Join(got, " ") != "x64 arm64 x86" {
+		t.Errorf("arches %v: %v %v", w.Arches, got, err)
+	}
+	w.Arches = []string{"ia64"}
+	if _, err := w.arches(); err == nil {
+		t.Error("ia64 was taken")
+	}
+	if !windowsInstaller("vero-example").MatchString("vero-example-1.2.3-x86-setup.exe") {
+		t.Error("an x86 installer isn't one the site takes")
+	}
+}

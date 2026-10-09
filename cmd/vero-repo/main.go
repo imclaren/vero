@@ -153,6 +153,9 @@ func buildCommand(args []string) error {
 	}
 	in.rpms, _ = filepath.Glob(filepath.Join(*packages, "*.rpm"))
 	in.flatpaks, _ = filepath.Glob(filepath.Join(*packages, "*.flatpak"))
+	in.pacman, _ = filepath.Glob(filepath.Join(*packages, "*.pkg.tar.zst"))
+	in.alpine, _ = filepath.Glob(filepath.Join(*packages, "*-r0-*.apk"))
+	in.void, _ = filepath.Glob(filepath.Join(*packages, "*.xbps"))
 	unix, _ := filepath.Glob(filepath.Join(*packages, "*.pkg"))
 	tgz, _ := filepath.Glob(filepath.Join(*packages, "*.tgz"))
 	in.unix = append(unix, tgz...)
@@ -186,6 +189,8 @@ func buildCommand(args []string) error {
 // packageFiles are the installers vero-repo package made, by kind.
 type packageFiles struct {
 	debs, exes, rpms, flatpaks, dmgs []string
+	// pacman, alpine and void are the Arch, Alpine and Void packages.
+	pacman, alpine, void []string
 	// macPkgs are the Mac's installer packages, beside its disk images;
 	// notes are what's new in this release, for the Mac's update prompt.
 	macPkgs []string
@@ -233,6 +238,31 @@ func build(out string, in packageFiles, keep int, url string, a *App, s *signer,
 		}
 		for arch, d := range rpms {
 			note("rpm-"+arch, d)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(out, "arch")); len(in.pacman) > 0 || err == nil {
+		pkgs, err := buildPacman(out, in.pacman, keep, a, s)
+		if err != nil {
+			return latest, fmt.Errorf("the Arch Linux repository: %w", err)
+		}
+		for arch, d := range pkgs {
+			note("arch-"+arch, d)
+		}
+	}
+	for _, l := range []struct {
+		dir, label string
+		pkgs       []string
+		build      func(string, []string, int, *App, *signer) (map[string]Download, error)
+	}{{"alpine", "Alpine", in.alpine, buildAlpine}, {"void", "Void", in.void, buildVoid}} {
+		if _, err := os.Stat(filepath.Join(out, l.dir)); len(l.pkgs) == 0 && err != nil {
+			continue
+		}
+		pkgs, err := l.build(out, l.pkgs, keep, a, s)
+		if err != nil {
+			return latest, fmt.Errorf("the %s repository: %w", l.label, err)
+		}
+		for arch, d := range pkgs {
+			note(l.dir+"-"+arch, d)
 		}
 	}
 	// Only Flatpak needs Docker: its repository is made by flatpak and

@@ -9,6 +9,7 @@ import (
 	"crypto"
 	"crypto/ed25519"
 	"crypto/rsa"
+	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/sha512"
 	"crypto/x509"
@@ -31,6 +32,7 @@ import (
 	"github.com/ProtonMail/go-crypto/openpgp"
 	"github.com/ProtonMail/go-crypto/openpgp/clearsign"
 	"github.com/cavaliergopher/rpm"
+	"github.com/klauspost/compress/zstd"
 	"github.com/ulikunitz/xz"
 )
 
@@ -150,6 +152,15 @@ func checkSite(site, url string, a *App, sparkle ed25519.PublicKey, previous *La
 	}
 	if exists("rpm") {
 		c.checkRPM()
+	}
+	if exists("arch") {
+		c.checkPacman()
+	}
+	if exists("alpine") {
+		c.checkAlpine()
+	}
+	if exists("void") {
+		c.checkVoid()
 	}
 	for _, sys := range unixSystems {
 		if !exists(sys.name) {
@@ -808,3 +819,295 @@ func loadKeyring(armored []byte) (openpgp.EntityList, error) {
 }
 
 func sha512Sum(b []byte) [64]byte { return sha512.Sum512(b) }
+
+// verifyBinary checks an unarmored detached signature of data, as pacman
+// reads them, with the site's key.
+func (c *checker) verifyBinary(what string, data, sig []byte) {
+	if c.keyring == nil {
+		return
+	}
+	if _, err := openpgp.CheckDetachedSignature(c.keyring, bytes.NewReader(data), bytes.NewReader(sig), nil); err != nil {
+		c.fail("%s: the signature doesn't check out with key.asc: %v", what, err)
+	}
+}
+
+// checkPacman checks each architecture's pacman repository: that its
+// indexes and packages are signed, and that each package matches what
+// the index says of it.
+func (c *checker) checkPacman() {
+	dirs, _ := filepath.Glob(filepath.Join(c.site, "arch", "*", c.a.Name+".db"))
+	for _, db := range dirs {
+		dir := filepathRel(c.site, filepath.Dir(db))
+		for _, index := range []string{".db", ".files"} {
+			data, ok := c.file(dir + "/" + c.a.Name + index)
+			if !ok {
+				continue
+			}
+			if sig, ok := c.file(dir + "/" + c.a.Name + index + ".sig"); ok {
+				c.verifyBinary(dir+"/"+c.a.Name+index, data, sig)
+			}
+		}
+		data, _ := c.file(dir + "/" + c.a.Name + ".db")
+		descs, err := tarMembers(data)
+		if err != nil {
+			c.fail("%s/%s.db: %v", dir, c.a.Name, err)
+			continue
+		}
+		for name, desc := range descs {
+			if path.Base(name) != "desc" {
+				continue
+			}
+			fields := pacmanFields(desc)
+			file := dir + "/" + fields["FILENAME"]
+			pkg, ok := c.file(file)
+			if !ok {
+				continue
+			}
+			size, _ := strconv.ParseInt(fields["CSIZE"], 10, 64)
+			c.sum(file, pkg, size, fields["SHA256SUM"])
+			sig, ok := c.file(file + ".sig")
+			if !ok {
+				continue
+			}
+			c.verifyBinary(file, pkg, sig)
+			if fields["PGPSIG"] != base64.StdEncoding.EncodeToString(sig) {
+				c.fail("%s.sig isn't the signature the index has for it", file)
+			}
+			_, files, err := readPacman(pkg)
+			if err != nil {
+				c.fail("%s: %v", file, err)
+				continue
+			}
+			c.contents(file, files, "/usr/lib/"+c.a.Name+"/")
+		}
+	}
+	c.ok("the Arch Linux repository")
+}
+
+// pacmanFields are the fields of a desc in a pacman index, each value's
+// lines joined by newlines.
+func pacmanFields(desc []byte) map[string]string {
+	fields := map[string]string{}
+	for _, block := range strings.Split(strings.TrimSpace(string(desc)), "\n\n") {
+		name, value, _ := strings.Cut(block, "\n")
+		fields[strings.Trim(name, "%")] = value
+	}
+	return fields
+}
+
+// tarMembers are the files in a tar, gzipped or not, by name.
+func tarMembers(data []byte) (map[string][]byte, error) {
+	var r io.Reader = bytes.NewReader(data)
+	if len(data) > 2 && data[0] == 0x1f && data[1] == 0x8b {
+		z, err := gzip.NewReader(r)
+		if err != nil {
+			return nil, err
+		}
+		r = z
+	}
+	tr := tar.NewReader(r)
+	out := map[string][]byte{}
+	for {
+		h, err := tr.Next()
+		if err == io.EOF {
+			return out, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		if h.Typeflag == tar.TypeReg {
+			out[h.Name], _ = io.ReadAll(tr)
+		}
+	}
+}
+
+// rsaPEM is the RSA public key in a site's PEM file, or nil.
+func (c *checker) rsaPEM(rel string) *rsa.PublicKey {
+	data, ok := c.file(rel)
+	if !ok {
+		return nil
+	}
+	if block, _ := pem.Decode(data); block != nil {
+		if k, err := x509.ParsePKIXPublicKey(block.Bytes); err == nil {
+			if pub, ok := k.(*rsa.PublicKey); ok {
+				return pub
+			}
+		}
+	}
+	c.fail("%s isn't an RSA public key", rel)
+	return nil
+}
+
+// alpineSigned checks the signature segment at the start of data, an
+// Alpine package or index, and returns the streams after it.
+func (c *checker) alpineSigned(what string, data []byte, pub *rsa.PublicKey) [][]byte {
+	streams, err := gzipStreams(data)
+	if err != nil || len(streams) < 2 {
+		c.fail("%s can't be read: %v", what, err)
+		return nil
+	}
+	files, _, err := gunzipTar(streams[0])
+	if err != nil {
+		c.fail("%s can't be read: %v", what, err)
+		return nil
+	}
+	sig, ok := files[".SIGN.RSA256."+alpineKeyName(c.a)]
+	sum := sha256.Sum256(streams[1])
+	if !ok || rsa.VerifyPKCS1v15(pub, crypto.SHA256, sum[:], sig) != nil {
+		c.fail("%s: the signature doesn't check out with alpine/%s", what, alpineKeyName(c.a))
+	}
+	return streams[1:]
+}
+
+// checkAlpine checks each architecture's Alpine repository: that the
+// index and the packages are signed, and that each package is what the
+// index says.
+func (c *checker) checkAlpine() {
+	pub := c.rsaPEM("alpine/" + alpineKeyName(c.a))
+	if pub == nil {
+		return
+	}
+	indexes, _ := filepath.Glob(filepath.Join(c.site, "alpine", "*", "APKINDEX.tar.gz"))
+	for _, index := range indexes {
+		dir := filepathRel(c.site, filepath.Dir(index))
+		data, _ := c.file(dir + "/APKINDEX.tar.gz")
+		streams := c.alpineSigned(dir+"/APKINDEX.tar.gz", data, pub)
+		if streams == nil {
+			continue
+		}
+		files, _, err := gunzipTar(streams[0])
+		if err != nil {
+			c.fail("%s/APKINDEX.tar.gz: %v", dir, err)
+			continue
+		}
+		for _, entry := range strings.Split(strings.TrimSpace(string(files["APKINDEX"])), "\n\n") {
+			fields := map[string]string{}
+			for _, line := range strings.Split(entry, "\n") {
+				if k, v, ok := strings.Cut(line, ":"); ok {
+					fields[k] = v
+				}
+			}
+			file := dir + "/" + fields["P"] + "-" + fields["V"] + ".apk"
+			pkg, ok := c.file(file)
+			if !ok {
+				continue
+			}
+			if fields["S"] != strconv.Itoa(len(pkg)) {
+				c.fail("%s is %d bytes, but its index says %s", file, len(pkg), fields["S"])
+			}
+			rest := c.alpineSigned(file, pkg, pub)
+			if len(rest) != 2 {
+				continue
+			}
+			control := sha1.Sum(rest[0])
+			if fields["C"] != "Q1"+base64.StdEncoding.EncodeToString(control[:]) {
+				c.fail("%s doesn't match the hash its index has for it", file)
+			}
+			info, _, err := apkInfo(pkg)
+			data := sha256.Sum256(rest[1])
+			if err != nil || pkgInfo(info, "datahash") != hex.EncodeToString(data[:]) {
+				c.fail("%s: its files don't match its .PKGINFO", file)
+			}
+			names, _, err := gunzipTar(rest[1])
+			if err != nil {
+				c.fail("%s: %v", file, err)
+				continue
+			}
+			var list []string
+			for n := range names {
+				list = append(list, n)
+			}
+			c.contents(file, list, "/usr/lib/"+c.a.Name+"/")
+		}
+	}
+	c.ok("the Alpine repository")
+}
+
+// checkVoid checks the Void repository: each architecture's repodata
+// carries the site's key, and each package it lists is there, matches
+// its hash, and is signed with that key.
+func (c *checker) checkVoid() {
+	repodata, _ := filepath.Glob(filepath.Join(c.site, "void", "*-repodata"))
+	for _, r := range repodata {
+		rel := filepathRel(c.site, r)
+		data, _ := c.file(rel)
+		index, meta, err := readRepodata(data)
+		if err != nil {
+			c.fail("%s: %v", rel, err)
+			continue
+		}
+		key, _ := meta["public-key"].([]byte)
+		var pub *rsa.PublicKey
+		if block, _ := pem.Decode(key); block != nil {
+			if k, err := x509.ParsePKIXPublicKey(block.Bytes); err == nil {
+				pub, _ = k.(*rsa.PublicKey)
+			}
+		}
+		if pub == nil {
+			c.fail("%s carries no RSA public key", rel)
+			continue
+		}
+		for _, v := range index {
+			props, _ := v.(plistDict)
+			pkgver, _ := props["pkgver"].(string)
+			arch, _ := props["architecture"].(string)
+			file := "void/" + pkgver + "." + arch + ".xbps"
+			pkg, ok := c.file(file)
+			if !ok {
+				continue
+			}
+			size, _ := props["filename-size"].(int64)
+			sha, _ := props["filename-sha256"].(string)
+			c.sum(file, pkg, size, sha)
+			if sig, ok := c.file(file + ".sig2"); ok {
+				sum := sha256.Sum256(pkg)
+				if rsa.VerifyPKCS1v15(pub, crypto.SHA256, sum[:], sig) != nil {
+					c.fail("%s.sig2: the signature doesn't check out with the repository's key", file)
+				}
+			}
+			_, files, err := voidContents(pkg)
+			if err != nil {
+				c.fail("%s: %v", file, err)
+				continue
+			}
+			c.contents(file, files, "/usr/lib/"+c.a.Name+"/")
+		}
+	}
+	c.ok("the Void repository")
+}
+
+// readRepodata is a Void repository's index.plist and index-meta.plist.
+func readRepodata(data []byte) (index, meta plistDict, err error) {
+	z, err := zstd.NewReader(bytes.NewReader(data))
+	if err != nil {
+		return nil, nil, err
+	}
+	defer z.Close()
+	tr := tar.NewReader(z)
+	for {
+		h, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, nil, err
+		}
+		body, err := io.ReadAll(tr)
+		if err != nil {
+			return nil, nil, err
+		}
+		switch h.Name {
+		case "index.plist":
+			index, err = parsePlist(body)
+		case "index-meta.plist":
+			meta, err = parsePlist(body)
+		}
+		if err != nil {
+			return nil, nil, fmt.Errorf("%s: %w", h.Name, err)
+		}
+	}
+	if index == nil || meta == nil {
+		return nil, nil, errors.New("no index.plist and index-meta.plist")
+	}
+	return index, meta, nil
+}

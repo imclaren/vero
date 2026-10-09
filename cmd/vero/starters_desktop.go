@@ -64,6 +64,12 @@ requires = "python3 >= 3.10, python3-gobject, (typelib(Gtk) = 4.0 if openSUSE-re
 
 [gtk.arch]
 depends = "python, python-gobject, gtk4"
+
+[gtk.alpine]
+depends = "python3, py3-gobject3, gtk4.0"
+
+[gtk.void]
+depends = "python3, python3-gobject, gtk4"
 `
 
 const gtkReadme = `# {{.Display}} for Linux, the BSDs and illumos

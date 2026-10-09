@@ -33,7 +33,7 @@ func TestPossibleTargets(t *testing.T) {
 	for _, p := range possibleTargets(a) {
 		names = append(names, p.name)
 	}
-	if got := strings.Join(names, ","); got != "deb,rpm,freebsd,openbsd,web,macos,windows" {
+	if got := strings.Join(names, ","); got != "deb,rpm,pacman,freebsd,openbsd,web,macos,windows" {
 		t.Errorf("possibleTargets = %s", got)
 	}
 	a.GTK.Flatpak.Build = true

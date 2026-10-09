@@ -11,7 +11,9 @@
 #   scripts/test-repo.sh --image fedora:latest    # dnf, which checks every signature
 #   scripts/test-repo.sh --image opensuse/tumbleweed  # zypper, the same
 #   scripts/test-repo.sh --flatpak                # Flatpak, from the .flatpakref
-#   scripts/test-repo.sh --image archlinux        # the AUR recipe, with makepkg
+#   scripts/test-repo.sh --image archlinux        # pacman, which checks every signature
+#   scripts/test-repo.sh --image alpine           # apk, the same
+#   scripts/test-repo.sh --image ghcr.io/void-linux/void-glibc  # xbps, the same
 #   scripts/test-repo.sh --vm freebsd             # pkg, in vero's FreeBSD VM
 #   scripts/test-repo.sh --vm netbsd              # pkgin, in vero's NetBSD VM
 #   scripts/test-repo.sh --vm openbsd             # pkg_add, in vero's OpenBSD VM
@@ -133,15 +135,27 @@ else
         archlinux*)
             # Arch's image is x86_64 only: Docker runs it emulated here,
             # where pacman's download sandbox can't start, so it's turned
-            # off. The recipe is built by an ordinary user, as makepkg
-            # insists.
-            TARGETS=deb RUN="--platform linux/amd64"
-            SETUP="sed -i 's/^#DisableSandbox/DisableSandbox/' /etc/pacman.conf
+            # off. The image has no key of its own to sign others' with,
+            # as an installed Arch has; pacman-key --init makes one.
+            TARGETS=pacman RUN="--platform linux/amd64"
+            SETUP="pacman-key --init > /dev/null 2>&1
+                sed -i 's/^#DisableSandbox/DisableSandbox/' /etc/pacman.conf
                 grep -q '^DisableSandbox' /etc/pacman.conf || sed -i '/^\[options\]/a DisableSandbox' /etc/pacman.conf
-                pacman -Syu --noconfirm --needed base-devel sudo curl > /dev/null 2>&1
-                useradd -m builder && echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder"
-            INSTALL="su builder -c 'rm -rf ~/pkg && mkdir ~/pkg && cd ~/pkg && curl -fsSLO $URL/aur/PKGBUILD && makepkg -si --noconfirm > /dev/null 2>&1'"
-            UPDATE="$INSTALL" ;;
+                pacman -Syu --noconfirm --needed curl > /dev/null 2>&1"
+            # pacman refuses a package or an index that isn't signed by a
+            # key it trusts; this checks that it was checked.
+            CHECK="$CHECK && pacman -Qi vero-example | grep -q '^Validated By *: Signature'"
+            UPDATE="pacman -Syu --noconfirm > /dev/null" ;;
+        alpine*)
+            # Alpine has wget, as BusyBox's, but no curl.
+            TARGETS=alpine
+            SETUP=true
+            INSTALL="wget -qO- $URL/install.sh | sh"
+            UPDATE="apk upgrade -U > /dev/null" ;;
+        *void*)
+            TARGETS=void
+            SETUP="xbps-install -Syu xbps > /dev/null && xbps-install -y curl > /dev/null"
+            UPDATE="xbps-install -Syu > /dev/null" ;;
         opensuse*)
             TARGETS=rpm
             SETUP="zypper -n -q install curl gzip > /dev/null"

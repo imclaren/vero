@@ -88,6 +88,10 @@ type GTK struct {
 	NetBSD    *Pkgsrc  `toml:"netbsd"`
 	Illumos   *Pkgsrc  `toml:"illumos"`
 	OpenBSD   *OpenBSD `toml:"openbsd"`
+	// Alpine and Void are what the app needs from Alpine Linux's and Void
+	// Linux's packages; each is packaged for when its section is here.
+	Alpine *LinuxPkg `toml:"alpine"`
+	Void   *LinuxPkg `toml:"void"`
 }
 
 // BSDPkg is what a FreeBSD or DragonFly package depends on: each package
@@ -165,6 +169,15 @@ type Flatpak struct {
 	Build          bool   `toml:"build"`
 	Runtime        string `toml:"runtime"`
 	RuntimeVersion string `toml:"runtime_version"`
+	// Resources are more files for the Flatpak, put beside the worker in
+	// /app/lib/NAME: a helper program the runtime lacks, such as the
+	// app's own ffmpeg, and its licence, say. {arch} in a path is the
+	// architecture, as Flatpak names it: x86_64 or aarch64. Prepare is a
+	// command run in vero-app.toml's folder before each architecture's
+	// Flatpak is made, with ARCH and GOARCH set: what downloads or builds
+	// those files, say.
+	Resources []string `toml:"resources"`
+	Prepare   string   `toml:"prepare"`
 	// Arches narrows the architectures packaged, such as ["x86_64"] where
 	// the system's own packages lack something on ARM; all of them when
 	// it's empty.
@@ -204,6 +217,9 @@ type Deb struct {
 type WPF struct {
 	Folder string `toml:"folder"`
 	Exe    string `toml:"exe"`
+	// Arches are the installers made: x64 and arm64 unless it says, and
+	// x86, for 32-bit Windows, only when it's named.
+	Arches []string `toml:"arches"`
 	// WingetID is the app's identifier in winget, as Publisher.App; made
 	// from the publisher's and the app's names unless it says.
 	WingetID string `toml:"winget_id"`
@@ -269,6 +285,11 @@ func (a *App) check(path string) error {
 	}
 	if a.GTK != nil {
 		if err := a.GTK.checkArches(); err != nil {
+			return problem("%v", err)
+		}
+	}
+	if a.WPF != nil {
+		if _, err := a.WPF.arches(); err != nil {
 			return problem("%v", err)
 		}
 	}

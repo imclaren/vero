@@ -43,8 +43,7 @@ func writeAUR(site, url string, a *App, debs map[string]*debFile) error {
 		sources = append(sources, source{arch.name, url + "/" + filepath.ToSlash(rel), hex.EncodeToString(sum[:])})
 		version = d.control.Get("Version")
 	}
-	// Arch's pkgver may not hold a hyphen.
-	pkgver := strings.NewReplacer("-", "_", "~", "_").Replace(version)
+	pkgver := pacmanVersion(version)
 	pkgname := a.Name + "-bin"
 	var arches, depends []string
 	for _, s := range sources {

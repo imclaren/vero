@@ -30,7 +30,7 @@ type Latest struct {
 // windowsInstaller is NAME-VERSION-ARCH-setup.exe, as package-windows.sh
 // names them.
 func windowsInstaller(name string) *regexp.Regexp {
-	return regexp.MustCompile(`^` + regexp.QuoteMeta(name) + `-(.+)-(x64|arm64)-setup\.exe$`)
+	return regexp.MustCompile(`^` + regexp.QuoteMeta(name) + `-(.+)-(x64|arm64|x86)-setup\.exe$`)
 }
 
 // buildWindows puts the new Windows installers in site/windows, keeps the
@@ -81,6 +81,12 @@ type page struct {
 	RPM     bool
 	Flatpak bool
 	AUR     bool
+	// Pacman is whether the site has a pacman repository, and
+	// Fingerprint the signing key's, which pacman-key trusts.
+	Pacman      bool
+	Fingerprint string
+	// VoidKey is the key's fingerprint as xbps names it.
+	VoidKey string
 	Windows []windowsDownload
 	// Mac is the newest disk image, if the site has one.
 	Mac *windowsDownload
@@ -88,6 +94,9 @@ type page struct {
 	Others []otherSection
 	// Unix are the BSDs and illumos the site has a repository for.
 	Unix []unixSection
+	// Linux are Alpine and Void, if the site has their repositories,
+	// which are added as root.
+	Linux []unixSection
 }
 
 // unixSection is how to install on one of the BSDs or illumos.
@@ -104,8 +113,9 @@ type windowsDownload struct {
 }
 
 // writeSite writes the site's pages: latest.json, index.html with how to
-// install on each system, and install.sh, which does it on Debian and
-// Ubuntu. urls in latest are relative to the site until here.
+// install on each system, and install.sh, which does it on every Unix the
+// site has a repository for. urls in latest are relative to the site
+// until here.
 func writeSite(site, url string, a *App, latest Latest, s *signer, noPage bool) error {
 	url = strings.TrimRight(url, "/")
 	for k, d := range latest.Downloads {
@@ -127,7 +137,10 @@ func writeSite(site, url string, a *App, latest Latest, s *signer, noPage bool) 
 		os.Remove(filepath.Join(site, "install.sh"))
 		return nil
 	}
-	p := page{App: a, URL: url, Latest: latest}
+	p := page{App: a, URL: url, Latest: latest, Fingerprint: s.keyFingerprint()}
+	if k, err := s.rsaKey(); err == nil {
+		p.VoidKey = voidFingerprint(&k.PublicKey)
+	}
 	for k := range latest.Downloads {
 		switch {
 		case strings.HasPrefix(k, "linux-"):
@@ -136,6 +149,8 @@ func writeSite(site, url string, a *App, latest Latest, s *signer, noPage bool) 
 			p.RPM = true
 		case strings.HasPrefix(k, "flatpak-"):
 			p.Flatpak = true
+		case strings.HasPrefix(k, "arch-"):
+			p.Pacman = true
 		}
 	}
 	if _, err := os.Stat(filepath.Join(site, "aur", "PKGBUILD")); err == nil {
@@ -149,13 +164,21 @@ func writeSite(site, url string, a *App, latest Latest, s *signer, noPage bool) 
 			}
 		}
 	}
+	for _, sys := range []string{"alpine", "void"} {
+		for k := range latest.Downloads {
+			if strings.HasPrefix(k, sys+"-") {
+				p.Linux = append(p.Linux, linuxInstructions(p, sys, ""))
+				break
+			}
+		}
+	}
 	if d, ok := latest.Downloads["macos-universal"]; ok {
 		p.Mac = &windowsDownload{"Mac (Apple silicon and Intel)", d.URL, d.Version}
 	}
 	p.Others = otherSections(p)
-	for _, arch := range []string{"x64", "arm64"} {
+	for _, arch := range windowsArches {
 		if d, ok := latest.Downloads["windows-"+arch]; ok {
-			label := map[string]string{"x64": "Most PCs (x64)", "arm64": "ARM PCs (ARM64)"}[arch]
+			label := map[string]string{"x64": "Most PCs (x64)", "arm64": "ARM PCs (ARM64)", "x86": "Older PCs with 32-bit Windows (x86)"}[arch]
 			p.Windows = append(p.Windows, windowsDownload{label, d.URL, d.Version})
 		}
 	}
@@ -166,7 +189,7 @@ func writeSite(site, url string, a *App, latest Latest, s *signer, noPage bool) 
 	if err := os.WriteFile(filepath.Join(site, "index.html"), html.Bytes(), 0o644); err != nil {
 		return err
 	}
-	if !p.Apt && !p.RPM && !p.Flatpak && len(p.Unix) == 0 {
+	if !p.Apt && !p.RPM && !p.Pacman && !p.Flatpak && len(p.Unix) == 0 && len(p.Linux) == 0 {
 		return nil
 	}
 	var sh bytes.Buffer
@@ -224,6 +247,20 @@ func flatpakCommands(p page) []string { return flatpakSteps(p, "") }
 
 func flatpakSteps(p page, yes string) []string {
 	return []string{fmt.Sprintf("flatpak install%s %s/flatpak/%s.flatpakref", yes, p.URL, p.App.Name)}
+}
+
+// pacmanCommands trust the signing key, add the repository to
+// pacman.conf, once, and install the app. pacman fills in $arch.
+func pacmanCommands(p page) []string { return pacmanSteps(p, "") }
+
+func pacmanSteps(p page, yes string) []string {
+	n := p.App.Name
+	return []string{
+		fmt.Sprintf("curl -fsSL %s/%s | sudo pacman-key --add -", p.URL, publicFile),
+		"sudo pacman-key --lsign-key " + p.Fingerprint,
+		fmt.Sprintf(`grep -qs '^\[%s\]' /etc/pacman.conf || printf '\n[%s]\nServer = %s/arch/$arch\n' | sudo tee -a /etc/pacman.conf > /dev/null`, n, n, p.URL),
+		"sudo pacman -Syu" + yes + " " + n,
+	}
 }
 
 func aurCommands(p page) []string {
@@ -299,7 +336,35 @@ func unixInstructions(p page, sys unixSystem, yes string) unixSection {
 	return s
 }
 
-var funcs = template.FuncMap{"apt": aptCommands, "dnf": dnfCommands, "zypper": zypperCommands, "flatpak": flatpakCommands, "aur": aurCommands}
+// linuxInstructions are the commands, run as root, that add the app's
+// repository on Alpine or Void and install it, and the one that updates
+// it. yes makes them ask nothing, for install.sh.
+func linuxInstructions(p page, sys, yes string) unixSection {
+	n, u := p.App.Name, p.URL
+	switch sys {
+	case "alpine":
+		repo := u + "/alpine"
+		return unixSection{System: "alpine", Label: "Alpine Linux", Commands: []string{
+			fmt.Sprintf("wget -qO /etc/apk/keys/%s %s/alpine/%s", alpineKeyName(p.App), u, alpineKeyName(p.App)),
+			fmt.Sprintf("grep -qx '%s' /etc/apk/repositories || echo '%s' >> /etc/apk/repositories", repo, repo),
+			"apk add -U " + n,
+		}, Update: "apk upgrade -U", Note: "GTK 4 is in Alpine's community repository, which needs to be on too."}
+	case "void":
+		y := ""
+		if yes != "" {
+			y = "y"
+		}
+		s := unixSection{System: "void", Label: "Void Linux", Commands: []string{
+			fmt.Sprintf("xbps-fetch -o /var/db/xbps/keys/%s.plist %s/void/%s.plist", p.VoidKey, u, p.VoidKey),
+			fmt.Sprintf("echo 'repository=%s/void' > /etc/xbps.d/%s.conf", u, n),
+			"xbps-install -S" + y + " " + n,
+		}, Update: "xbps-install -Su"}
+		return s
+	}
+	return unixSection{}
+}
+
+var funcs = template.FuncMap{"apt": aptCommands, "dnf": dnfCommands, "zypper": zypperCommands, "flatpak": flatpakCommands, "aur": aurCommands, "pacman": pacmanCommands}
 
 var indexPage = template.Must(template.New("index").Funcs(funcs).Parse(`<!doctype html>
 <html lang="en">
@@ -331,8 +396,9 @@ var indexPage = template.Must(template.New("index").Funcs(funcs).Parse(`<!doctyp
 <div id="systems">
 {{- if .Apt}}
 <section data-system="linux">
-<h2>Debian and Ubuntu</h2>
+<h2>Debian, Ubuntu and Chromebooks</h2>
 <p>Add {{.App.DisplayName}}'s repository and install it. After that, your usual updates keep it up to date.</p>
+<p class="soft">On a Chromebook, turn on Linux first, in Settings → Developers, then run these in its Terminal.</p>
 <pre>{{range apt .}}{{.}}
 {{end}}</pre>
 <p>Or run one command, which does the same:</p>
@@ -361,13 +427,36 @@ var indexPage = template.Must(template.New("index").Funcs(funcs).Parse(`<!doctyp
 <p class="soft">Flatpak keeps it up to date, with your other Flatpak apps. If your system doesn't have Flatpak yet, <a href="https://flatpak.org/setup/">flatpak.org/setup</a> says how to add it.</p>
 </section>
 {{- end}}
+{{- if .Pacman}}
+<section data-system="linux">
+<h2>Arch Linux</h2>
+<p>Trust the key that signs {{.App.DisplayName}}, add its repository and install it. After that, <code>sudo pacman -Syu</code> keeps it up to date.</p>
+<pre>{{range pacman .}}{{.}}
+{{end}}</pre>
 {{- if .AUR}}
+<p class="soft">Or build it yourself from <a href="{{.URL}}/aur/PKGBUILD">its recipe</a>, with <code>makepkg -si</code>.</p>
+{{- end}}
+</section>
+{{- else if .AUR}}
 <section data-system="linux">
 <h2>Arch Linux</h2>
 <p>Download the package's recipe and build it with makepkg:</p>
 <pre>{{range aur .}}{{.}}
 {{end}}</pre>
 <p class="soft">To update it, do the same again.</p>
+</section>
+{{- end}}
+{{- range .Linux}}
+<section data-system="linux">
+<h2>{{.Label}}</h2>
+<p>As root, add {{$.App.DisplayName}}'s repository and install it:</p>
+<pre>{{range .Commands}}{{.}}
+{{end}}</pre>
+<p>To update it later, with your other packages:</p>
+<pre>{{.Update}}</pre>
+{{- if .Note}}
+<p class="soft">{{.Note}}</p>
+{{- end}}
 </section>
 {{- end}}
 {{- range .Unix}}
@@ -437,6 +526,14 @@ var installScript = textTemplate.Must(textTemplate.New("install").Funcs(textTemp
 	"dnf":     func(p page) []string { return dnfSteps(p, " -y") },
 	"zypper":  func(p page) []string { return zypperSteps(p, " -y") },
 	"flatpak": func(p page) []string { return flatpakSteps(p, " -y") },
+	"pacman":  func(p page) []string { return pacmanSteps(p, " --noconfirm") },
+	"linux": func(p page) []unixSection {
+		var out []unixSection
+		for _, s := range p.Linux {
+			out = append(out, linuxInstructions(p, s.System, "yes"))
+		}
+		return out
+	},
 	"unix": func(p page) []unixSection {
 		var out []unixSection
 		for _, s := range p.Unix {
@@ -451,6 +548,16 @@ var installScript = textTemplate.Must(textTemplate.New("install").Funcs(textTemp
 set -e
 {{- range unix .}}
 if [ "$(uname -s)" = {{if eq .System "freebsd"}}FreeBSD{{else if eq .System "dragonfly"}}DragonFly{{else if eq .System "netbsd"}}NetBSD{{else if eq .System "openbsd"}}OpenBSD{{else}}SunOS{{end}} ]; then
+    [ "$(id -u)" = 0 ] || { echo "Run this as root." >&2; exit 1; }
+{{- range .Commands}}
+    {{.}}
+{{- end}}
+    echo "{{$.App.DisplayName}} is installed. To update it later: {{.Update}}"
+    exit 0
+fi
+{{- end}}
+{{- range linux .}}
+if grep -qs '^ID="\{0,1\}{{.System}}' /etc/os-release; then
     [ "$(id -u)" = 0 ] || { echo "Run this as root." >&2; exit 1; }
 {{- range .Commands}}
     {{.}}
@@ -482,6 +589,15 @@ if command -v dnf > /dev/null; then
 fi
 if command -v zypper > /dev/null; then
 {{- range zypper .}}
+    {{.}}
+{{- end}}
+    echo "{{.App.DisplayName}} is installed."
+    exit 0
+fi
+{{- end}}
+{{- if .Pacman}}
+if command -v pacman > /dev/null; then
+{{- range pacman .}}
     {{.}}
 {{- end}}
     echo "{{.App.DisplayName}} is installed."

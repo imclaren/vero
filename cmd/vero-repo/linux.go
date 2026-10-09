@@ -28,7 +28,7 @@ var linuxArches = []struct {
 	{"amd64", map[string]string{"deb": "amd64", "rpm": "x86_64", "arch": "x86_64", "flatpak": "x86_64", "alpine": "x86_64", "void": "x86_64"}, false},
 	{"arm64", map[string]string{"deb": "arm64", "rpm": "aarch64", "arch": "aarch64", "flatpak": "aarch64", "alpine": "aarch64", "void": "aarch64"}, false},
 	{"riscv64", map[string]string{"deb": "riscv64", "rpm": "riscv64", "arch": "riscv64", "alpine": "riscv64"}, true},
-	{"ppc64le", map[string]string{"deb": "ppc64el", "rpm": "ppc64le", "alpine": "ppc64le", "void": "ppc64le"}, true},
+	{"ppc64le", map[string]string{"deb": "ppc64el", "rpm": "ppc64le", "alpine": "ppc64le"}, true},
 	// 32-bit ARM as Raspberry Pi OS and its like have it: ARMv7, with
 	// hardware floating point.
 	{"arm", map[string]string{"deb": "armhf", "arch": "armv7h", "alpine": "armv7", "void": "armv7l"}, true},
@@ -296,6 +296,12 @@ func (g *GTK) sectionArches() map[string][]string {
 	}
 	if g.OpenBSD != nil {
 		m["openbsd"] = g.OpenBSD.Arches
+	}
+	if g.Alpine != nil {
+		m["alpine"] = g.Alpine.Arches
+	}
+	if g.Void != nil {
+		m["void"] = g.Void.Arches
 	}
 	return m
 }

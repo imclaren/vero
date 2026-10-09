@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -19,7 +20,7 @@ func packageCommand(args []string) error {
 	fset := flag.NewFlagSet("package", flag.ExitOnError)
 	appPath := fset.String("app", "vero-app.toml", "the app's vero-app.toml")
 	version := fset.String("version", "", "the version to build; the file's when not given")
-	targets := fset.String("targets", "", "comma separated: deb, rpm, flatpak, macos, windows, msix, web, android, ios, wasi, plan9, freebsd, dragonfly, netbsd, illumos, openbsd; linux for deb and rpm, bsd for the BSDs and illumos (default: all the app has)")
+	targets := fset.String("targets", "", "comma separated: deb, rpm, pacman, alpine, void, flatpak, macos, windows, msix, web, android, ios, wasi, plan9, freebsd, dragonfly, netbsd, illumos, openbsd; linux for all of those but flatpak, bsd for the BSDs and illumos (default: all the app has)")
 	out := fset.String("out", "dist/packages", "where the installers go")
 	ldflags := fset.String("ldflags", "", "more of the worker's build flags: what your app builds into it")
 	vero := fset.String("vero", "", "vero's folder (default: found from this program's source)")
@@ -65,14 +66,21 @@ func packageCommand(args []string) error {
 			return false
 		}
 		switch kind {
-		case "deb", "rpm":
+		case "deb", "rpm", "pacman":
 			return all || want["linux"] || want[kind]
 		case "flatpak":
 			return want["flatpak"] || a.GTK.Flatpak.Build && (all || want["linux"])
+		case "alpine":
+			return a.GTK.Alpine != nil && (all || want["linux"] || want[kind])
+		case "void":
+			return a.GTK.Void != nil && (all || want["linux"] || want[kind])
 		}
 		return a.GTK.enabled(kind) && (all || want["bsd"] || want[kind]) || want[kind]
 	}
 	for t := range want {
+		if a.GTK != nil && (t == "alpine" && a.GTK.Alpine == nil || t == "void" && a.GTK.Void == nil) {
+			return fmt.Errorf("--targets %s: vero-app.toml has no [gtk.%s], which says what the app needs there", t, t)
+		}
 		if s := system(t); s != nil && a.GTK != nil && !a.GTK.enabled(t) {
 			return fmt.Errorf("--targets %s: vero-app.toml has no [gtk.%s], which says what the app needs there", t, t)
 		}
@@ -122,6 +130,32 @@ func packageCommand(args []string) error {
 			return err
 		}
 		if err := packageRPM(a, w, outDir); err != nil {
+			return err
+		}
+		did = true
+	}
+	if gtk("pacman") {
+		w, err := needWorkers("linux", a.linuxGoarches("arch")...)
+		if err != nil {
+			return err
+		}
+		if err := packagePacman(a, w, outDir); err != nil {
+			return err
+		}
+		did = true
+	}
+	for _, l := range []struct {
+		kind string
+		make func(*App, map[string]string, string) error
+	}{{"alpine", packageAlpine}, {"void", packageVoid}} {
+		if !gtk(l.kind) {
+			continue
+		}
+		w, err := needWorkers("linux", a.linuxGoarches(l.kind)...)
+		if err != nil {
+			return err
+		}
+		if err := l.make(a, w, outDir); err != nil {
 			return err
 		}
 		did = true
@@ -222,7 +256,36 @@ func packageWindows(a *App, vero, root, worker, out, ldflags string) error {
 	if ldflags != "" {
 		args = append(args, "--ldflags", ldflags)
 	}
+	arches, err := a.WPF.arches()
+	if err != nil {
+		return err
+	}
+	args = append(args, "--arches", strings.Join(arches, " "))
 	return run(root, filepath.Join(vero, "scripts", "package-windows.sh"), args)
+}
+
+// windowsArches are the Windows installers vero can make, as Windows
+// names their architectures.
+var windowsArches = []string{"x64", "arm64", "x86"}
+
+// arches are the Windows installers to make: [wpf]'s arches, or x64 and
+// arm64.
+func (w *WPF) arches() ([]string, error) {
+	if len(w.Arches) == 0 {
+		return []string{"x64", "arm64"}, nil
+	}
+	var out []string
+	for _, a := range w.Arches {
+		name := strings.ToLower(a)
+		if alias, ok := map[string]string{"amd64": "x64", "x86_64": "x64", "386": "x86", "i386": "x86", "i686": "x86", "aarch64": "arm64"}[name]; ok {
+			name = alias
+		}
+		if !slices.Contains(windowsArches, name) {
+			return nil, fmt.Errorf("[wpf] arches: %s isn't one vero makes an installer for: x64, arm64 or x86", a)
+		}
+		out = append(out, name)
+	}
+	return out, nil
 }
 
 func run(dir, script string, args []string) error {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -69,5 +70,14 @@ func TestKeys(t *testing.T) {
 	}
 	if k := Keys("linux", "amd64"); k[0] != "linux-amd64" {
 		t.Errorf("linux: %v", k)
+	}
+	if k := Keys("windows", "386"); k[0] != "windows-x86" {
+		t.Errorf("32-bit windows: %v", k)
+	}
+	if k := strings.Join(Keys("linux", "arm"), " "); k != "linux-armhf arch-armv7h alpine-armv7 void-armv7l" {
+		t.Errorf("32-bit ARM: %v", k)
+	}
+	if k := strings.Join(Keys("linux", "ppc64le"), " "); k != "linux-ppc64el rpm-ppc64le alpine-ppc64le" {
+		t.Errorf("POWER: %v", k)
 	}
 }

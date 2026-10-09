@@ -169,7 +169,7 @@ func credentialsCommand(args []string) error {
 			fmt.Printf("      %s\n", it.todo)
 		}
 	}
-	fmt.Println("\nDebian, Ubuntu, Fedora, openSUSE, FreeBSD, DragonFly, NetBSD, OpenBSD, illumos, the browser, WASI and Plan 9 need nothing: the site is all there is.")
+	fmt.Println("\nDebian, Ubuntu, Chromebooks, Fedora, openSUSE, Arch, Alpine, Void, FreeBSD, DragonFly, NetBSD, OpenBSD, illumos, the browser, WASI and Plan 9 need nothing: the site is all there is.")
 	fmt.Println("Settings exported in your shell are read by the next vero-repo release.")
 	return nil
 }

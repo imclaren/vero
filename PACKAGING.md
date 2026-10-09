@@ -60,9 +60,9 @@ the publisher - and writes them into `vero-app.toml`. (`--summary`,
 **4. Release.** One command: it makes the signing key the first time
 (which signs this and every later release, so that people's systems trust
 your updates: back the folder up), builds every installer your Mac has
-the tools for - here the Debian packages, the rpms, the Mac disk image and
-the Windows installers - and builds the install site into `dist/site`,
-checked.
+the tools for - here the Debian packages, the rpms, the Arch packages, the
+Mac disk image and the Windows installers - and builds the install site
+into `dist/site`, checked.
 
 ```bash
 vero release
@@ -159,9 +159,9 @@ the build sets.
 
 Each system names its packages differently, so `vero-app.toml` says what
 your app needs from each, in its own section: `[gtk.deb]`, `[gtk.rpm]`,
-`[gtk.arch]`, `[gtk.freebsd]` and so on. Leave out the sections of the
-systems you don't want; a system is packaged for only when its section is
-there. `[needs]` says what the app asks of the system, such as the
+`[gtk.arch]`, `[gtk.alpine]`, `[gtk.void]`, `[gtk.freebsd]` and so on.
+Leave out the sections of the systems you don't want; a system is
+packaged for only when its section is there. `[needs]` says what the app asks of the system, such as the
 network.
 
 **2. Release.**
@@ -201,10 +201,11 @@ vero-site -dir /srv/myapp -domain downloads.example.com
 ```
 
 **4. Release an update.** Change the app and run `vero release` again.
-People get it with their usual updates: apt, dnf, zypper, pkg, pkgin and
-Flatpak find it by themselves, a Mac app with Sparkle reads the appcast,
-and OpenBSD's `pkg_add -u` does with the folder the page says to give it.
-On Arch, they build the recipe again. Your app can read `latest.json`
+People get it with their usual updates: apt (on Debian, Ubuntu and
+Chromebooks, where Linux is turned on in Settings → Developers), dnf,
+zypper, pacman, apk, xbps, pkg, pkgin and Flatpak find it by themselves, a
+Mac app with Sparkle reads the appcast, and OpenBSD's `pkg_add -u` does
+with the folder the page says to give it. Your app can read `latest.json`
 from the site to tell Windows and Android users that a new version is
 out.
 

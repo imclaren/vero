@@ -137,8 +137,8 @@ func (s *server) download(w http.ResponseWriter, r *http.Request) {
 
 // systemName is the name vero-repo uses for a system, from the names
 // people link with: mac and osx for macos, win for windows, deb, debian
-// and ubuntu for linux's .deb, fedora for rpm, pkg for the Mac's installer
-// package.
+// and ubuntu (and chromebook) for linux's .deb, fedora for rpm, archlinux
+// for arch, pkg for the Mac's installer package.
 func systemName(s string) string {
 	s = strings.ToLower(strings.TrimSpace(s))
 	if n, ok := map[string]string{
@@ -146,7 +146,8 @@ func systemName(s string) string {
 		"pkg": "macos-pkg", "mac-pkg": "macos-pkg",
 		"win": "windows", "win32": "windows", "win64": "windows",
 		"deb": "linux", "debian": "linux", "ubuntu": "linux",
-		"fedora": "rpm", "opensuse": "rpm", "suse": "rpm",
+		"chromebook": "linux", "chromeos": "linux",
+		"fedora": "rpm", "opensuse": "rpm", "suse": "rpm", "archlinux": "arch",
 	}[s]; ok {
 		return n
 	}
@@ -158,7 +159,8 @@ func systemName(s string) string {
 // still gets an installer.
 func keys(system, arch string) []string {
 	arches := map[string][]string{
-		"windows": {"x64", "arm64"}, "linux": {"amd64", "arm64"}, "rpm": {"x86_64", "aarch64"},
+		"windows": {"x64", "arm64", "x86"}, "linux": {"amd64", "arm64"}, "rpm": {"x86_64", "aarch64"},
+		"arch": {"x86_64", "aarch64"}, "alpine": {"x86_64", "aarch64"}, "void": {"x86_64", "aarch64"},
 		"flatpak": {"x86_64", "aarch64"}, "freebsd": {"amd64", "aarch64"}, "macos": {"universal", ""},
 		"macos-pkg": {""},
 	}[system]

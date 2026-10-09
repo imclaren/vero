@@ -60,7 +60,7 @@ func writeWinget(site, url string, a *App, windows map[string]Download) error {
 	q := func(s string) string { return fmt.Sprintf("%q", s) }
 
 	var installers strings.Builder
-	for _, arch := range []string{"x64", "arm64"} {
+	for _, arch := range windowsArches {
 		d, ok := windows[arch]
 		if !ok || d.Version != version {
 			continue

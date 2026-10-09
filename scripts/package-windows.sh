@@ -1,6 +1,6 @@
 #!/bin/sh
 # Packages a vero app with a WPF front end as Windows installers, x64 and
-# ARM64, from a Mac: the worker cross-compiled (build-all.sh), the app
+# ARM64, and x86 if asked, from a Mac: the worker cross-compiled (build-all.sh), the app
 # published self-contained (no .NET to install), and NSIS's makensis -
 # which runs on the Mac - making an installer of each.
 #
@@ -9,9 +9,12 @@
 #   path/to/vero/scripts/package-windows.sh --name myapp --version 1.2.3 \
 #       --app windows --exe myapp.exe --worker ./cmd/worker --worker-name myapp-worker.exe \
 #       --icon icon.png --publisher "Your Name or Company" [--url https://example.com] \
-#       [--id myapp] [--startup "Open myapp when I sign in"] [--webview2] [--out dist/packages]
+#       [--id myapp] [--startup "Open myapp when I sign in"] [--webview2] [--out dist/packages] \
+#       [--arches "x64 arm64 x86"]
 #
 #   --app DIR      the WPF project's folder; dotnet publish builds it
+#   --arches LIST  the installers to make: x64 and arm64 unless it says;
+#                  x86 is for 32-bit Windows
 #   --startup TEXT offers, ticked, to open the app at sign-in, as TEXT
 #   --webview2     for an app that shows web pages with Microsoft Edge
 #                  WebView2: the installer installs it where it's missing.
@@ -32,14 +35,14 @@ VERO=$(cd "$(dirname "$0")/.." && pwd)
 ROOT=$PWD
 [ -f "$ROOT/go.mod" ] || { echo "run this from beside your app's go.mod" >&2; exit 2; }
 
-NAME="" VERSION="" APP="" EXE="" WORKER="" WORKER_NAME="" ICON="" PUBLISHER="" URL="" ID="" STARTUP="" WEBVIEW2=""
+ARCHES="x64 arm64" NAME="" VERSION="" APP="" EXE="" WORKER="" WORKER_NAME="" ICON="" PUBLISHER="" URL="" ID="" STARTUP="" WEBVIEW2=""
 OUT="$ROOT/dist/packages"
 while [ $# -gt 0 ]; do
     case $1 in
         --name) NAME=$2 ;; --version) VERSION=$2 ;; --app) APP=$2 ;; --exe) EXE=$2 ;;
         --worker) WORKER=$2 ;; --worker-name) WORKER_NAME=$2 ;; --icon) ICON=$2 ;;
         --publisher) PUBLISHER=$2 ;; --url) URL=$2 ;; --id) ID=$2 ;; --startup) STARTUP=$2 ;; --out) OUT=$2 ;;
-        --ldflags) LDEXTRA=$2 ;;
+        --ldflags) LDEXTRA=$2 ;; --arches) ARCHES=$2 ;;
         --webview2) WEBVIEW2=yes; shift; continue ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
@@ -61,7 +64,11 @@ trap 'rm -rf "$STAGE"' EXIT
 
 echo "building the worker"
 DIST="$ROOT/dist"
-WORKER=$WORKER CSHIM=none WPF_APP=none TARGETS="windows/amd64 windows/arm64" \
+# goarch ARCH: Go's name for one of Windows'.
+goarch() { case $1 in x64) echo amd64 ;; x86) echo 386 ;; *) echo "$1" ;; esac; }
+TARGETS=""
+for arch in $ARCHES; do TARGETS="$TARGETS windows/$(goarch "$arch")"; done
+WORKER=$WORKER CSHIM=none WPF_APP=none TARGETS="$TARGETS" \
     LDFLAGS="-s -w -X main.version=$VERSION ${LDEXTRA:-}" sh "$VERO/scripts/build-all.sh" >/dev/null
 python3 "$VERO/scripts/lib/ico.py" "$ICON" "$STAGE/app.ico"
 if [ -n "$WEBVIEW2" ]; then
@@ -71,8 +78,8 @@ if [ -n "$WEBVIEW2" ]; then
     curl -fsSL -o "$STAGE/MicrosoftEdgeWebview2Setup.exe" "https://go.microsoft.com/fwlink/p/?LinkId=2124703"
 fi
 
-for arch in x64 arm64; do
-    goarch=$([ $arch = x64 ] && echo amd64 || echo arm64)
+for arch in $ARCHES; do
+    goarch=$(goarch "$arch")
     echo "publishing for win-$arch"
     "$DOTNET" publish "$APP" -c Release -r "win-$arch" --self-contained -p:EnableWindowsTargeting=true \
         -p:Version="$VERSION" -o "$STAGE/$arch" -v quiet >/dev/null

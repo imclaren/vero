@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -44,6 +45,14 @@ func packageFlatpak(a *App, workers map[string]string, out string, t *tools) err
 	script := ""
 	var built []string
 	for _, arch := range a.linuxArches("flatpak") {
+		if p := a.GTK.Flatpak.Prepare; p != "" {
+			cmd := exec.Command("sh", "-c", p)
+			cmd.Dir, cmd.Stdout, cmd.Stderr = a.dir, os.Stdout, os.Stderr
+			cmd.Env = append(os.Environ(), "ARCH="+arch.name, "GOARCH="+arch.goarch)
+			if err := cmd.Run(); err != nil {
+				return fmt.Errorf("[gtk.flatpak] prepare, for %s: %w", arch.name, err)
+			}
+		}
 		build := filepath.Join(stage, "build-"+arch.name)
 		if err := flatpakBuildFolder(a, workers[arch.goarch], arch.name, build); err != nil {
 			return err
@@ -90,6 +99,24 @@ func flatpakBuildFolder(a *App, worker, arch, dir string) error {
 			if err := writeTree(filepath.Join(dir, "export", rel), f.data, 0o644); err != nil {
 				return err
 			}
+		}
+	}
+	for _, r := range a.GTK.Flatpak.Resources {
+		src := a.Path(strings.ReplaceAll(r, "{arch}", arch))
+		data, err := os.ReadFile(src)
+		if err != nil {
+			return fmt.Errorf("[gtk.flatpak] resources: %w", err)
+		}
+		info, err := os.Stat(src)
+		if err != nil {
+			return err
+		}
+		mode := os.FileMode(0o644)
+		if info.Mode()&0o111 != 0 {
+			mode = 0o755
+		}
+		if err := writeTree(filepath.Join(dir, "files", "lib", a.Name, filepath.Base(src)), data, mode); err != nil {
+			return err
 		}
 	}
 	// What software centres show of the app before it's installed: the

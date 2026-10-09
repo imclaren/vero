@@ -85,12 +85,26 @@ func (l Latest) Check(current string, keys ...string) (Result, error) {
 func Keys(goos, goarch string) []string {
 	switch goos {
 	case "windows":
-		return []string{"windows-" + map[string]string{"amd64": "x64", "arm64": "arm64"}[goarch]}
+		return []string{"windows-" + map[string]string{"amd64": "x64", "arm64": "arm64", "386": "x86"}[goarch]}
 	case "darwin":
 		return []string{"macos-universal", "macos"}
 	case "linux":
-		rpm := map[string]string{"amd64": "x86_64", "arm64": "aarch64"}[goarch]
-		return []string{"linux-" + goarch, "rpm-" + rpm, "flatpak-" + rpm}
+		// Each kind of package names the architecture its own way; a
+		// kind without a name has no package for it.
+		names := map[string]map[string]string{
+			"amd64":   {"linux": "amd64", "rpm": "x86_64", "flatpak": "x86_64", "arch": "x86_64", "alpine": "x86_64", "void": "x86_64"},
+			"arm64":   {"linux": "arm64", "rpm": "aarch64", "flatpak": "aarch64", "arch": "aarch64", "alpine": "aarch64", "void": "aarch64"},
+			"riscv64": {"linux": "riscv64", "rpm": "riscv64", "arch": "riscv64", "alpine": "riscv64"},
+			"ppc64le": {"linux": "ppc64el", "rpm": "ppc64le", "alpine": "ppc64le"},
+			"arm":     {"linux": "armhf", "arch": "armv7h", "alpine": "armv7", "void": "armv7l"},
+		}[goarch]
+		var keys []string
+		for _, kind := range []string{"linux", "rpm", "flatpak", "arch", "alpine", "void"} {
+			if names[kind] != "" {
+				keys = append(keys, kind+"-"+names[kind])
+			}
+		}
+		return keys
 	default:
 		return []string{goos + "-" + goarch, goos + "-" + map[string]string{"amd64": "x86_64", "arm64": "aarch64"}[goarch]}
 	}

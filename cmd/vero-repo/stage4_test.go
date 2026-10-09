@@ -228,7 +228,8 @@ func TestWinget(t *testing.T) {
 	site := t.TempDir()
 	os.MkdirAll(filepath.Join(site, "windows"), 0o755)
 	os.WriteFile(filepath.Join(site, "windows", "vero-example-1.2.3-x64-setup.exe"), []byte("exe"), 0o644)
-	windows := map[string]Download{"x64": {"1.2.3", "windows/vero-example-1.2.3-x64-setup.exe"}}
+	os.WriteFile(filepath.Join(site, "windows", "vero-example-1.2.3-x86-setup.exe"), []byte("exe"), 0o644)
+	windows := map[string]Download{"x64": {"1.2.3", "windows/vero-example-1.2.3-x64-setup.exe"}, "x86": {"1.2.3", "windows/vero-example-1.2.3-x86-setup.exe"}}
 	if err := writeWinget(site, "https://example.com/vero", a, windows); err != nil {
 		t.Fatal(err)
 	}
@@ -241,7 +242,7 @@ func TestWinget(t *testing.T) {
 		t.Fatal(err)
 	}
 	sum, _ := fileSHA256(filepath.Join(site, "windows", "vero-example-1.2.3-x64-setup.exe"))
-	for _, want := range []string{"InstallerType: nullsoft", "Silent: /S", "- Architecture: x64",
+	for _, want := range []string{"InstallerType: nullsoft", "Silent: /S", "- Architecture: x64", "- Architecture: x86",
 		"InstallerUrl: \"https://example.com/vero/windows/vero-example-1.2.3-x64-setup.exe\"", strings.ToUpper(sum), "ManifestVersion: " + wingetSchema} {
 		if !strings.Contains(string(installer), want) {
 			t.Errorf("no %q in\n%s", want, installer)

@@ -17,15 +17,17 @@ run them.
 
 | System | What your users get | What you need on your Mac |
 |---|---|---|
-| Debian, Ubuntu | an apt repository: install once, then their usual updates | Go |
+| Debian, Ubuntu and Chromebooks (Linux on ChromeOS, turned on in Settings → Developers) | an apt repository: install once, then their usual updates | Go |
 | Fedora, openSUSE | an rpm repository, the same | Go |
-| Arch Linux | a recipe for the AUR | Go |
+| Arch Linux | a pacman repository, the same, and a recipe for the AUR | Go |
+| Alpine Linux | an apk repository, if you ask for one | Go |
+| Void Linux | an xbps repository, if you ask for one | Go |
 | Any Linux, with Flatpak | a Flatpak repository, if you ask for one | Docker and colima |
 | FreeBSD, DragonFly | a pkg repository | Go |
 | NetBSD, illumos | a pkgsrc repository, for pkgin | Go |
 | OpenBSD | signed packages for pkg_add | Go |
 | macOS | a disk image, a Sparkle appcast for updates, and a Homebrew cask | Xcode; a Developer ID and an Apple account to notarise |
-| Windows | an installer, and a winget manifest; an MSIX for the Microsoft Store if you ask | makensis and dotnet |
+| Windows | an installer, and a winget manifest; one for 32-bit Windows, and an MSIX for the Microsoft Store, if you ask | makensis and dotnet |
 | Android | a signed .apk, and an .aab for Google Play if your build makes one | the Android SDK and a JDK |
 | iPhone and iPad | an .ipa, for the App Store or TestFlight | Xcode and an Apple account |
 | In a browser | the page, served from the site | Go |
@@ -120,7 +122,9 @@ there's no build number, whatever the Xcode project says.
 
 `[wpf]` names the WPF project and the program it builds. vero publishes it
 self-contained, so people need no .NET, and makes an installer for x64 and
-one for ARM64, with `makensis`, which runs on a Mac. The installers aren't
+one for ARM64, with `makensis`, which runs on a Mac. `arches = ["x64",
+"arm64", "x86"]` adds one for 32-bit Windows, with the worker built for
+386; winget lists each. The installers aren't
 signed, because signing needs your own code-signing certificate; until
 you sign them, with `signtool` on Windows or `osslsigncode` on a Mac,
 Windows SmartScreen warns people who download them, and the page tells
@@ -173,12 +177,33 @@ terminal front end and the worker it drives, which is built once as
 people run it with `wasmtime`. `[plan9]` names the Plan 9 front end,
 bundled with the worker and an `rc` script that installs them.
 
-## The AUR, if you like
+## Arch Linux, Alpine and Void
 
-Arch users can build the recipe from your site, as its page says. To list
-your app on the Arch User Repository, so that AUR helpers find it, make an
-account at [aur.archlinux.org](https://aur.archlinux.org) and add your SSH
-key to it. Then publish `dist/site/aur` there, as `NAME-bin`:
+Arch users add your pacman repository, as the site's page says: pacman-key
+trusts your key, `/etc/pacman.conf` gains a section named after your app,
+whose `Server` is `.../arch/$arch`, and `pacman -Syu` keeps the app up to
+date. pacman checks the signature of every package and of the index. The
+packages are made by default, with the `.deb` and the `.rpm`; `[gtk.arch]`
+says what they depend on.
+
+`[gtk.alpine]` and `[gtk.void]` make packages for Alpine and Void, with
+what each depends on, by its own names. apk and xbps check every package
+with the RSA half of your signing key, which the site publishes for them,
+and the page's commands put where each looks for the keys it trusts:
+`/etc/apk/keys` for apk, and `/var/db/xbps/keys` for xbps, named by its
+fingerprint. The same packages serve Void's glibc and musl systems, since
+the worker needs neither.
+
+A private site can put a password in the address any of them fetches
+from, as `https://NAME:PASSWORD@example.com/myapp/arch/$arch` in
+`pacman.conf`, or the same in `/etc/apk/repositories` or
+`/etc/xbps.d/NAME.conf`; so can a Flatpak remote's URL.
+
+**The AUR, if you like.** Arch users can also build the recipe in
+`dist/site/aur`, which installs the newest `.deb`. To list your app on the
+Arch User Repository, so that AUR helpers find it, make an account at
+[aur.archlinux.org](https://aur.archlinux.org) and add your SSH key to it.
+Then publish `dist/site/aur` there, as `NAME-bin`:
 
 ```bash
 git clone ssh://aur@aur.archlinux.org/myapp-bin.git
@@ -196,9 +221,12 @@ dist/site/
   install.sh     installs in one command, on every Unix the site covers
   key.asc        your public key
   latest.json    the newest version, and where each download is
-  apt/           the Debian and Ubuntu repository, signed
+  apt/           the Debian, Ubuntu and Chromebook repository, signed
   rpm/           the Fedora and openSUSE repository, signed, and the .repo file that adds it
+  arch/          the Arch Linux repository for each processor, signed
   aur/           the Arch recipe, PKGBUILD and .SRCINFO
+  alpine/        the Alpine repository for each processor, signed, and the key that checks it
+  void/          the Void repository, signed, with the key in each processor's repodata
   freebsd/       the FreeBSD repository for each processor, signed; its .conf; key.pem
   dragonfly/     the same, for DragonFly
   netbsd/        the NetBSD pkgsrc repository for each processor
@@ -215,6 +243,13 @@ dist/site/
   wasi/          the WASI bundles, one for each desktop
   plan9/         the Plan 9 bundles
 ```
+
+A Flatpak runs on GNOME's runtime, which has GTK, Python and PyGObject but
+not every program an app might run. `resources` in `[gtk.flatpak]` puts
+more files beside the worker, such as the app's own ffmpeg: `{arch}` in a
+path is the architecture, so `"ffmpeg/{arch}/ffmpeg"` takes each
+architecture's own. `prepare` is a command run before each architecture's
+Flatpak is made, with `ARCH` and `GOARCH` set, which can fetch them.
 
 The Flatpak repository holds many small files, which your web host has to
 serve exactly as they are. `vero-repo check --app vero-app.toml --url URL
@@ -240,6 +275,9 @@ RISC-V to the usual two. Each package names them as its system does, and
 |---|---|---|---|---|---|
 | `[gtk.deb]` | amd64 | arm64 | riscv64 | ppc64el | armhf |
 | `[gtk.rpm]` | x86_64 | aarch64 | riscv64 | ppc64le | |
+| `[gtk.arch]` | x86_64 | aarch64 | riscv64 | | armv7h |
+| `[gtk.alpine]` | x86_64 | aarch64 | riscv64 | ppc64le | armv7 |
+| `[gtk.void]` | x86_64 | aarch64 | | | armv7l |
 | `[gtk.flatpak]` | x86_64 | aarch64 | | | |
 
 32-bit ARM is ARMv7 with hardware floating point, as Raspberry Pi OS and
@@ -274,7 +312,8 @@ vero-repo key --dir ~/vero-keys/myapp --name "Your Name or Company" --email you@
 This makes the folder you name with `--dir`. Without `--dir`, it's a
 folder named after you in `~/Library/Application Support/vero-repo` on a
 Mac, or `~/.config/vero-repo` on Linux. Its `private.asc` signs every
-release, so that people's systems can tell your updates are really yours;
+release, so that people's systems can tell your updates are really yours,
+its RSA half signing the FreeBSD, DragonFly, Alpine and Void packages too;
 `signify.sec` signs the OpenBSD packages; `sparkle.sec` signs Mac updates;
 and `android.keystore`, made the first time an Android app is built, signs
 it. Back the folder up, keep it out of your repository, and never publish
@@ -294,10 +333,10 @@ path/to/vero/scripts/package.sh --app vero-app.toml --version 1.2.3
 
 This builds them into `dist/packages`, each for both x86_64 and ARM64
 processors where the system has both. Use `--targets` to build only some
-of them: `deb`, `rpm`, `flatpak`, `freebsd`, `dragonfly`, `netbsd`,
-`illumos`, `openbsd`, `macos`, `windows`, `msix`, `android`, `ios`, `web`,
-`wasi`, `plan9`; or `linux` for the `.deb` and `.rpm`, and `bsd` for the
-BSDs and illumos. Use `--ldflags` to build more into your worker, such as
+of them: `deb`, `rpm`, `pacman`, `alpine`, `void`, `flatpak`, `freebsd`,
+`dragonfly`, `netbsd`, `illumos`, `openbsd`, `macos`, `windows`, `msix`,
+`android`, `ios`, `web`, `wasi`, `plan9`; or `linux` for all of Linux's
+but the Flatpak, and `bsd` for the BSDs and illumos. Use `--ldflags` to build more into your worker, such as
 API keys from a file outside your repository.
 
 **The site.**
@@ -330,6 +369,8 @@ scripts/test-repo.sh --image ubuntu:24.04
 scripts/test-repo.sh --image fedora:latest
 scripts/test-repo.sh --image opensuse/tumbleweed
 scripts/test-repo.sh --image archlinux
+scripts/test-repo.sh --image alpine
+scripts/test-repo.sh --image ghcr.io/void-linux/void-glibc
 scripts/test-repo.sh --flatpak
 scripts/test-repo.sh --vm freebsd         # also netbsd, openbsd, dragonfly, illumos
 scripts/test-repo.sh --mac                # the disk image, on this Mac, and the appcast after an update
