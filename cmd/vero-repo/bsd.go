@@ -53,19 +53,23 @@ type unixArch struct {
 	// abi is a pkg package's ABI, which may match many versions, and
 	// legacy the same as older pkg wrote it, which pkg still reads.
 	abi, legacy string
+	// extra is packaged only where the system's section names it.
+	extra bool
 }
 
 var unixSystems = []unixSystem{
 	{name: "freebsd", label: "FreeBSD", goos: "freebsd", prefix: "/usr/local", format: "pkg", arches: []unixArch{
-		{"amd64", "amd64", "FreeBSD:*:amd64", "freebsd:*:x86:64"}, {"arm64", "aarch64", "FreeBSD:*:aarch64", "freebsd:*:aarch64:64"}}},
+		{"amd64", "amd64", "FreeBSD:*:amd64", "freebsd:*:x86:64", false}, {"arm64", "aarch64", "FreeBSD:*:aarch64", "freebsd:*:aarch64:64", false},
+		{"386", "i386", "FreeBSD:*:i386", "freebsd:*:x86:32", true}, {"arm", "armv7", "FreeBSD:*:armv7", "freebsd:*:armv7:32:el:eabi:hardfp", true}}},
 	{name: "dragonfly", label: "DragonFly", goos: "dragonfly", prefix: "/usr/local", format: "pkg", arches: []unixArch{
-		{"amd64", "x86:64", "dragonfly:*:x86:64", "dragonfly:*:x86:64"}}},
+		{"amd64", "x86:64", "dragonfly:*:x86:64", "dragonfly:*:x86:64", false}}},
 	{name: "netbsd", label: "NetBSD", goos: "netbsd", prefix: "/usr/pkg", format: "pkgsrc", opsys: "NetBSD", osVersion: "10.0",
-		arches: []unixArch{{"amd64", "x86_64", "", ""}, {"arm64", "aarch64", "", ""}}},
+		arches: []unixArch{{"amd64", "x86_64", "", "", false}, {"arm64", "aarch64", "", "", false}, {"386", "i386", "", "", true}}},
 	{name: "illumos", label: "illumos", goos: "illumos", prefix: "/opt/local", format: "pkgsrc", opsys: "SunOS", osVersion: "5.11",
-		arches: []unixArch{{"amd64", "x86_64", "", ""}}},
+		arches: []unixArch{{"amd64", "x86_64", "", "", false}}},
 	{name: "openbsd", label: "OpenBSD", goos: "openbsd", prefix: "/usr/local", format: "openbsd",
-		arches: []unixArch{{"amd64", "amd64", "", ""}, {"arm64", "aarch64", "", ""}}},
+		arches: []unixArch{{"amd64", "amd64", "", "", false}, {"arm64", "aarch64", "", "", false},
+			{"386", "i386", "", "", true}, {"arm", "armv7", "", "", true}, {"riscv64", "riscv64", "", "", true}}},
 }
 
 // system is one of unixSystems, by name.

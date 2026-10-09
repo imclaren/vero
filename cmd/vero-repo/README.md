@@ -265,23 +265,43 @@ something the app needs on ARM. `vero-repo` refuses an architecture the
 system doesn't have. Narrowing them doesn't move a repository, so adding
 one back later needs nothing from the people who installed the app.
 
-On Linux, `arches` can also name RISC-V, POWER and 32-bit ARM, which are
-packaged only when a section names them; naming any architecture means
-naming all you want, so `arches = ["x86_64", "aarch64", "riscv64"]` adds
-RISC-V to the usual two. Each package names them as its system does, and
-`arches` takes any of those names:
+Other architectures are packaged only when a section names them, and
+naming any architecture means naming all you want, so `arches =
+["x86_64", "aarch64", "riscv64"]` adds RISC-V to the usual two. Each
+package names them as its system does, and `arches` takes any of those
+names, or Go's. On Linux:
 
-| Section | x86-64 | ARM64 | RISC-V | POWER | 32-bit ARM |
-|---|---|---|---|---|---|
-| `[gtk.deb]` | amd64 | arm64 | riscv64 | ppc64el | armhf |
-| `[gtk.rpm]` | x86_64 | aarch64 | riscv64 | ppc64le | |
-| `[gtk.arch]` | x86_64 | aarch64 | riscv64 | | armv7h |
-| `[gtk.alpine]` | x86_64 | aarch64 | riscv64 | ppc64le | armv7 |
-| `[gtk.void]` | x86_64 | aarch64 | | | armv7l |
-| `[gtk.flatpak]` | x86_64 | aarch64 | | | |
+| Architecture | `[gtk.deb]` | `[gtk.rpm]` | `[gtk.arch]` | `[gtk.alpine]` | `[gtk.void]` | `[gtk.flatpak]` |
+|---|---|---|---|---|---|---|
+| x86-64 | amd64 | x86_64 | x86_64 | x86_64 | x86_64 | x86_64 |
+| ARM64 | arm64 | aarch64 | aarch64 | aarch64 | aarch64 | aarch64 |
+| RISC-V | riscv64 | riscv64 | riscv64 | riscv64 | | |
+| POWER | ppc64el | ppc64le | | ppc64le | | |
+| 32-bit ARM | armhf | | armv7h | armv7 | armv7l | |
+| 32-bit x86 | i386 | i686 | i686 | x86 | i686 | |
+| LoongArch | loong64 | | loong64 | loongarch64 | | |
+| POWER, big-endian | ppc64 | | | | | |
+| IBM Z | s390x | s390x | | s390x | | |
+| MIPS64 | mips64el | | | | | |
+| MIPS | mipsel | | | | | |
+
+On the BSDs:
+
+| Architecture | `[gtk.freebsd]` | `[gtk.netbsd]` | `[gtk.openbsd]` |
+|---|---|---|---|
+| x86-64 | amd64 | x86_64 | amd64 |
+| ARM64 | aarch64 | aarch64 | aarch64 |
+| 32-bit x86 | i386 | i386 | i386 |
+| 32-bit ARM | armv7 | | armv7 |
+| RISC-V | | | riscv64 |
+
+DragonFly and illumos are x86-64 only.
 
 32-bit ARM is ARMv7 with hardware floating point, as Raspberry Pi OS and
-Debian's armhf have it; the worker is built with `GOARM=7`.
+Debian's armhf have it; the worker is built with `GOARM=7`. 32-bit x86
+needs a Pentium 4 or later, since the worker is built with `GO386=sse2`.
+Void has i686 packages only for glibc, so there is no i686-musl one. The
+MIPS packages are little-endian, as Debian 12's are.
 
 The illumos packages are signed, because pkgsrc there, as SmartOS sets it
 up, installs only signed packages: the page's commands add your key to its

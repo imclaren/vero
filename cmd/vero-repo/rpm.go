@@ -95,7 +95,7 @@ func splitList(s string) []string {
 
 // rpmFile is NAME-VERSION-RELEASE.ARCH.rpm, as packageRPM names them.
 func rpmFile(name string) *regexp.Regexp {
-	return regexp.MustCompile(`^` + regexp.QuoteMeta(name) + `-([^-]+)-([^-]+)\.(x86_64|aarch64|riscv64|ppc64le|noarch)\.rpm$`)
+	return regexp.MustCompile(`^` + regexp.QuoteMeta(name) + `-([^-]+)-([^-]+)\.(` + linuxArchNames("rpm") + `|noarch)\.rpm$`)
 }
 
 // buildRPM makes site/rpm a repository that dnf and zypper install and

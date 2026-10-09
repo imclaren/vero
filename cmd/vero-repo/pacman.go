@@ -31,7 +31,7 @@ func pacmanVersion(v string) string {
 // pacmanPackage is NAME-VERSION-1-ARCH.pkg.tar.zst, as packagePacman
 // names them.
 func pacmanPackage(name string) *regexp.Regexp {
-	return regexp.MustCompile(`^` + regexp.QuoteMeta(name) + `-([^-]+)-1-(x86_64|aarch64|riscv64|armv7h)\.pkg\.tar\.zst$`)
+	return regexp.MustCompile(`^` + regexp.QuoteMeta(name) + `-([^-]+)-1-(` + linuxArchNames("arch") + `)\.pkg\.tar\.zst$`)
 }
 
 // pacmanDepends is what an Arch package depends on: [gtk.arch]'s, or GTK

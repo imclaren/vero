@@ -462,8 +462,14 @@ func (c *checker) checkPkg(sys unixSystem) {
 		c.fail("%s/key.pem isn't an RSA public key", sys.name)
 		return
 	}
+	checked := 0
 	for _, arch := range sys.arches {
 		dir := filepath.ToSlash(filepathRel(c.site, pkgRepoDir(c.site, &sys, arch)))
+		// An architecture the app isn't packaged for has no folder.
+		if _, err := os.Stat(filepath.Join(c.site, dir)); err != nil && len(sys.arches) > 1 {
+			continue
+		}
+		checked++
 		archive, ok := c.file(dir + "/packagesite.pkg")
 		if !ok {
 			continue
@@ -503,6 +509,9 @@ func (c *checker) checkPkg(sys unixSystem) {
 				c.sum(dir+"/"+m.Path, data, m.PkgSize, m.Sum)
 			}
 		}
+	}
+	if checked == 0 {
+		c.fail("%s has no repository for any architecture", sys.name)
 	}
 	c.ok("the " + sys.label + " repository")
 }

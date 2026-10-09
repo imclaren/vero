@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -32,6 +33,28 @@ var linuxArches = []struct {
 	// 32-bit ARM as Raspberry Pi OS and its like have it: ARMv7, with
 	// hardware floating point.
 	{"arm", map[string]string{"deb": "armhf", "arch": "armv7h", "alpine": "armv7", "void": "armv7l"}, true},
+	// 32-bit Intel and AMD, from the Pentium 4 on, since Go's code needs
+	// SSE2: i686 to rpm, pacman and xbps, which have it as the oldest they
+	// run on.
+	{"386", map[string]string{"deb": "i386", "rpm": "i686", "arch": "i686", "alpine": "x86", "void": "i686"}, true},
+	{"loong64", map[string]string{"deb": "loong64", "arch": "loong64", "alpine": "loongarch64"}, true},
+	// POWER, big-endian, as Debian's ports have it.
+	{"ppc64", map[string]string{"deb": "ppc64"}, true},
+	{"s390x", map[string]string{"deb": "s390x", "rpm": "s390x", "alpine": "s390x"}, true},
+	{"mips64le", map[string]string{"deb": "mips64el"}, true},
+	{"mipsle", map[string]string{"deb": "mipsel"}, true},
+}
+
+// linuxArchNames are every name a kind of Linux package has for an
+// architecture, as a regular expression's alternatives.
+func linuxArchNames(section string) string {
+	var names []string
+	for _, a := range linuxArches {
+		if n := a.names[section]; n != "" {
+			names = append(names, regexp.QuoteMeta(n))
+		}
+	}
+	return strings.Join(names, "|")
 }
 
 // linuxArch is an architecture a kind of Linux package is made for: Go's
@@ -53,10 +76,7 @@ func buildWorker(a *App, root, worker, goos, goarch, ldflags, dir string) (strin
 	flags := strings.TrimSpace("-s -w -X main.version=" + a.Version + " " + ldflags)
 	cmd := exec.Command("go", "build", "-trimpath", "-ldflags", flags, "-o", out, worker)
 	cmd.Dir, cmd.Stdout, cmd.Stderr = root, os.Stdout, os.Stderr
-	cmd.Env = append(os.Environ(), "GOOS="+goos, "GOARCH="+goarch, "CGO_ENABLED=0")
-	if goarch == "arm" {
-		cmd.Env = append(cmd.Env, "GOARM=7")
-	}
+	cmd.Env = append(append(os.Environ(), "GOOS="+goos, "GOARCH="+goarch, "CGO_ENABLED=0"), goarchEnv(goarch)...)
 	if goos == "darwin" && a.Worker.CGO {
 		arch := map[string]string{"amd64": "x86_64"}[goarch]
 		if arch == "" {
@@ -72,6 +92,19 @@ func buildWorker(a *App, root, worker, goos, goarch, ldflags, dir string) (strin
 		return "", fmt.Errorf("building the worker for %s/%s: %w", goos, goarch, err)
 	}
 	return out, nil
+}
+
+// goarchEnv is what Go is told, besides GOARCH, to build for goarch as
+// the systems packaged for have it: ARMv7 with hardware floating point,
+// and the Pentium 4's SSE2.
+func goarchEnv(goarch string) []string {
+	switch goarch {
+	case "arm":
+		return []string{"GOARM=7"}
+	case "386":
+		return []string{"GO386=sse2"}
+	}
+	return nil
 }
 
 // linuxTree is the app as a Linux package installs it under prefix (/usr,
@@ -218,8 +251,20 @@ func goarchOf(name string) string {
 		return "riscv64"
 	case "ppc64le", "ppc64el", "powerpc64le":
 		return "ppc64le"
-	case "arm", "armhf", "armv7", "armv7h", "armv7l", "armv7hl":
+	case "arm", "armhf", "armv7", "armv7h", "armv7l", "armv7hl", "earmv7hf":
 		return "arm"
+	case "386", "i386", "i486", "i586", "i686", "x86", "pentium4":
+		return "386"
+	case "loong64", "loongarch64":
+		return "loong64"
+	case "ppc64", "powerpc64":
+		return "ppc64"
+	case "s390x":
+		return "s390x"
+	case "mips64le", "mips64el":
+		return "mips64le"
+	case "mipsle", "mipsel":
+		return "mipsle"
 	}
 	return ""
 }
@@ -331,7 +376,8 @@ func (g *GTK) checkArches() error {
 }
 
 // archesFor are the architectures the app is packaged for on sys: the
-// system's, less any its [gtk.NAME] section leaves out. Where sys's
+// system's, less any its [gtk.NAME] section leaves out, and less its extra
+// ones unless the section names them. Where sys's
 // repositories go still follows sys.arches, so that narrowing them doesn't
 // move a repository.
 func (a *App) archesFor(sys *unixSystem) []unixArch {
@@ -341,7 +387,7 @@ func (a *App) archesFor(sys *unixSystem) []unixArch {
 	}
 	var out []unixArch
 	for _, arch := range sys.arches {
-		if allows(arches, arch.goarch) {
+		if (len(arches) == 0 && !arch.extra) || (len(arches) > 0 && allows(arches, arch.goarch)) {
 			out = append(out, arch)
 		}
 	}

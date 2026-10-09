@@ -25,8 +25,8 @@ import (
 // section is there.
 type LinuxPkg struct {
 	Depends string `toml:"depends"`
-	// Arches narrows the architectures packaged, or adds RISC-V, POWER or
-	// 32-bit ARM; x86-64 and ARM64 when it's empty.
+	// Arches narrows the architectures packaged, or adds others, such as
+	// RISC-V or 32-bit Intel; x86-64 and ARM64 when it's empty.
 	Arches []string `toml:"arches"`
 }
 
@@ -47,7 +47,7 @@ func alpineVersion(v string) (string, error) {
 // alpinePackage is NAME-VERSION-r0-ARCH.apk, as packageAlpine names
 // them, unsigned until vero-repo build signs them.
 func alpinePackage(name string) *regexp.Regexp {
-	return regexp.MustCompile(`^` + regexp.QuoteMeta(name) + `-([^-]+-r0)-(x86_64|aarch64|riscv64|ppc64le|armv7)\.apk$`)
+	return regexp.MustCompile(`^` + regexp.QuoteMeta(name) + `-([^-]+-r0)-(` + linuxArchNames("alpine") + `)\.apk$`)
 }
 
 // alpineDepends is what an Alpine package depends on: [gtk.alpine]'s, or

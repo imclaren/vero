@@ -100,9 +100,10 @@ type GTK struct {
 type BSDPkg struct {
 	Deps   map[string]string `toml:"deps"`
 	Python string            `toml:"python"`
-	// Arches narrows the architectures packaged, such as ["x86_64"] where
-	// the system's own packages lack something on ARM; all of them when
-	// it's empty.
+	// Arches are the architectures packaged: x86-64 and ARM64, where the
+	// system has them, when it's empty. Naming some narrows them, such as
+	// ["x86_64"] where the system's own packages lack something on ARM, or
+	// adds others, such as 32-bit Intel, which are packaged only when named.
 	Arches []string `toml:"arches"`
 }
 
@@ -111,9 +112,10 @@ type BSDPkg struct {
 type Pkgsrc struct {
 	Depends []string `toml:"depends"`
 	Python  string   `toml:"python"`
-	// Arches narrows the architectures packaged, such as ["x86_64"] where
-	// the system's own packages lack something on ARM; all of them when
-	// it's empty.
+	// Arches are the architectures packaged: x86-64 and ARM64, where the
+	// system has them, when it's empty. Naming some narrows them, such as
+	// ["x86_64"] where the system's own packages lack something on ARM, or
+	// adds others, such as 32-bit Intel, which are packaged only when named.
 	Arches []string `toml:"arches"`
 }
 
@@ -122,9 +124,10 @@ type Pkgsrc struct {
 type OpenBSD struct {
 	Depends []string `toml:"depends"`
 	Python  string   `toml:"python"`
-	// Arches narrows the architectures packaged, such as ["x86_64"] where
-	// the system's own packages lack something on ARM; all of them when
-	// it's empty.
+	// Arches are the architectures packaged: x86-64 and ARM64, where the
+	// system has them, when it's empty. Naming some narrows them, such as
+	// ["x86_64"] where the system's own packages lack something on ARM, or
+	// adds others, such as 32-bit Intel, which are packaged only when named.
 	Arches []string `toml:"arches"`
 }
 
@@ -145,18 +148,20 @@ func (g *GTK) python(system string) string {
 type RPM struct {
 	Requires   string `toml:"requires"`
 	Recommends string `toml:"recommends"`
-	// Arches narrows the architectures packaged, such as ["x86_64"] where
-	// the system's own packages lack something on ARM; all of them when
-	// it's empty.
+	// Arches are the architectures packaged: x86-64 and ARM64, where the
+	// system has them, when it's empty. Naming some narrows them, such as
+	// ["x86_64"] where the system's own packages lack something on ARM, or
+	// adds others, such as 32-bit Intel, which are packaged only when named.
 	Arches []string `toml:"arches"`
 }
 
 // Arch is what an Arch Linux package depends on, comma separated.
 type Arch struct {
 	Depends string `toml:"depends"`
-	// Arches narrows the architectures packaged, such as ["x86_64"] where
-	// the system's own packages lack something on ARM; all of them when
-	// it's empty.
+	// Arches are the architectures packaged: x86-64 and ARM64, where the
+	// system has them, when it's empty. Naming some narrows them, such as
+	// ["x86_64"] where the system's own packages lack something on ARM, or
+	// adds others, such as 32-bit Intel, which are packaged only when named.
 	Arches []string `toml:"arches"`
 }
 
@@ -178,9 +183,10 @@ type Flatpak struct {
 	// those files, say.
 	Resources []string `toml:"resources"`
 	Prepare   string   `toml:"prepare"`
-	// Arches narrows the architectures packaged, such as ["x86_64"] where
-	// the system's own packages lack something on ARM; all of them when
-	// it's empty.
+	// Arches are the architectures packaged: x86-64 and ARM64, where the
+	// system has them, when it's empty. Naming some narrows them, such as
+	// ["x86_64"] where the system's own packages lack something on ARM, or
+	// adds others, such as 32-bit Intel, which are packaged only when named.
 	Arches []string `toml:"arches"`
 }
 
@@ -207,9 +213,10 @@ type Deb struct {
 	Depends    string `toml:"depends"`
 	Recommends string `toml:"recommends"`
 	Section    string `toml:"section"`
-	// Arches narrows the architectures packaged, such as ["x86_64"] where
-	// the system's own packages lack something on ARM; all of them when
-	// it's empty.
+	// Arches are the architectures packaged: x86-64 and ARM64, where the
+	// system has them, when it's empty. Naming some narrows them, such as
+	// ["x86_64"] where the system's own packages lack something on ARM, or
+	// adds others, such as 32-bit Intel, which are packaged only when named.
 	Arches []string `toml:"arches"`
 }
 

@@ -28,12 +28,17 @@ import (
 
 // voidArches are the architectures Void's repositories are found by:
 // each of glibc and musl, which the same package serves, since the
-// worker needs neither.
-func voidArches(arch string) []string { return []string{arch, arch + "-musl"} }
+// worker needs neither. Void has i686 only with glibc.
+func voidArches(arch string) []string {
+	if arch == "i686" {
+		return []string{arch}
+	}
+	return []string{arch, arch + "-musl"}
+}
 
 // voidPackage is NAME-VERSION_1.ARCH.xbps, as packageVoid names them.
 func voidPackage(name string) *regexp.Regexp {
-	return regexp.MustCompile(`^` + regexp.QuoteMeta(name) + `-([^-_]+)_1\.((?:x86_64|aarch64|armv7l)(?:-musl)?)\.xbps$`)
+	return regexp.MustCompile(`^` + regexp.QuoteMeta(name) + `-([^-_]+)_1\.((?:` + linuxArchNames("void") + `)(?:-musl)?)\.xbps$`)
 }
 
 // voidDepends is what a Void package depends on, as xbps patterns:

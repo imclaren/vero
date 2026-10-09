@@ -91,15 +91,17 @@ runtime_version = "51"
 #
 # This section, and the Linux ones above, may also narrow the
 # architectures packaged, where the system's own packages lack something
-# the app needs on one of them. Without it, every architecture vero builds
-# for there is packaged:
+# the app needs on one of them. Without it, x86-64 and ARM64 are packaged,
+# where the system has them:
 #
 #   arches = ["x86_64"]
 #
-# On Linux it can also add RISC-V, POWER and 32-bit ARM, which are
-# packaged only when named, such as in [gtk.deb]:
+# It can also add others, such as RISC-V, 32-bit ARM and 32-bit x86, which
+# are packaged only when named, such as in [gtk.deb]:
 #
-#   arches = ["amd64", "arm64", "riscv64", "ppc64el", "armhf"]
+#   arches = ["amd64", "arm64", "riscv64", "armhf", "i386"]
+#
+# cmd/vero-repo/README.md lists them all for each system.
 #
 # FreeBSD and DragonFly: each package the app needs, with the port it
 # comes from.
