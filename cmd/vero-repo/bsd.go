@@ -131,6 +131,9 @@ func packageUnix(a *App, sys *unixSystem, workers map[string]string, out string)
 		if err != nil {
 			return err
 		}
+		if sys.name == "illumos" {
+			files = iconOutsideTheme(a, sys.prefix, files)
+		}
 		name := filepath.Join(out, unixPackageName(a, sys, arch))
 		switch sys.format {
 		case "pkg":
@@ -146,6 +149,34 @@ func packageUnix(a *App, sys *unixSystem, workers map[string]string, out string)
 		fmt.Println("built", name)
 	}
 	return nil
+}
+
+// iconOutsideTheme moves the icon out of the hicolor theme, to one PNG
+// the menu entry names by its whole path. GTK 4 from SmartOS's pkgsrc
+// crashes reading any PNG on illumos (in png_read_info, from GTK's own
+// loader; gdk-pixbuf reads them), and a GTK 4 app looks its window icon
+// up in the theme by the app's ID. The menu, MATE's on OpenIndiana, is
+// GTK 3 and reads PNGs through gdk-pixbuf.
+func iconOutsideTheme(a *App, prefix string, files []treeFile) []treeFile {
+	icon := path.Join(prefix, "share", a.Name, a.ID+".png")
+	themed := path.Join(prefix, "share", "icons", "hicolor") + "/"
+	desktop := path.Join(prefix, "share", "applications", a.ID+".desktop")
+	var kept []treeFile
+	for _, f := range files {
+		switch {
+		case strings.HasPrefix(f.path, themed):
+			if strings.Contains(f.path, "/256x256/") {
+				kept = append(kept, treeFile{icon, f.data, f.mode})
+			}
+		case f.path == desktop:
+			f.data = bytes.Replace(f.data, []byte("\nIcon="+a.ID+"\n"), []byte("\nIcon="+icon+"\n"), 1)
+			kept = append(kept, f)
+		default:
+			kept = append(kept, f)
+		}
+	}
+	sort.Slice(kept, func(i, j int) bool { return kept[i].path < kept[j].path })
+	return kept
 }
 
 // systemPython is the python a system's own section asks for on arch, by

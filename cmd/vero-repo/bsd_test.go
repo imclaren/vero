@@ -546,3 +546,28 @@ func TestOpenBSD(t *testing.T) {
 		t.Errorf("the listing: %s", listing)
 	}
 }
+
+// On illumos the icon is kept out of the hicolor theme, where GTK 4 would
+// read it and crash, and the menu entry names it by its whole path.
+func TestIllumosIconOutsideTheme(t *testing.T) {
+	a, workers := bsdApp(t)
+	files, err := unixTree(a, "/opt/local", workers["amd64"], "/opt/local/bin/"+a.Name, "/opt/local/bin/python3.12")
+	if err != nil {
+		t.Fatal(err)
+	}
+	icon := "/opt/local/share/" + a.Name + "/" + a.ID + ".png"
+	var found bool
+	for _, f := range iconOutsideTheme(a, "/opt/local", files) {
+		switch {
+		case strings.Contains(f.path, "/hicolor/"):
+			t.Errorf("%s is in the theme", f.path)
+		case f.path == icon:
+			found = true
+		case strings.HasSuffix(f.path, ".desktop") && !strings.Contains(string(f.data), "\nIcon="+icon+"\n"):
+			t.Errorf("the menu entry is\n%s", f.data)
+		}
+	}
+	if !found {
+		t.Errorf("no %s", icon)
+	}
+}
