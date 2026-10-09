@@ -342,6 +342,13 @@ keyring first. The NetBSD packages aren't signed, since NetBSD's pkgsrc
 doesn't check unless it's set up to, so your site's HTTPS vouches for
 them. Everything else that installs from your site checks your signature.
 
+On illumos the icon isn't put in the icon theme. GTK 4 from SmartOS's
+pkgsrc crashes there reading a PNG, and a GTK 4 app loads its window's
+icon from the theme, so the app would not start. The package keeps the
+icon in `share/<name>/` instead, and the menu entry names it by its whole
+path: the menu, MATE's on OpenIndiana, is GTK 3, which reads it safely.
+The app's window has no icon of its own there.
+
 `scripts/package.sh` runs `vero-repo package`, which builds the Windows
 installers with [`package-windows.sh`](../../scripts/package-windows.sh).
 [`package-linux.sh`](../../scripts/package-linux.sh) builds `.deb` files on its
@@ -413,7 +420,11 @@ never offered the update. It refuses to finish otherwise.
 
 [`scripts/test-repo.sh`](../../scripts/test-repo.sh) checks all of it for real.
 It builds the example's site, serves it from your Mac, and installs the
-example from it on a clean system, as the site tells people to. Then it
+example from it on a clean system, as the site tells people to. It checks
+that the worker answers, that the command, menu entry and front end are
+there, that Python can load GTK 4, and that GTK 4 can read the app's icon,
+which the app loads when it starts. It doesn't open the app's window, so
+try your own app by hand on each system too. Then it
 releases version 1.0.1 and checks that the system's own updates bring it.
 It tries Debian, in a container, unless you say otherwise:
 

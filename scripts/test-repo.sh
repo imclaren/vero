@@ -64,6 +64,13 @@ rm -rf "$SITE"
 # have to bring it, typelibs and all.
 GTK="import gi; gi.require_version('Gtk', '4.0'); from gi.repository import Gtk"
 
+# The icons the package puts in the hicolor theme, read as GTK 4 reads
+# them, since a GTK 4 app loads its window's icon from the theme by its
+# ID: GTK 4 from SmartOS's pkgsrc crashed doing that on illumos, which
+# installing alone didn't show. It needs no display. Its argument is the
+# prefix the package installs under.
+ICONS="import gi, glob, sys; gi.require_version('Gdk', '4.0'); from gi.repository import Gdk; [Gdk.Texture.new_from_filename(f) for f in glob.glob(sys.argv[1] + '/share/icons/hicolor/*/apps/dev.vero.example.png')]"
+
 # What to build, and how to install, check and update, on this system.
 if [ -n "$MAC" ]; then
     # The disk image, on this very Mac: mounted, the app copied out and
@@ -95,6 +102,7 @@ elif [ -n "$VMSYS" ]; then
             # or without a display, whatever imports it: so here, GTK is
             # checked for, not started.
             GTK="import os; assert os.path.exists('/usr/local/lib/girepository-1.0/Gtk-4.0.typelib')"
+            ICONS="pass"
             INSTALL="ftp -V -o - $URL/install.sh | sh"
             UPDATE="PKG_PATH=$URL/openbsd/%a/:installpath pkg_add -u vero-example" ;;
         dragonfly) SSH_PORT=2225 PREFIX=/usr/local PY=python3.11
@@ -115,6 +123,7 @@ elif [ -n "$VMSYS" ]; then
     : "${SETUP:=true}"
     WORKER="$PREFIX/lib/vero-example/worker -version"
     CHECK="PATH=$PREFIX/bin:\$PATH; command -v vero-example && ls $PREFIX/share/applications/dev.vero.example.desktop $PREFIX/lib/vero-example/vero.py && $PY -c \"$GTK\""
+    ICON_CHECK="$PY -c \"$ICONS\" $PREFIX"
 elif [ -n "$FLATPAK" ]; then
     IMAGE=debian:trixie TARGETS=flatpak
     # The volume keeps GNOME's runtime between runs; the example, and
@@ -125,6 +134,7 @@ elif [ -n "$FLATPAK" ]; then
     INSTALL="flatpak install -y --noninteractive $URL/flatpak/vero-example.flatpakref > /dev/null"
     WORKER="flatpak run --command=/app/lib/vero-example/worker dev.vero.example -version"
     CHECK="ls /var/lib/flatpak/exports/share/applications/dev.vero.example.desktop /var/lib/flatpak/exports/share/icons/hicolor/128x128/apps/dev.vero.example.png && flatpak run --command=python3 dev.vero.example -c \"$GTK\""
+    ICON_CHECK="flatpak run --command=python3 dev.vero.example -c \"$ICONS\" /app"
     UPDATE="flatpak update -y --noninteractive > /dev/null"
     RUN="--privileged -v vero-test-flatpak:/var/lib/flatpak"
 else
@@ -132,6 +142,7 @@ else
     WORKER="/usr/lib/vero-example/worker -version"
     RUN=""
     CHECK="command -v vero-example && ls /usr/share/applications/dev.vero.example.desktop /usr/share/metainfo/dev.vero.example.metainfo.xml /usr/lib/vero-example/vero.py && python3 -c \"$GTK\""
+    ICON_CHECK="python3 -c \"$ICONS\" /usr"
     case $IMAGE in
         archlinux*)
             # Arch's image is x86_64 only: Docker runs it emulated here,
@@ -359,6 +370,8 @@ got=$(in_container "$WORKER")
 [ "$got" = 1.0.0 ] || { echo "FAIL: the installed worker says $got, not 1.0.0" >&2; exit 1; }
 in_container "$CHECK" >/dev/null ||
     { echo "FAIL: the package lacks its command, menu entry, metadata, binding, signature or GTK" >&2; exit 1; }
+in_container "$ICON_CHECK" >/dev/null 2>&1 ||
+    { echo "FAIL: GTK 4 crashed or failed reading the app's icon, which the app loads when it starts" >&2; exit 1; }
 echo "ok: 1.0.0 installed from the repository, and its worker answers"
 
 echo "== releasing 1.0.1 into the same site"
