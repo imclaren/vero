@@ -19,10 +19,15 @@ func TestOlderARM(t *testing.T) {
 	a.GTK.Deb.Arches = []string{"armhf", "armel"}
 	a.GTK.Alpine = &LinuxPkg{Arches: []string{"armv7", "armhf"}}
 	a.GTK.Void = &LinuxPkg{Arches: []string{"armv7l", "armv6l"}}
+	a.GTK.RPM.Arches = []string{"armv7hl", "armv6hl"}
+	a.GTK.Arch.Arches = []string{"powerpc64le", "ppc64"}
 	if err := a.GTK.checkArches(); err != nil {
 		t.Fatal(err)
 	}
-	for section, want := range map[string]string{"deb": "armv6:armhf armv5:armel", "alpine": "arm:armv7 armv6:armhf", "void": "arm:armv7l armv6:armv6l"} {
+	for section, want := range map[string]string{
+		"deb": "armv6:armhf armv5:armel", "alpine": "arm:armv7 armv6:armhf", "void": "arm:armv7l armv6:armv6l",
+		"rpm": "arm:armv7hl armv6:armv6hl", "arch": "ppc64le:powerpc64le ppc64:powerpc64",
+	} {
 		var got []string
 		for _, arch := range a.linuxArches(section) {
 			got = append(got, arch.goarch+":"+arch.name)
@@ -37,12 +42,13 @@ func TestOlderARM(t *testing.T) {
 		}
 	}
 	b := *a.GTK
-	b.RPM.Arches = []string{"armel"}
+	b.RPM.Arches = []string{"armel"} // openSUSE has ARMv6 and 7, not 5
 	if err := b.checkArches(); err == nil {
 		t.Error("[gtk.rpm] took armel")
 	}
 
 	pkgs, site := t.TempDir(), t.TempDir()
+	a.GTK.RPM.Arches, a.GTK.Arch.Arches = nil, nil
 	for _, pack := range []func(*App, map[string]string, string) error{packageDeb, packageAlpine, packageVoid} {
 		if err := pack(a, workers, pkgs); err != nil {
 			t.Fatal(err)

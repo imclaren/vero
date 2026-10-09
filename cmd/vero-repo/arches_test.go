@@ -98,7 +98,7 @@ func TestLinuxArches(t *testing.T) {
 	if got := strings.Join(a.linuxGoarches("deb", "rpm"), " "); got != "amd64 riscv64 ppc64le armv6" {
 		t.Errorf("the workers needed are %s", got)
 	}
-	for section, arch := range map[string]string{"rpm": "armhf", "flatpak": "riscv64"} {
+	for section, arch := range map[string]string{"rpm": "mipsel", "flatpak": "riscv64"} {
 		b := *a.GTK
 		b.RPM.Arches, b.Flatpak.Arches = nil, nil
 		if section == "rpm" {

@@ -286,13 +286,13 @@ names, or Go's. On Linux:
 | x86-64 | amd64 | x86_64 | x86_64 | x86_64 | x86_64 | x86_64 | x86_64 |
 | ARM64 | arm64 | aarch64 | aarch64 | aarch64 | aarch64 | aarch64 | aarch64 |
 | RISC-V | riscv64 | riscv64 | riscv64 | riscv64 | | riscv64 | |
-| POWER | ppc64el | ppc64le | | ppc64le | | ppc64le | |
-| 32-bit ARM (ARMv7) | | | armv7h | armv7 | armv7l | | |
-| 32-bit ARM (ARMv6) | armhf | | | armhf | armv6l | | |
+| POWER | ppc64el | ppc64le | powerpc64le | ppc64le | | ppc64le | |
+| 32-bit ARM (ARMv7) | | armv7hl | armv7h | armv7 | armv7l | | |
+| 32-bit ARM (ARMv6) | armhf | armv6hl | | armhf | armv6l | | |
 | 32-bit ARM (ARMv5) | armel | | | | | | |
 | 32-bit x86 | i386 | i686 | pentium4 | x86 | i686 | | |
 | LoongArch | loong64 | | loong64 | loongarch64 | | loongarch64 | |
-| POWER, big-endian | ppc64 | | | | | ppc64 | |
+| POWER, big-endian | ppc64 | | powerpc64 | | | ppc64 | |
 | IBM Z | s390x | s390x | | s390x | | | |
 | MIPS64 | mips64el | | | | | | |
 | MIPS | mipsel | | | | | | |
@@ -324,7 +324,9 @@ python = "python3.11"
 armv6l have it, for the first Raspberry Pis; and ARMv5, without, with
 `GOARM=5`, as Debian's armel. Debian's own armhf is ARMv7, but Raspberry
 Pi OS's, by the same name, is ARMv6, so the armhf `.deb` is built for
-ARMv6, which runs on both. Arch Linux ARM has only ARMv7 now.
+ARMv6, which runs on both. Arch Linux ARM has only ARMv7 now. The rpm's
+32-bit ARM is openSUSE's, which has both ARMv7 and ARMv6; Fedora has
+none. Arch's POWER is Arch POWER's.
 
 32-bit x86 needs a Pentium 4 or later, since the worker is built with
 `GO386=sse2`. That is what Arch Linux 32 calls pentium4: its pacman takes
@@ -440,6 +442,7 @@ with `scripts/setup-windows-ssh.sh`, which the
 [VM's notes](../../.windows/unattend/README.md) describe.
 
 Some packages have been checked only by vero's own checks, not installed
-on the system they are for: Debian's armel, Alpine's armhf, Void's armv6l,
-Arch Linux 32's pentium4, FreeBSD's armv7, and Chimera's on anything but
-ARM64, which `test-repo.sh` installs in Chimera's container.
+on the system they are for: Debian's armel, openSUSE's armv7hl and
+armv6hl, Alpine's armhf, Void's armv6l, Arch Linux 32's pentium4, Arch
+POWER's, FreeBSD's armv7, and Chimera's on anything but ARM64, which
+`test-repo.sh` installs in Chimera's container.

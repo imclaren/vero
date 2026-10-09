@@ -29,15 +29,17 @@ var linuxArches = []struct {
 	{"amd64", map[string]string{"deb": "amd64", "rpm": "x86_64", "arch": "x86_64", "flatpak": "x86_64", "alpine": "x86_64", "void": "x86_64", "chimera": "x86_64"}, false},
 	{"arm64", map[string]string{"deb": "arm64", "rpm": "aarch64", "arch": "aarch64", "flatpak": "aarch64", "alpine": "aarch64", "void": "aarch64", "chimera": "aarch64"}, false},
 	{"riscv64", map[string]string{"deb": "riscv64", "rpm": "riscv64", "arch": "riscv64", "alpine": "riscv64", "chimera": "riscv64"}, true},
-	{"ppc64le", map[string]string{"deb": "ppc64el", "rpm": "ppc64le", "alpine": "ppc64le", "chimera": "ppc64le"}, true},
-	// 32-bit ARM: ARMv7, with hardware floating point.
-	{"arm", map[string]string{"arch": "armv7h", "alpine": "armv7", "void": "armv7l"}, true},
+	// POWER: Arch's is Arch POWER's.
+	{"ppc64le", map[string]string{"deb": "ppc64el", "rpm": "ppc64le", "arch": "powerpc64le", "alpine": "ppc64le", "chimera": "ppc64le"}, true},
+	// 32-bit ARM: ARMv7, with hardware floating point. The rpm's is
+	// openSUSE's.
+	{"arm", map[string]string{"rpm": "armv7hl", "arch": "armv7h", "alpine": "armv7", "void": "armv7l"}, true},
 	// Older 32-bit ARM: ARMv6 with hardware floating point, as Alpine's
 	// armhf and Void's armv6l have it, and ARMv5, without, as Debian's
 	// armel. Go builds both as arm, with GOARM=6 or 5. Debian's armhf is
 	// ARMv7, but Raspberry Pi OS's, by the same name, is ARMv6, for the
 	// first Raspberry Pis: the .deb is built for ARMv6, which runs on both.
-	{"armv6", map[string]string{"deb": "armhf", "alpine": "armhf", "void": "armv6l"}, true},
+	{"armv6", map[string]string{"deb": "armhf", "rpm": "armv6hl", "alpine": "armhf", "void": "armv6l"}, true},
 	{"armv5", map[string]string{"deb": "armel"}, true},
 	// 32-bit Intel and AMD, from the Pentium 4 on, since Go's code needs
 	// SSE2: i686 to rpm and xbps, which have it as the oldest they run on,
@@ -45,8 +47,8 @@ var linuxArches = []struct {
 	// processor with SSE2, and looks for packages for it alone.
 	{"386", map[string]string{"deb": "i386", "rpm": "i686", "arch": "pentium4", "alpine": "x86", "void": "i686"}, true},
 	{"loong64", map[string]string{"deb": "loong64", "arch": "loong64", "alpine": "loongarch64", "chimera": "loongarch64"}, true},
-	// POWER, big-endian, as Debian's ports and Chimera have it.
-	{"ppc64", map[string]string{"deb": "ppc64", "chimera": "ppc64"}, true},
+	// POWER, big-endian, as Debian's ports, Arch POWER and Chimera have it.
+	{"ppc64", map[string]string{"deb": "ppc64", "arch": "powerpc64", "chimera": "ppc64"}, true},
 	{"s390x", map[string]string{"deb": "s390x", "rpm": "s390x", "alpine": "s390x"}, true},
 	{"mips64le", map[string]string{"deb": "mips64el"}, true},
 	{"mipsle", map[string]string{"deb": "mipsel"}, true},
@@ -273,7 +275,7 @@ func goarchOf(name string) string {
 		return "ppc64le"
 	case "arm", "armv7", "armv7h", "armv7l", "armv7hl", "earmv7hf":
 		return "arm"
-	case "armhf", "armv6", "armv6l", "armv6h", "armv6hf":
+	case "armhf", "armv6", "armv6l", "armv6h", "armv6hf", "armv6hl":
 		return "armv6"
 	case "armel", "armv5", "armv5te", "armv5tel":
 		return "armv5"
