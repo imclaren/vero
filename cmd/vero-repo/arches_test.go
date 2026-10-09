@@ -311,7 +311,7 @@ func TestMoreBSDArches(t *testing.T) {
 	}
 	a.GTK.FreeBSD.Arches = []string{"amd64", "i386", "armv7"}
 	a.GTK.NetBSD.Arches = []string{"i386"}
-	a.GTK.OpenBSD.Arches = []string{"i386", "armv7", "riscv64"}
+	a.GTK.OpenBSD.Arches = []string{"i386", "armv7", "riscv64"} // OpenBSD calls 32-bit ARM arm
 	if err := a.GTK.checkArches(); err != nil {
 		t.Fatal(err)
 	}
@@ -329,7 +329,7 @@ func TestMoreBSDArches(t *testing.T) {
 	sort.Strings(got)
 	want := "vero-example-1.2.3.beta-freebsd-amd64.pkg vero-example-1.2.3.beta-freebsd-armv7.pkg vero-example-1.2.3.beta-freebsd-i386.pkg " +
 		"vero-example-1.2.3.beta-netbsd-i386.tgz " +
-		"vero-example-1.2.3.beta-openbsd-armv7.tgz vero-example-1.2.3.beta-openbsd-i386.tgz vero-example-1.2.3.beta-openbsd-riscv64.tgz"
+		"vero-example-1.2.3.beta-openbsd-arm.tgz vero-example-1.2.3.beta-openbsd-i386.tgz vero-example-1.2.3.beta-openbsd-riscv64.tgz"
 	if strings.Join(got, " ") != want {
 		t.Fatalf("packaged %v, want %s", got, want)
 	}
@@ -366,7 +366,7 @@ func TestMoreBSDArches(t *testing.T) {
 			t.Errorf("no %s: %v", f, err)
 		}
 	}
-	for _, arch := range []string{"i386", "armv7", "riscv64"} {
+	for _, arch := range []string{"i386", "arm", "riscv64"} {
 		if files, _ := filepath.Glob(filepath.Join(site, "openbsd", arch, "*.tgz")); len(files) != 1 {
 			t.Errorf("openbsd/%s has %v", arch, files)
 		}

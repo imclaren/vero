@@ -69,7 +69,7 @@ var unixSystems = []unixSystem{
 		arches: []unixArch{{"amd64", "x86_64", "", "", false}}},
 	{name: "openbsd", label: "OpenBSD", goos: "openbsd", prefix: "/usr/local", format: "openbsd",
 		arches: []unixArch{{"amd64", "amd64", "", "", false}, {"arm64", "aarch64", "", "", false},
-			{"386", "i386", "", "", true}, {"arm", "armv7", "", "", true}, {"riscv64", "riscv64", "", "", true}}},
+			{"386", "i386", "", "", true}, {"arm", "arm", "", "", true}, {"riscv64", "riscv64", "", "", true}}},
 }
 
 // system is one of unixSystems, by name.

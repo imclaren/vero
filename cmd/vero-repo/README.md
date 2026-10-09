@@ -292,7 +292,7 @@ On the BSDs:
 | x86-64 | amd64 | x86_64 | amd64 |
 | ARM64 | aarch64 | aarch64 | aarch64 |
 | 32-bit x86 | i386 | i386 | i386 |
-| 32-bit ARM | armv7 | | armv7 |
+| 32-bit ARM | armv7 | | arm |
 | RISC-V | | | riscv64 |
 
 DragonFly and illumos are x86-64 only.
