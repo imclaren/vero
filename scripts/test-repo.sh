@@ -13,6 +13,7 @@
 #   scripts/test-repo.sh --flatpak                # Flatpak, from the .flatpakref
 #   scripts/test-repo.sh --image archlinux        # pacman, which checks every signature
 #   scripts/test-repo.sh --image alpine           # apk, the same
+#   scripts/test-repo.sh --image chimeralinux/chimera  # apk on Chimera
 #   scripts/test-repo.sh --image ghcr.io/void-linux/void-glibc  # xbps, the same
 #   scripts/test-repo.sh --vm freebsd             # pkg, in vero's FreeBSD VM
 #   scripts/test-repo.sh --vm netbsd              # pkgin, in vero's NetBSD VM
@@ -151,6 +152,13 @@ else
             TARGETS=alpine
             SETUP=true
             INSTALL="wget -qO- $URL/install.sh | sh"
+            UPDATE="apk upgrade -U > /dev/null" ;;
+        *chimera*)
+            # Chimera's image is a minimal install, without the fetch the
+            # others have. Its sleep, FreeBSD's, takes only a number.
+            TARGETS=chimera SLEEP=86400
+            SETUP="apk add chimerautils-extra > /dev/null"
+            INSTALL="fetch -qo - $URL/install.sh | sh"
             UPDATE="apk upgrade -U > /dev/null" ;;
         *void*)
             TARGETS=void
@@ -341,7 +349,7 @@ if [ -n "$VMSYS" ]; then
 else
     docker rm -f "$NAME" >/dev/null 2>&1 || true
     # shellcheck disable=SC2086
-    docker run -d --name "$NAME" $RUN --add-host=host.docker.internal:host-gateway "$IMAGE" sleep infinity >/dev/null
+    docker run -d --name "$NAME" $RUN --add-host=host.docker.internal:host-gateway "$IMAGE" sleep "${SLEEP:-infinity}" >/dev/null
 fi
 
 echo "== installing it as the site says, in $IMAGE${FLATPAK:+, with Flatpak}"

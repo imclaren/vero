@@ -92,6 +92,9 @@ type GTK struct {
 	// Linux's packages; each is packaged for when its section is here.
 	Alpine *LinuxPkg `toml:"alpine"`
 	Void   *LinuxPkg `toml:"void"`
+	// Chimera is what the app needs from Chimera Linux's packages, whose
+	// apk installs the same kind of package as Alpine's.
+	Chimera *LinuxPkg `toml:"chimera"`
 }
 
 // BSDPkg is what a FreeBSD or DragonFly package depends on: each package
@@ -100,11 +103,40 @@ type GTK struct {
 type BSDPkg struct {
 	Deps   map[string]string `toml:"deps"`
 	Python string            `toml:"python"`
+	// ByArch replaces deps, python or both on an architecture, by the
+	// system's name for it, where its packages differ there, as in
+	// [gtk.freebsd.by_arch.armv7].
+	ByArch map[string]BSDArchPkg `toml:"by_arch"`
 	// Arches are the architectures packaged: x86-64 and ARM64, where the
 	// system has them, when it's empty. Naming some narrows them, such as
 	// ["x86_64"] where the system's own packages lack something on ARM, or
 	// adds others, such as 32-bit Intel, which are packaged only when named.
 	Arches []string `toml:"arches"`
+}
+
+// BSDArchPkg is what a FreeBSD or DragonFly package needs on one
+// architecture, where it isn't what its section says for the others.
+type BSDArchPkg struct {
+	Deps   map[string]string `toml:"deps"`
+	Python string            `toml:"python"`
+}
+
+// depsFor are the packages a FreeBSD or DragonFly package depends on, on
+// arch, by the system's name for it.
+func (b *BSDPkg) depsFor(arch string) map[string]string {
+	if o, ok := b.ByArch[arch]; ok && len(o.Deps) > 0 {
+		return o.Deps
+	}
+	return b.Deps
+}
+
+// pythonFor is the python a FreeBSD or DragonFly package starts the app
+// with on arch, or "" for the usual.
+func (b *BSDPkg) pythonFor(arch string) string {
+	if o, ok := b.ByArch[arch]; ok && o.Python != "" {
+		return o.Python
+	}
+	return b.Python
 }
 
 // Pkgsrc is what a pkgsrc package, for NetBSD or illumos, depends on:
@@ -155,9 +187,12 @@ type RPM struct {
 	Arches []string `toml:"arches"`
 }
 
-// Arch is what an Arch Linux package depends on, comma separated.
+// Arch is what an Arch Linux package depends on, comma separated, and
+// what it can use if it's there, each as pacman's optdepends has it,
+// "NAME: what for", with no comma in what for.
 type Arch struct {
-	Depends string `toml:"depends"`
+	Depends    string `toml:"depends"`
+	OptDepends string `toml:"optdepends"`
 	// Arches are the architectures packaged: x86-64 and ARM64, where the
 	// system has them, when it's empty. Naming some narrows them, such as
 	// ["x86_64"] where the system's own packages lack something on ARM, or

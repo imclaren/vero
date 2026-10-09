@@ -94,7 +94,7 @@ type page struct {
 	Others []otherSection
 	// Unix are the BSDs and illumos the site has a repository for.
 	Unix []unixSection
-	// Linux are Alpine and Void, if the site has their repositories,
+	// Linux are Alpine, Void and Chimera, if the site has their repositories,
 	// which are added as root.
 	Linux []unixSection
 }
@@ -164,7 +164,7 @@ func writeSite(site, url string, a *App, latest Latest, s *signer, noPage bool) 
 			}
 		}
 	}
-	for _, sys := range []string{"alpine", "void"} {
+	for _, sys := range []string{"alpine", "void", "chimera"} {
 		for k := range latest.Downloads {
 			if strings.HasPrefix(k, sys+"-") {
 				p.Linux = append(p.Linux, linuxInstructions(p, sys, ""))
@@ -337,7 +337,7 @@ func unixInstructions(p page, sys unixSystem, yes string) unixSection {
 }
 
 // linuxInstructions are the commands, run as root, that add the app's
-// repository on Alpine or Void and install it, and the one that updates
+// repository on Alpine, Void or Chimera and install it, and the one that updates
 // it. yes makes them ask nothing, for install.sh.
 func linuxInstructions(p page, sys, yes string) unixSection {
 	n, u := p.App.Name, p.URL
@@ -349,6 +349,15 @@ func linuxInstructions(p page, sys, yes string) unixSection {
 			fmt.Sprintf("grep -qx '%s' /etc/apk/repositories || echo '%s' >> /etc/apk/repositories", repo, repo),
 			"apk add -U " + n,
 		}, Update: "apk upgrade -U", Note: "GTK 4 is in Alpine's community repository, which needs to be on too."}
+	case "chimera":
+		// Chimera has FreeBSD's fetch, rather than curl or wget, on all but
+		// a minimal install. Its apk asks before installing much, and from
+		// install.sh would read the answer from the rest of the script.
+		return unixSection{System: "chimera", Label: "Chimera Linux", Commands: []string{
+			fmt.Sprintf("fetch -qo /etc/apk/keys/%s %s/chimera/%s", alpineKeyName(p.App), u, alpineKeyName(p.App)),
+			fmt.Sprintf("mkdir -p /etc/apk/repositories.d && echo '%s/chimera' > /etc/apk/repositories.d/%s.list", u, n),
+			"apk add -U" + map[string]string{"": "", "yes": " --interactive=no"}[yes] + " " + n,
+		}, Update: "apk upgrade -U", Note: "On a minimal install, apk add chimerautils-extra adds fetch first."}
 	case "void":
 		y := ""
 		if yes != "" {

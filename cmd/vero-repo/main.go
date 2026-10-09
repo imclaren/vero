@@ -155,6 +155,7 @@ func buildCommand(args []string) error {
 	in.flatpaks, _ = filepath.Glob(filepath.Join(*packages, "*.flatpak"))
 	in.pacman, _ = filepath.Glob(filepath.Join(*packages, "*.pkg.tar.zst"))
 	in.alpine, _ = filepath.Glob(filepath.Join(*packages, "*-r0-*.apk"))
+	in.chimera, _ = filepath.Glob(filepath.Join(*packages, "*-r0-chimera-*.apk"))
 	in.void, _ = filepath.Glob(filepath.Join(*packages, "*.xbps"))
 	unix, _ := filepath.Glob(filepath.Join(*packages, "*.pkg"))
 	tgz, _ := filepath.Glob(filepath.Join(*packages, "*.tgz"))
@@ -189,8 +190,10 @@ func buildCommand(args []string) error {
 // packageFiles are the installers vero-repo package made, by kind.
 type packageFiles struct {
 	debs, exes, rpms, flatpaks, dmgs []string
-	// pacman, alpine and void are the Arch, Alpine and Void packages.
-	pacman, alpine, void []string
+	// pacman, alpine, void and chimera are the Arch, Alpine, Void and
+	// Chimera packages. Alpine's glob takes in Chimera's too, which
+	// buildAlpine leaves alone.
+	pacman, alpine, void, chimera []string
 	// macPkgs are the Mac's installer packages, beside its disk images;
 	// notes are what's new in this release, for the Mac's update prompt.
 	macPkgs []string
@@ -253,7 +256,7 @@ func build(out string, in packageFiles, keep int, url string, a *App, s *signer,
 		dir, label string
 		pkgs       []string
 		build      func(string, []string, int, *App, *signer) (map[string]Download, error)
-	}{{"alpine", "Alpine", in.alpine, buildAlpine}, {"void", "Void", in.void, buildVoid}} {
+	}{{"alpine", "Alpine", in.alpine, buildAlpine}, {"void", "Void", in.void, buildVoid}, {"chimera", "Chimera", in.chimera, buildChimera}} {
 		if _, err := os.Stat(filepath.Join(out, l.dir)); len(l.pkgs) == 0 && err != nil {
 			continue
 		}

@@ -22,6 +22,7 @@ run them.
 | Arch Linux | a pacman repository, the same, and a recipe for the AUR | Go |
 | Alpine Linux | an apk repository, if you ask for one | Go |
 | Void Linux | an xbps repository, if you ask for one | Go |
+| Chimera Linux | an apk repository, if you ask for one | Go |
 | Any Linux, with Flatpak | a Flatpak repository, if you ask for one | Docker and colima |
 | FreeBSD, DragonFly | a pkg repository | Go |
 | NetBSD, illumos | a pkgsrc repository, for pkgin | Go |
@@ -177,27 +178,35 @@ terminal front end and the worker it drives, which is built once as
 people run it with `wasmtime`. `[plan9]` names the Plan 9 front end,
 bundled with the worker and an `rc` script that installs them.
 
-## Arch Linux, Alpine and Void
+## Arch Linux, Alpine, Void and Chimera
 
 Arch users add your pacman repository, as the site's page says: pacman-key
 trusts your key, `/etc/pacman.conf` gains a section named after your app,
 whose `Server` is `.../arch/$arch`, and `pacman -Syu` keeps the app up to
 date. pacman checks the signature of every package and of the index. The
 packages are made by default, with the `.deb` and the `.rpm`; `[gtk.arch]`
-says what they depend on.
+says what they depend on, and `optdepends` what they can use if it's
+there, as `"webkitgtk-6.0: signing in inside the app"`.
 
-`[gtk.alpine]` and `[gtk.void]` make packages for Alpine and Void, with
-what each depends on, by its own names. apk and xbps check every package
-with the RSA half of your signing key, which the site publishes for them,
-and the page's commands put where each looks for the keys it trusts:
-`/etc/apk/keys` for apk, and `/var/db/xbps/keys` for xbps, named by its
-fingerprint. The same packages serve Void's glibc and musl systems, since
-the worker needs neither.
+`[gtk.alpine]`, `[gtk.void]` and `[gtk.chimera]` make packages for
+Alpine, Void and Chimera, with what each depends on, by its own names. apk
+and xbps check every package with the RSA half of your signing key, which
+the site publishes for them, and the page's commands put where each looks
+for the keys it trusts: `/etc/apk/keys` for apk, and `/var/db/xbps/keys`
+for xbps, named by its fingerprint. The same packages serve Void's glibc
+and musl systems, since the worker needs neither.
+
+Chimera's apk is apk-tools 3, which reads Alpine's kind of package and
+index, signed as Alpine's are, besides its own newer kind; vero makes
+Alpine's kind for it, in a repository of its own, with Chimera's names for
+what the app needs. Chimera has FreeBSD's `fetch`, rather than curl or
+wget, which a minimal install adds with `apk add chimerautils-extra`.
 
 A private site can put a password in the address any of them fetches
 from, as `https://NAME:PASSWORD@example.com/myapp/arch/$arch` in
 `pacman.conf`, or the same in `/etc/apk/repositories` or
-`/etc/xbps.d/NAME.conf`; so can a Flatpak remote's URL.
+`/etc/xbps.d/NAME.conf` or `/etc/apk/repositories.d/NAME.list`; so can a
+Flatpak remote's URL.
 
 **The AUR, if you like.** Arch users can also build the recipe in
 `dist/site/aur`, which installs the newest `.deb`. To list your app on the
@@ -226,6 +235,7 @@ dist/site/
   arch/          the Arch Linux repository for each processor, signed
   aur/           the Arch recipe, PKGBUILD and .SRCINFO
   alpine/        the Alpine repository for each processor, signed, and the key that checks it
+  chimera/       the same, for Chimera
   void/          the Void repository, signed, with the key in each processor's repodata
   freebsd/       the FreeBSD repository for each processor, signed; its .conf; key.pem
   dragonfly/     the same, for DragonFly
@@ -271,19 +281,21 @@ naming any architecture means naming all you want, so `arches =
 package names them as its system does, and `arches` takes any of those
 names, or Go's. On Linux:
 
-| Architecture | `[gtk.deb]` | `[gtk.rpm]` | `[gtk.arch]` | `[gtk.alpine]` | `[gtk.void]` | `[gtk.flatpak]` |
-|---|---|---|---|---|---|---|
-| x86-64 | amd64 | x86_64 | x86_64 | x86_64 | x86_64 | x86_64 |
-| ARM64 | arm64 | aarch64 | aarch64 | aarch64 | aarch64 | aarch64 |
-| RISC-V | riscv64 | riscv64 | riscv64 | riscv64 | | |
-| POWER | ppc64el | ppc64le | | ppc64le | | |
-| 32-bit ARM | armhf | | armv7h | armv7 | armv7l | |
-| 32-bit x86 | i386 | i686 | i686 | x86 | i686 | |
-| LoongArch | loong64 | | loong64 | loongarch64 | | |
-| POWER, big-endian | ppc64 | | | | | |
-| IBM Z | s390x | s390x | | s390x | | |
-| MIPS64 | mips64el | | | | | |
-| MIPS | mipsel | | | | | |
+| Architecture | `[gtk.deb]` | `[gtk.rpm]` | `[gtk.arch]` | `[gtk.alpine]` | `[gtk.void]` | `[gtk.chimera]` | `[gtk.flatpak]` |
+|---|---|---|---|---|---|---|---|
+| x86-64 | amd64 | x86_64 | x86_64 | x86_64 | x86_64 | x86_64 | x86_64 |
+| ARM64 | arm64 | aarch64 | aarch64 | aarch64 | aarch64 | aarch64 | aarch64 |
+| RISC-V | riscv64 | riscv64 | riscv64 | riscv64 | | riscv64 | |
+| POWER | ppc64el | ppc64le | | ppc64le | | ppc64le | |
+| 32-bit ARM (ARMv7) | | | armv7h | armv7 | armv7l | | |
+| 32-bit ARM (ARMv6) | armhf | | | armhf | armv6l | | |
+| 32-bit ARM (ARMv5) | armel | | | | | | |
+| 32-bit x86 | i386 | i686 | pentium4 | x86 | i686 | | |
+| LoongArch | loong64 | | loong64 | loongarch64 | | loongarch64 | |
+| POWER, big-endian | ppc64 | | | | | ppc64 | |
+| IBM Z | s390x | s390x | | s390x | | | |
+| MIPS64 | mips64el | | | | | | |
+| MIPS | mipsel | | | | | | |
 
 On the BSDs:
 
@@ -297,11 +309,28 @@ On the BSDs:
 
 DragonFly and illumos are x86-64 only.
 
-32-bit ARM is ARMv7 with hardware floating point, as Raspberry Pi OS and
-Debian's armhf have it; the worker is built with `GOARM=7`. 32-bit x86
-needs a Pentium 4 or later, since the worker is built with `GO386=sse2`,
-and Go's code for POWER, either way round, needs a POWER8 or later, so not
-a Power Mac G5.
+Where a FreeBSD or DragonFly package needs other packages on one
+architecture, `by_arch` replaces `deps`, `python` or both there, by the
+system's name for it:
+
+```toml
+[gtk.freebsd.by_arch.armv7]
+deps = { python3 = "lang/python3", py311-pygobject = "devel/py-pygobject@py311" }
+python = "python3.11"
+```
+
+32-bit ARM comes in three: ARMv7 with hardware floating point, built with
+`GOARM=7`; ARMv6 with it, with `GOARM=6`, as Alpine's armhf and Void's
+armv6l have it, for the first Raspberry Pis; and ARMv5, without, with
+`GOARM=5`, as Debian's armel. Debian's own armhf is ARMv7, but Raspberry
+Pi OS's, by the same name, is ARMv6, so the armhf `.deb` is built for
+ARMv6, which runs on both. Arch Linux ARM has only ARMv7 now.
+
+32-bit x86 needs a Pentium 4 or later, since the worker is built with
+`GO386=sse2`. That is what Arch Linux 32 calls pentium4: its pacman takes
+that name on a processor with SSE2, and looks only in that folder of the
+repository. Go's code for POWER, either way round, needs a POWER8 or
+later, so not a Power Mac G5.
 Void has i686 packages only for glibc, so there is no i686-musl one. The
 MIPS packages are little-endian, as Debian 12's are.
 
@@ -355,7 +384,7 @@ path/to/vero/scripts/package.sh --app vero-app.toml --version 1.2.3
 
 This builds them into `dist/packages`, each for both x86_64 and ARM64
 processors where the system has both. Use `--targets` to build only some
-of them: `deb`, `rpm`, `pacman`, `alpine`, `void`, `flatpak`, `freebsd`,
+of them: `deb`, `rpm`, `pacman`, `alpine`, `void`, `chimera`, `flatpak`, `freebsd`,
 `dragonfly`, `netbsd`, `illumos`, `openbsd`, `macos`, `windows`, `msix`,
 `android`, `ios`, `web`, `wasi`, `plan9`; or `linux` for all of Linux's
 but the Flatpak, and `bsd` for the BSDs and illumos. Use `--ldflags` to build more into your worker, such as
@@ -392,6 +421,7 @@ scripts/test-repo.sh --image fedora:latest
 scripts/test-repo.sh --image opensuse/tumbleweed
 scripts/test-repo.sh --image archlinux
 scripts/test-repo.sh --image alpine
+scripts/test-repo.sh --image chimeralinux/chimera
 scripts/test-repo.sh --image ghcr.io/void-linux/void-glibc
 scripts/test-repo.sh --flatpak
 scripts/test-repo.sh --vm freebsd         # also netbsd, openbsd, dragonfly, illumos
@@ -408,3 +438,8 @@ app, and leaves a screenshot of the desktop. A VM made with
 `scripts/run-windows.sh --install` has SSH; one made before that gets it
 with `scripts/setup-windows-ssh.sh`, which the
 [VM's notes](../../.windows/unattend/README.md) describe.
+
+Some packages have been checked only by vero's own checks, not installed
+on the system they are for: Debian's armel, Alpine's armhf, Void's armv6l,
+Arch Linux 32's pentium4, FreeBSD's armv7, and Chimera's on anything but
+ARM64, which `test-repo.sh` installs in Chimera's container.

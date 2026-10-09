@@ -49,12 +49,16 @@ func writeAUR(site, url string, a *App, debs map[string]*debFile) error {
 	for _, s := range sources {
 		arches = append(arches, "'"+s.arch+"'")
 	}
-	var deps []string
+	var deps, optdeps, optdepends []string
 	if a.GTK != nil {
 		deps = splitList(a.GTK.Arch.Depends)
+		optdeps = splitList(a.GTK.Arch.OptDepends)
 	}
 	for _, d := range deps {
 		depends = append(depends, shellQuote(d))
+	}
+	for _, d := range optdeps {
+		optdepends = append(optdepends, shellQuote(d))
 	}
 	licence := a.Licence
 	if licence == "" {
@@ -69,7 +73,11 @@ func writeAUR(site, url string, a *App, debs map[string]*debFile) error {
 	if a.Homepage != "" {
 		fmt.Fprintf(&b, "url=%s\n", shellQuote(a.Homepage))
 	}
-	fmt.Fprintf(&b, "license=('%s')\ndepends=(%s)\nprovides=('%s')\nconflicts=('%s')\n", licence, strings.Join(depends, " "), a.Name, a.Name)
+	fmt.Fprintf(&b, "license=('%s')\ndepends=(%s)\n", licence, strings.Join(depends, " "))
+	if len(optdepends) > 0 {
+		fmt.Fprintf(&b, "optdepends=(%s)\n", strings.Join(optdepends, " "))
+	}
+	fmt.Fprintf(&b, "provides=('%s')\nconflicts=('%s')\n", a.Name, a.Name)
 	// Built already: nothing to strip, and no debug package to make.
 	b.WriteString("options=('!debug' '!strip')\n")
 	for _, s := range sources {
@@ -92,6 +100,9 @@ package() {
 	fmt.Fprintf(&info, "\tlicense = %s\n", licence)
 	for _, d := range deps {
 		fmt.Fprintf(&info, "\tdepends = %s\n", d)
+	}
+	for _, d := range optdeps {
+		fmt.Fprintf(&info, "\toptdepends = %s\n", d)
 	}
 	fmt.Fprintf(&info, "\tprovides = %s\n\tconflicts = %s\n\toptions = !debug\n\toptions = !strip\n", a.Name, a.Name)
 	for _, s := range sources {

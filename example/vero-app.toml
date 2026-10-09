@@ -68,13 +68,17 @@ requires = "python3 >= 3.10, python3-gobject, (typelib(Gtk) = 4.0 if openSUSE-re
 [gtk.arch]
 depends = "python, python-gobject, gtk4"
 
-# Alpine Linux and Void Linux, each packaged for when its section is
-# here: what the app needs from their packages.
+# Alpine Linux, Void Linux and Chimera Linux, each packaged for when its
+# section is here: what the app needs from their packages.
 [gtk.alpine]
 depends = "python3, py3-gobject3, gtk4.0"
 
 [gtk.void]
 depends = "python3, python3-gobject, gtk4"
+
+# Chimera Linux, whose apk installs the same kind of package as Alpine's.
+[gtk.chimera]
+depends = "python, python-gobject, gtk4"
 
 # A Flatpak, for any Linux. It's made only when asked for, with build =
 # true or --targets flatpak, since making one needs Docker. The runtime it

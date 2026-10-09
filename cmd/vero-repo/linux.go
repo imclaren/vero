@@ -18,7 +18,7 @@ import (
 )
 
 // linuxArches are the architectures the Linux packages may be built for:
-// Go's name, and each kind of package's own, by its section of
+// Go's name (or armv6 and armv5, Go's arm for older processors), and each kind of package's own, by its section of
 // vero-app.toml; a kind without one has no packages for it. The extra ones
 // are packaged only where a section's arches names them.
 var linuxArches = []struct {
@@ -26,20 +26,27 @@ var linuxArches = []struct {
 	names  map[string]string
 	extra  bool
 }{
-	{"amd64", map[string]string{"deb": "amd64", "rpm": "x86_64", "arch": "x86_64", "flatpak": "x86_64", "alpine": "x86_64", "void": "x86_64"}, false},
-	{"arm64", map[string]string{"deb": "arm64", "rpm": "aarch64", "arch": "aarch64", "flatpak": "aarch64", "alpine": "aarch64", "void": "aarch64"}, false},
-	{"riscv64", map[string]string{"deb": "riscv64", "rpm": "riscv64", "arch": "riscv64", "alpine": "riscv64"}, true},
-	{"ppc64le", map[string]string{"deb": "ppc64el", "rpm": "ppc64le", "alpine": "ppc64le"}, true},
-	// 32-bit ARM as Raspberry Pi OS and its like have it: ARMv7, with
-	// hardware floating point.
-	{"arm", map[string]string{"deb": "armhf", "arch": "armv7h", "alpine": "armv7", "void": "armv7l"}, true},
+	{"amd64", map[string]string{"deb": "amd64", "rpm": "x86_64", "arch": "x86_64", "flatpak": "x86_64", "alpine": "x86_64", "void": "x86_64", "chimera": "x86_64"}, false},
+	{"arm64", map[string]string{"deb": "arm64", "rpm": "aarch64", "arch": "aarch64", "flatpak": "aarch64", "alpine": "aarch64", "void": "aarch64", "chimera": "aarch64"}, false},
+	{"riscv64", map[string]string{"deb": "riscv64", "rpm": "riscv64", "arch": "riscv64", "alpine": "riscv64", "chimera": "riscv64"}, true},
+	{"ppc64le", map[string]string{"deb": "ppc64el", "rpm": "ppc64le", "alpine": "ppc64le", "chimera": "ppc64le"}, true},
+	// 32-bit ARM: ARMv7, with hardware floating point.
+	{"arm", map[string]string{"arch": "armv7h", "alpine": "armv7", "void": "armv7l"}, true},
+	// Older 32-bit ARM: ARMv6 with hardware floating point, as Alpine's
+	// armhf and Void's armv6l have it, and ARMv5, without, as Debian's
+	// armel. Go builds both as arm, with GOARM=6 or 5. Debian's armhf is
+	// ARMv7, but Raspberry Pi OS's, by the same name, is ARMv6, for the
+	// first Raspberry Pis: the .deb is built for ARMv6, which runs on both.
+	{"armv6", map[string]string{"deb": "armhf", "alpine": "armhf", "void": "armv6l"}, true},
+	{"armv5", map[string]string{"deb": "armel"}, true},
 	// 32-bit Intel and AMD, from the Pentium 4 on, since Go's code needs
-	// SSE2: i686 to rpm, pacman and xbps, which have it as the oldest they
-	// run on.
-	{"386", map[string]string{"deb": "i386", "rpm": "i686", "arch": "i686", "alpine": "x86", "void": "i686"}, true},
-	{"loong64", map[string]string{"deb": "loong64", "arch": "loong64", "alpine": "loongarch64"}, true},
-	// POWER, big-endian, as Debian's ports have it.
-	{"ppc64", map[string]string{"deb": "ppc64"}, true},
+	// SSE2: i686 to rpm and xbps, which have it as the oldest they run on,
+	// and pentium4 to Arch Linux 32's pacman, which takes that name on a
+	// processor with SSE2, and looks for packages for it alone.
+	{"386", map[string]string{"deb": "i386", "rpm": "i686", "arch": "pentium4", "alpine": "x86", "void": "i686"}, true},
+	{"loong64", map[string]string{"deb": "loong64", "arch": "loong64", "alpine": "loongarch64", "chimera": "loongarch64"}, true},
+	// POWER, big-endian, as Debian's ports and Chimera have it.
+	{"ppc64", map[string]string{"deb": "ppc64", "chimera": "ppc64"}, true},
 	{"s390x", map[string]string{"deb": "s390x", "rpm": "s390x", "alpine": "s390x"}, true},
 	{"mips64le", map[string]string{"deb": "mips64el"}, true},
 	{"mipsle", map[string]string{"deb": "mipsel"}, true},
@@ -76,7 +83,7 @@ func buildWorker(a *App, root, worker, goos, goarch, ldflags, dir string) (strin
 	flags := strings.TrimSpace("-s -w -X main.version=" + a.Version + " " + ldflags)
 	cmd := exec.Command("go", "build", "-trimpath", "-ldflags", flags, "-o", out, worker)
 	cmd.Dir, cmd.Stdout, cmd.Stderr = root, os.Stdout, os.Stderr
-	cmd.Env = append(append(os.Environ(), "GOOS="+goos, "GOARCH="+goarch, "CGO_ENABLED=0"), goarchEnv(goarch)...)
+	cmd.Env = append(append(os.Environ(), "GOOS="+goos, "GOARCH="+goBuildArch(goarch), "CGO_ENABLED=0"), goarchEnv(goarch)...)
 	if goos == "darwin" && a.Worker.CGO {
 		arch := map[string]string{"amd64": "x86_64"}[goarch]
 		if arch == "" {
@@ -94,13 +101,26 @@ func buildWorker(a *App, root, worker, goos, goarch, ldflags, dir string) (strin
 	return out, nil
 }
 
+// goBuildArch is the GOARCH Go builds goarch with: arm for armv6 and
+// armv5, and goarch itself for the rest.
+func goBuildArch(goarch string) string {
+	if goarch == "armv6" || goarch == "armv5" {
+		return "arm"
+	}
+	return goarch
+}
+
 // goarchEnv is what Go is told, besides GOARCH, to build for goarch as
 // the systems packaged for have it: ARMv7 with hardware floating point,
-// and the Pentium 4's SSE2.
+// or the older ARM of armv6 and armv5, and the Pentium 4's SSE2.
 func goarchEnv(goarch string) []string {
 	switch goarch {
 	case "arm":
 		return []string{"GOARM=7"}
+	case "armv6":
+		return []string{"GOARM=6"}
+	case "armv5":
+		return []string{"GOARM=5"}
 	case "386":
 		return []string{"GO386=sse2"}
 	}
@@ -251,8 +271,12 @@ func goarchOf(name string) string {
 		return "riscv64"
 	case "ppc64le", "ppc64el", "powerpc64le":
 		return "ppc64le"
-	case "arm", "armhf", "armv7", "armv7h", "armv7l", "armv7hl", "earmv7hf":
+	case "arm", "armv7", "armv7h", "armv7l", "armv7hl", "earmv7hf":
 		return "arm"
+	case "armhf", "armv6", "armv6l", "armv6h", "armv6hf":
+		return "armv6"
+	case "armel", "armv5", "armv5te", "armv5tel":
+		return "armv5"
 	case "386", "i386", "i486", "i586", "i686", "x86", "pentium4":
 		return "386"
 	case "loong64", "loongarch64":
@@ -269,14 +293,32 @@ func goarchOf(name string) string {
 	return ""
 }
 
-// allows says whether arches, from a section of vero-app.toml, takes in
+// sectionGoarch is an architecture as Go names it, from a name section's
+// arches gives it: the system's own name for one first, then goarchOf's.
+func sectionGoarch(section, name string) string {
+	for _, a := range linuxArches {
+		if n := a.names[section]; n != "" && strings.EqualFold(n, name) {
+			return a.goarch
+		}
+	}
+	if sys := system(section); sys != nil {
+		for _, a := range sys.arches {
+			if strings.EqualFold(a.name, name) {
+				return a.goarch
+			}
+		}
+	}
+	return goarchOf(name)
+}
+
+// allows says whether arches, from section of vero-app.toml, takes in
 // goarch: all of them, when it's empty.
-func allows(arches []string, goarch string) bool {
+func allows(section string, arches []string, goarch string) bool {
 	if len(arches) == 0 {
 		return true
 	}
 	for _, a := range arches {
-		if goarchOf(a) == goarch {
+		if sectionGoarch(section, a) == goarch {
 			return true
 		}
 	}
@@ -290,7 +332,7 @@ func linuxArchesOf(section string, arches []string) []linuxArch {
 	var out []linuxArch
 	for _, a := range linuxArches {
 		name := a.names[section]
-		if name == "" || (len(arches) == 0 && a.extra) || (len(arches) > 0 && !allows(arches, a.goarch)) {
+		if name == "" || (len(arches) == 0 && a.extra) || (len(arches) > 0 && !allows(section, arches, a.goarch)) {
 			continue
 		}
 		out = append(out, linuxArch{a.goarch, name, a.names["deb"]})
@@ -299,7 +341,7 @@ func linuxArchesOf(section string, arches []string) []linuxArch {
 }
 
 // linuxArches are the architectures the app's Linux packages of a kind -
-// deb, rpm, arch, flatpak, alpine or void - are made for.
+// deb, rpm, arch, flatpak, alpine, void or chimera - are made for.
 func (a *App) linuxArches(section string) []linuxArch {
 	if a.GTK == nil {
 		return linuxArchesOf(section, nil)
@@ -348,6 +390,9 @@ func (g *GTK) sectionArches() map[string][]string {
 	if g.Void != nil {
 		m["void"] = g.Void.Arches
 	}
+	if g.Chimera != nil {
+		m["chimera"] = g.Chimera.Arches
+	}
 	return m
 }
 
@@ -367,8 +412,22 @@ func (g *GTK) checkArches() error {
 			}
 		}
 		for _, a := range arches {
-			if g := goarchOf(a); g == "" || !has[g] {
+			if g := sectionGoarch(section, a); g == "" || !has[g] {
 				return fmt.Errorf("[gtk.%s] arches: %s isn't one vero packages for there", section, a)
+			}
+		}
+	}
+	for section, b := range map[string]*BSDPkg{"freebsd": g.FreeBSD, "dragonfly": g.DragonFly} {
+		if b == nil {
+			continue
+		}
+		for name := range b.ByArch {
+			found := false
+			for _, a := range system(section).arches {
+				found = found || a.name == name
+			}
+			if !found {
+				return fmt.Errorf("[gtk.%s.by_arch.%s]: %s isn't %s's name for one of the architectures vero packages for there", section, name, name, system(section).label)
 			}
 		}
 	}
@@ -387,7 +446,7 @@ func (a *App) archesFor(sys *unixSystem) []unixArch {
 	}
 	var out []unixArch
 	for _, arch := range sys.arches {
-		if (len(arches) == 0 && !arch.extra) || (len(arches) > 0 && allows(arches, arch.goarch)) {
+		if (len(arches) == 0 && !arch.extra) || (len(arches) > 0 && allows(sys.name, arches, arch.goarch)) {
 			out = append(out, arch)
 		}
 	}

@@ -120,7 +120,7 @@ func unixPackage(name string) *regexp.Regexp {
 // workers are the worker built for each of Go's architectures there.
 func packageUnix(a *App, sys *unixSystem, workers map[string]string, out string) error {
 	for _, arch := range a.archesFor(sys) {
-		files, err := unixTree(a, sys.prefix, workers[arch.goarch], a.Name, a.GTK.python(systemPython(a.GTK, sys.name)))
+		files, err := unixTree(a, sys.prefix, workers[arch.goarch], a.Name, a.GTK.python(systemPython(a.GTK, sys.name, arch.name)))
 		if err != nil {
 			return err
 		}
@@ -141,13 +141,14 @@ func packageUnix(a *App, sys *unixSystem, workers map[string]string, out string)
 	return nil
 }
 
-// systemPython is the python a system's own section asks for, or "".
-func systemPython(g *GTK, sys string) string {
+// systemPython is the python a system's own section asks for on arch, by
+// the system's name for it, or "".
+func systemPython(g *GTK, sys, arch string) string {
 	switch sys {
 	case "freebsd":
-		return g.FreeBSD.Python
+		return g.FreeBSD.pythonFor(arch)
 	case "dragonfly":
-		return g.DragonFly.Python
+		return g.DragonFly.pythonFor(arch)
 	case "netbsd":
 		return g.NetBSD.Python
 	case "illumos":
@@ -166,7 +167,7 @@ func pkgManifest(a *App, sys *unixSystem, arch unixArch, files []treeFile, full 
 	if sys.name == "dragonfly" {
 		section = a.GTK.DragonFly
 	}
-	for name, origin := range section.Deps {
+	for name, origin := range section.depsFor(arch.name) {
 		deps[name] = map[string]string{"origin": origin}
 	}
 	var flatsize int

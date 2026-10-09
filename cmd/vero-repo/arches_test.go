@@ -95,7 +95,7 @@ func TestLinuxArches(t *testing.T) {
 	if got := names("rpm"); got != "x86_64 riscv64 ppc64le" {
 		t.Errorf("rpm's arches are %s", got)
 	}
-	if got := strings.Join(a.linuxGoarches("deb", "rpm"), " "); got != "amd64 riscv64 ppc64le arm" {
+	if got := strings.Join(a.linuxGoarches("deb", "rpm"), " "); got != "amd64 riscv64 ppc64le armv6" {
 		t.Errorf("the workers needed are %s", got)
 	}
 	for section, arch := range map[string]string{"rpm": "armhf", "flatpak": "riscv64"} {
@@ -198,7 +198,7 @@ func TestMoreLinuxArches(t *testing.T) {
 		return strings.Join(out, " ")
 	}
 	for section, want := range map[string]string{
-		"deb": "i386 loong64 ppc64 s390x mips64el mipsel", "rpm": "i686 s390x", "arch": "i686 loong64",
+		"deb": "i386 loong64 ppc64 s390x mips64el mipsel", "rpm": "i686 s390x", "arch": "pentium4 loong64",
 		"alpine": "x86 loongarch64 s390x", "void": "i686",
 	} {
 		if got := names(section); got != want {
@@ -269,7 +269,7 @@ func TestMoreLinuxArches(t *testing.T) {
 	if err != nil || newest["i686"].URL == "" || newest["s390x"].URL == "" {
 		t.Fatalf("rpm: %v %v", newest, err)
 	}
-	if newest, err = buildPacman(site, pacs, 3, a, s); err != nil || newest["i686"].URL == "" || newest["loong64"].URL == "" {
+	if newest, err = buildPacman(site, pacs, 3, a, s); err != nil || newest["pentium4"].URL == "" || newest["loong64"].URL == "" {
 		t.Fatalf("pacman: %v %v", newest, err)
 	}
 	if newest, err = buildAlpine(site, apks, 3, a, s); err != nil || newest["x86"].URL == "" || newest["loongarch64"].URL == "" || newest["s390x"].URL == "" {
@@ -278,7 +278,7 @@ func TestMoreLinuxArches(t *testing.T) {
 	if newest, err = buildVoid(site, xbps, 3, a, s); err != nil || newest["i686"].URL == "" || len(newest) != 1 {
 		t.Fatalf("void: %v %v", newest, err)
 	}
-	for _, f := range []string{"arch/i686/vero-example.db", "arch/loong64/vero-example.db", "alpine/x86/APKINDEX.tar.gz", "alpine/loongarch64/APKINDEX.tar.gz", "void/i686-repodata"} {
+	for _, f := range []string{"arch/pentium4/vero-example.db", "arch/loong64/vero-example.db", "alpine/x86/APKINDEX.tar.gz", "alpine/loongarch64/APKINDEX.tar.gz", "void/i686-repodata"} {
 		if _, err := os.Stat(filepath.Join(site, f)); err != nil {
 			t.Errorf("no %s: %v", f, err)
 		}
@@ -289,7 +289,7 @@ func TestMoreLinuxArches(t *testing.T) {
 	c.checkApt()
 	c.checkRPM()
 	c.checkPacman()
-	c.checkAlpine()
+	c.checkApk(alpineSystem)
 	c.checkVoid()
 	if len(c.problems) > 0 {
 		t.Fatal(c.problems)

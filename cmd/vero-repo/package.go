@@ -20,7 +20,7 @@ func packageCommand(args []string) error {
 	fset := flag.NewFlagSet("package", flag.ExitOnError)
 	appPath := fset.String("app", "vero-app.toml", "the app's vero-app.toml")
 	version := fset.String("version", "", "the version to build; the file's when not given")
-	targets := fset.String("targets", "", "comma separated: deb, rpm, pacman, alpine, void, flatpak, macos, windows, msix, web, android, ios, wasi, plan9, freebsd, dragonfly, netbsd, illumos, openbsd; linux for all of those but flatpak, bsd for the BSDs and illumos (default: all the app has)")
+	targets := fset.String("targets", "", "comma separated: deb, rpm, pacman, alpine, void, chimera, flatpak, macos, windows, msix, web, android, ios, wasi, plan9, freebsd, dragonfly, netbsd, illumos, openbsd; linux for all of those but flatpak, bsd for the BSDs and illumos (default: all the app has)")
 	out := fset.String("out", "dist/packages", "where the installers go")
 	ldflags := fset.String("ldflags", "", "more of the worker's build flags: what your app builds into it")
 	vero := fset.String("vero", "", "vero's folder (default: found from this program's source)")
@@ -74,11 +74,13 @@ func packageCommand(args []string) error {
 			return a.GTK.Alpine != nil && (all || want["linux"] || want[kind])
 		case "void":
 			return a.GTK.Void != nil && (all || want["linux"] || want[kind])
+		case "chimera":
+			return a.GTK.Chimera != nil && (all || want["linux"] || want[kind])
 		}
 		return a.GTK.enabled(kind) && (all || want["bsd"] || want[kind]) || want[kind]
 	}
 	for t := range want {
-		if a.GTK != nil && (t == "alpine" && a.GTK.Alpine == nil || t == "void" && a.GTK.Void == nil) {
+		if a.GTK != nil && (t == "alpine" && a.GTK.Alpine == nil || t == "void" && a.GTK.Void == nil || t == "chimera" && a.GTK.Chimera == nil) {
 			return fmt.Errorf("--targets %s: vero-app.toml has no [gtk.%s], which says what the app needs there", t, t)
 		}
 		if s := system(t); s != nil && a.GTK != nil && !a.GTK.enabled(t) {
@@ -147,7 +149,7 @@ func packageCommand(args []string) error {
 	for _, l := range []struct {
 		kind string
 		make func(*App, map[string]string, string) error
-	}{{"alpine", packageAlpine}, {"void", packageVoid}} {
+	}{{"alpine", packageAlpine}, {"void", packageVoid}, {"chimera", packageChimera}} {
 		if !gtk(l.kind) {
 			continue
 		}

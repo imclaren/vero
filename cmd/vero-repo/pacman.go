@@ -84,6 +84,9 @@ func pacmanInfo(a *App, arch string, files []treeFile) []byte {
 	for _, d := range pacmanDepends(a) {
 		fmt.Fprintf(&b, "depend = %s\n", d)
 	}
+	for _, d := range splitList(a.GTK.Arch.OptDepends) {
+		fmt.Fprintf(&b, "optdepend = %s\n", d)
+	}
 	return []byte(b.String())
 }
 
@@ -401,6 +404,7 @@ func pacmanDesc(file string, data, sig []byte, info [][2]string) []byte {
 	field("BUILDDATE", pkgInfo(info, "builddate"))
 	field("PACKAGER", pkgInfo(info, "packager"))
 	field("DEPENDS", pkgInfoAll(info, "depend")...)
+	field("OPTDEPENDS", pkgInfoAll(info, "optdepend")...)
 	return []byte(b.String())
 }
 

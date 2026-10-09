@@ -44,32 +44,70 @@ func alpineVersion(v string) (string, error) {
 	return m[1], nil
 }
 
+// apkSystem is a Linux whose packages apk installs: Alpine, and Chimera,
+// whose apk 3 reads Alpine's kind of package and index, signed as Alpine's
+// are, as well as its own newer kind.
+type apkSystem struct {
+	// name is its section of vero-app.toml, its folder on the site and
+	// its prefix in latest.json; label is how people know it.
+	name, label string
+	// infix comes before the architecture in the name of a package
+	// vero-repo package makes, so that Chimera's and Alpine's differ.
+	infix string
+	// pkg is its section; depends is what the app needs when the section
+	// doesn't say.
+	pkg     func(*GTK) *LinuxPkg
+	depends []string
+}
+
+var (
+	alpineSystem  = apkSystem{"alpine", "Alpine", "", func(g *GTK) *LinuxPkg { return g.Alpine }, []string{"python3", "py3-gobject3", "gtk4.0"}}
+	chimeraSystem = apkSystem{"chimera", "Chimera", "chimera-", func(g *GTK) *LinuxPkg { return g.Chimera }, []string{"python", "python-gobject", "gtk4"}}
+)
+
 // alpinePackage is NAME-VERSION-r0-ARCH.apk, as packageAlpine names
 // them, unsigned until vero-repo build signs them.
-func alpinePackage(name string) *regexp.Regexp {
-	return regexp.MustCompile(`^` + regexp.QuoteMeta(name) + `-([^-]+-r0)-(` + linuxArchNames("alpine") + `)\.apk$`)
+func alpinePackage(name string) *regexp.Regexp { return alpineSystem.packageName(name) }
+
+// packageName is NAME-VERSION-r0-INFIXARCH.apk, as packageApk names them.
+func (sys apkSystem) packageName(name string) *regexp.Regexp {
+	return regexp.MustCompile(`^` + regexp.QuoteMeta(name) + `-([^-]+-r0)-` + regexp.QuoteMeta(sys.infix) + `(` + linuxArchNames(sys.name) + `)\.apk$`)
 }
 
 // alpineDepends is what an Alpine package depends on: [gtk.alpine]'s, or
 // GTK 4 for Python.
-func alpineDepends(a *App) []string {
-	if d := splitList(a.GTK.Alpine.Depends); len(d) > 0 {
+func alpineDepends(a *App) []string { return alpineSystem.dependsOf(a) }
+
+// dependsOf is what the app's package for sys depends on: its section's,
+// or GTK 4 for Python, by the system's names.
+func (sys apkSystem) dependsOf(a *App) []string {
+	if d := splitList(sys.pkg(a.GTK).Depends); len(d) > 0 {
 		return d
 	}
-	return []string{"python3", "py3-gobject3", "gtk4.0"}
+	return sys.depends
 }
 
-// packageAlpine builds the app's Alpine package for each architecture,
+// packageAlpine builds the app's Alpine packages.
+func packageAlpine(a *App, workers map[string]string, out string) error {
+	return packageApk(alpineSystem, a, workers, out)
+}
+
+// packageChimera builds the app's Chimera packages.
+func packageChimera(a *App, workers map[string]string, out string) error {
+	return packageApk(chimeraSystem, a, workers, out)
+}
+
+// packageApk builds the app's package for sys for each architecture,
 // in Go, as abuild would but for the signature, which vero-repo build
 // adds: two gzip streams, one after the other - the control segment,
 // .PKGINFO, then the files, each with its SHA-1 in the tar, as apk checks
 // them.
-func packageAlpine(a *App, workers map[string]string, out string) error {
+func packageApk(sys apkSystem, a *App, workers map[string]string, out string) error {
 	version, err := alpineVersion(a.Version)
 	if err != nil {
 		return err
 	}
-	for _, arch := range a.linuxArches("alpine") {
+	for _, arch := range a.linuxArches(sys.name) {
 		files, err := linuxTree(a, "/usr", workers[arch.goarch], a.Name)
 		if err != nil {
 			return err
@@ -95,7 +133,7 @@ func packageAlpine(a *App, workers map[string]string, out string) error {
 		}
 		fmt.Fprintf(&info, "builddate = %d\npackager = %s\nsize = %d\narch = %s\norigin = %s\nmaintainer = %s\nlicense = %s\n",
 			buildTime().Unix(), a.Publisher, size, arch.name, a.Name, a.Publisher, licence)
-		for _, d := range alpineDepends(a) {
+		for _, d := range sys.dependsOf(a) {
 			fmt.Fprintf(&info, "depend = %s\n", d)
 		}
 		fmt.Fprintf(&info, "datahash = %s\n", hex.EncodeToString(sum[:]))
@@ -103,7 +141,7 @@ func packageAlpine(a *App, workers map[string]string, out string) error {
 		if err != nil {
 			return err
 		}
-		name := filepath.Join(out, fmt.Sprintf("%s-%s-r0-%s.apk", a.Name, version, arch.name))
+		name := filepath.Join(out, fmt.Sprintf("%s-%s-r0-%s%s.apk", a.Name, version, sys.infix, arch.name))
 		if err := os.MkdirAll(out, 0o755); err != nil {
 			return err
 		}
@@ -264,17 +302,27 @@ func apkInfo(pkg []byte) ([][2]string, []byte, error) {
 	return nil, nil, errors.New("no .PKGINFO")
 }
 
-// buildAlpine makes site/alpine/ARCH a repository apk installs and
-// updates from, for each architecture: the newest keep packages, each
-// signed, and APKINDEX.tar.gz, the index, signed too, as abuild-sign signs
-// them. key.rsa.pub beside them is the public key apk checks them with.
-// It returns the newest package of each architecture.
+// buildAlpine makes the site's Alpine repository.
 func buildAlpine(site string, newPkgs []string, keep int, a *App, s *signer) (map[string]Download, error) {
+	return buildApk(alpineSystem, site, newPkgs, keep, a, s)
+}
+
+// buildChimera makes the site's Chimera repository.
+func buildChimera(site string, newPkgs []string, keep int, a *App, s *signer) (map[string]Download, error) {
+	return buildApk(chimeraSystem, site, newPkgs, keep, a, s)
+}
+
+// buildApk makes site/SYSTEM/ARCH a repository apk installs and updates
+// from, for each architecture: the newest keep packages, each signed, and
+// APKINDEX.tar.gz, the index, signed too, as abuild-sign signs them.
+// key.rsa.pub beside them is the public key apk checks them with. It
+// returns the newest package of each architecture.
+func buildApk(sys apkSystem, site string, newPkgs []string, keep int, a *App, s *signer) (map[string]Download, error) {
 	newest := map[string]Download{}
-	match := alpinePackage(a.Name)
+	match := sys.packageName(a.Name)
 	inRepo := regexp.MustCompile(`^` + regexp.QuoteMeta(a.Name) + `-([^-]+)-r0\.apk$`)
-	for _, arch := range a.linuxArches("alpine") {
-		dir := filepath.Join(site, "alpine", arch.name)
+	for _, arch := range a.linuxArches(sys.name) {
+		dir := filepath.Join(site, sys.name, arch.name)
 		for _, p := range newPkgs {
 			m := match.FindStringSubmatch(filepath.Base(p))
 			if m == nil || m[2] != arch.name {
@@ -348,7 +396,7 @@ func buildAlpine(site string, newPkgs []string, keep int, a *App, s *signer) (ma
 	if err != nil {
 		return nil, err
 	}
-	return newest, os.WriteFile(filepath.Join(site, "alpine", alpineKeyName(a)), key, 0o644)
+	return newest, os.WriteFile(filepath.Join(site, sys.name, alpineKeyName(a)), key, 0o644)
 }
 
 // apkIndexEntry is a package's entry in APKINDEX: C, the SHA-1 of its

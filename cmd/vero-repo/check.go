@@ -156,8 +156,10 @@ func checkSite(site, url string, a *App, sparkle ed25519.PublicKey, previous *La
 	if exists("arch") {
 		c.checkPacman()
 	}
-	if exists("alpine") {
-		c.checkAlpine()
+	for _, sys := range []apkSystem{alpineSystem, chimeraSystem} {
+		if exists(sys.name) {
+			c.checkApk(sys)
+		}
 	}
 	if exists("void") {
 		c.checkVoid()
@@ -948,8 +950,9 @@ func (c *checker) rsaPEM(rel string) *rsa.PublicKey {
 }
 
 // alpineSigned checks the signature segment at the start of data, an
-// Alpine package or index, and returns the streams after it.
-func (c *checker) alpineSigned(what string, data []byte, pub *rsa.PublicKey) [][]byte {
+// Alpine or Chimera package or index, checked with the key in dir, and
+// returns the streams after it.
+func (c *checker) alpineSigned(what, dir string, data []byte, pub *rsa.PublicKey) [][]byte {
 	streams, err := gzipStreams(data)
 	if err != nil || len(streams) < 2 {
 		c.fail("%s can't be read: %v", what, err)
@@ -963,24 +966,24 @@ func (c *checker) alpineSigned(what string, data []byte, pub *rsa.PublicKey) [][
 	sig, ok := files[".SIGN.RSA256."+alpineKeyName(c.a)]
 	sum := sha256.Sum256(streams[1])
 	if !ok || rsa.VerifyPKCS1v15(pub, crypto.SHA256, sum[:], sig) != nil {
-		c.fail("%s: the signature doesn't check out with alpine/%s", what, alpineKeyName(c.a))
+		c.fail("%s: the signature doesn't check out with %s/%s", what, dir, alpineKeyName(c.a))
 	}
 	return streams[1:]
 }
 
-// checkAlpine checks each architecture's Alpine repository: that the
-// index and the packages are signed, and that each package is what the
+// checkApk checks each architecture's Alpine or Chimera repository: that
+// the index and the packages are signed, and that each package is what the
 // index says.
-func (c *checker) checkAlpine() {
-	pub := c.rsaPEM("alpine/" + alpineKeyName(c.a))
+func (c *checker) checkApk(sys apkSystem) {
+	pub := c.rsaPEM(sys.name + "/" + alpineKeyName(c.a))
 	if pub == nil {
 		return
 	}
-	indexes, _ := filepath.Glob(filepath.Join(c.site, "alpine", "*", "APKINDEX.tar.gz"))
+	indexes, _ := filepath.Glob(filepath.Join(c.site, sys.name, "*", "APKINDEX.tar.gz"))
 	for _, index := range indexes {
 		dir := filepathRel(c.site, filepath.Dir(index))
 		data, _ := c.file(dir + "/APKINDEX.tar.gz")
-		streams := c.alpineSigned(dir+"/APKINDEX.tar.gz", data, pub)
+		streams := c.alpineSigned(dir+"/APKINDEX.tar.gz", sys.name, data, pub)
 		if streams == nil {
 			continue
 		}
@@ -1004,7 +1007,7 @@ func (c *checker) checkAlpine() {
 			if fields["S"] != strconv.Itoa(len(pkg)) {
 				c.fail("%s is %d bytes, but its index says %s", file, len(pkg), fields["S"])
 			}
-			rest := c.alpineSigned(file, pkg, pub)
+			rest := c.alpineSigned(file, sys.name, pkg, pub)
 			if len(rest) != 2 {
 				continue
 			}
@@ -1029,7 +1032,7 @@ func (c *checker) checkAlpine() {
 			c.contents(file, list, "/usr/lib/"+c.a.Name+"/")
 		}
 	}
-	c.ok("the Alpine repository")
+	c.ok("the " + sys.label + " repository")
 }
 
 // checkVoid checks the Void repository: each architecture's repodata

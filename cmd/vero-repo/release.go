@@ -198,6 +198,7 @@ func possibleTargets(a *App) []target {
 	add(a.GTK != nil, "pacman")
 	add(a.GTK != nil && a.GTK.Alpine != nil, "alpine")
 	add(a.GTK != nil && a.GTK.Void != nil, "void")
+	add(a.GTK != nil && a.GTK.Chimera != nil, "chimera")
 	add(a.GTK != nil && a.GTK.Flatpak.Build, "flatpak")
 	for _, sys := range unixSystems {
 		add(a.GTK != nil && a.GTK.enabled(sys.name), sys.name)
@@ -276,7 +277,7 @@ func signingSummary(a *App, targets string) string {
 	}
 	var b strings.Builder
 	b.WriteString("signed:\n")
-	if has("deb") || has("rpm") || has("pacman") || has("alpine") || has("void") || has("flatpak") {
+	if has("deb") || has("rpm") || has("pacman") || has("alpine") || has("void") || has("chimera") || has("flatpak") {
 		b.WriteString("  Linux             with your key; nothing more to do\n")
 	}
 	for _, sys := range unixSystems {

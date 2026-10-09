@@ -138,12 +138,12 @@ func TestAlpine(t *testing.T) {
 	}
 
 	ch := &checker{site: site, url: "https://example.com", a: a}
-	ch.checkAlpine()
+	ch.checkApk(alpineSystem)
 	if len(ch.problems) > 0 {
 		t.Fatal(ch.problems)
 	}
 	os.WriteFile(filepath.Join(site, "alpine", "aarch64", "vero-example-1.2.3_beta-r0.apk"), append(pkg, 0), 0o644)
-	ch.checkAlpine()
+	ch.checkApk(alpineSystem)
 	if len(ch.problems) == 0 {
 		t.Error("a changed package passed")
 	}
