@@ -30,7 +30,10 @@ else:
     raise SystemExit("qemu never opened its console socket")
 s.settimeout(0.5)
 
-F2 = b"\x1b2"
+# F2 as the terminal's own key code, not the installer's Esc-2. In a text
+# field the installer translates an Esc twice, and the second time crashes
+# in curses.ascii.isdigit(None), so Esc-2 on the Users screen always fails.
+F2 = b"\x1bOQ"
 
 
 def drain(seconds):
@@ -161,7 +164,7 @@ time.sleep(1.5)
 s.sendall(F2)
 time.sleep(10)
 
-wait_for("Esc-2_Install", 300, "the summary")
+wait_for("_Install", 300, "the summary")   # F2_Install, or Esc-2_Install once Esc was used
 s.sendall(F2)
 print("   installing", flush=True)
 
@@ -179,6 +182,9 @@ while time.time() < end:
 # It reboots itself, back into the install media, and what it leaves on the
 # disk cannot boot: no bootloader in the MBR and no boot archive.  Both are
 # written from here.
+# The last screen waits for F8 to reboot. Esc-8 is safe here: the Esc
+# crash above is only in text fields, and vt100 has no F8 key code.
+s.sendall(b"\x1b8")
 print("   repairing the installation", flush=True)
 wait_for("Autoboot in", 600, "the loader again")
 s.sendall(b" ")
