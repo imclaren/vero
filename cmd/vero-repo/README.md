@@ -299,7 +299,9 @@ DragonFly and illumos are x86-64 only.
 
 32-bit ARM is ARMv7 with hardware floating point, as Raspberry Pi OS and
 Debian's armhf have it; the worker is built with `GOARM=7`. 32-bit x86
-needs a Pentium 4 or later, since the worker is built with `GO386=sse2`.
+needs a Pentium 4 or later, since the worker is built with `GO386=sse2`,
+and Go's code for POWER, either way round, needs a POWER8 or later, so not
+a Power Mac G5.
 Void has i686 packages only for glibc, so there is no i686-musl one. The
 MIPS packages are little-endian, as Debian 12's are.
 
