@@ -454,8 +454,13 @@ func TestPkgsrc(t *testing.T) {
 		}
 	}
 	launcher := mustReadFromTgz(t, file, "bin/vero-example")
-	if !strings.Contains(launcher, "exec python3.12 /usr/pkg/lib/vero-example/main.py") {
+	if !strings.Contains(launcher, "exec /usr/pkg/bin/python3.12 /usr/pkg/lib/vero-example/main.py") {
 		t.Errorf("the launcher: %q", launcher)
+	}
+	// The desktop entry too, by its whole path: a session's PATH may leave
+	// out pkgsrc's bin.
+	if entry := mustReadFromTgz(t, file, "share/applications/dev.vero.example.desktop"); !strings.Contains(entry, "Exec=/usr/pkg/bin/vero-example") {
+		t.Errorf("the desktop entry: %q", entry)
 	}
 }
 

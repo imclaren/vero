@@ -120,7 +120,14 @@ func unixPackage(name string) *regexp.Regexp {
 // workers are the worker built for each of Go's architectures there.
 func packageUnix(a *App, sys *unixSystem, workers map[string]string, out string) error {
 	for _, arch := range a.archesFor(sys) {
-		files, err := unixTree(a, sys.prefix, workers[arch.goarch], a.Name, a.GTK.python(systemPython(a.GTK, sys.name, arch.name)))
+		// Both by their whole path, under the package's prefix: a login's
+		// PATH may leave it out, as OpenIndiana's does /opt/local/bin, and
+		// a desktop session's even more often.
+		python := a.GTK.python(systemPython(a.GTK, sys.name, arch.name))
+		if !strings.Contains(python, "/") {
+			python = path.Join(sys.prefix, "bin", python)
+		}
+		files, err := unixTree(a, sys.prefix, workers[arch.goarch], path.Join(sys.prefix, "bin", a.Name), python)
 		if err != nil {
 			return err
 		}
