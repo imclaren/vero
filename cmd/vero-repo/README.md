@@ -230,6 +230,21 @@ something the app needs on ARM. `vero-repo` refuses an architecture the
 system doesn't have. Narrowing them doesn't move a repository, so adding
 one back later needs nothing from the people who installed the app.
 
+On Linux, `arches` can also name RISC-V, POWER and 32-bit ARM, which are
+packaged only when a section names them; naming any architecture means
+naming all you want, so `arches = ["x86_64", "aarch64", "riscv64"]` adds
+RISC-V to the usual two. Each package names them as its system does, and
+`arches` takes any of those names:
+
+| Section | x86-64 | ARM64 | RISC-V | POWER | 32-bit ARM |
+|---|---|---|---|---|---|
+| `[gtk.deb]` | amd64 | arm64 | riscv64 | ppc64el | armhf |
+| `[gtk.rpm]` | x86_64 | aarch64 | riscv64 | ppc64le | |
+| `[gtk.flatpak]` | x86_64 | aarch64 | | | |
+
+32-bit ARM is ARMv7 with hardware floating point, as Raspberry Pi OS and
+Debian's armhf have it; the worker is built with `GOARM=7`.
+
 The illumos packages are signed, because pkgsrc there, as SmartOS sets it
 up, installs only signed packages: the page's commands add your key to its
 keyring first. The NetBSD packages aren't signed, since NetBSD's pkgsrc

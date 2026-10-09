@@ -15,7 +15,11 @@ import (
 // own AUR account: the README says how. debs are the newest package of
 // each Debian architecture.
 func writeAUR(site, url string, a *App, debs map[string]*debFile) error {
-	if debs["amd64"] == nil && debs["arm64"] == nil {
+	some := false
+	for _, arch := range a.linuxArches("arch") {
+		some = some || debs[arch.deb] != nil
+	}
+	if !some {
 		return nil
 	}
 	url = strings.TrimRight(url, "/")
@@ -23,7 +27,7 @@ func writeAUR(site, url string, a *App, debs map[string]*debFile) error {
 	var sources []source
 	version := ""
 	for _, arch := range a.linuxArches("arch") {
-		d := debs[arch.goarch]
+		d := debs[arch.deb]
 		if d == nil {
 			continue
 		}

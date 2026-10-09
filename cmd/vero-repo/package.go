@@ -105,10 +105,9 @@ func packageCommand(args []string) error {
 		}
 		return workers[goos], nil
 	}
-	linuxGoarches := []string{"amd64", "arm64"}
 	did := false
 	if gtk("deb") {
-		w, err := needWorkers("linux", linuxGoarches...)
+		w, err := needWorkers("linux", a.linuxGoarches("deb")...)
 		if err != nil {
 			return err
 		}
@@ -118,7 +117,7 @@ func packageCommand(args []string) error {
 		did = true
 	}
 	if gtk("rpm") {
-		w, err := needWorkers("linux", linuxGoarches...)
+		w, err := needWorkers("linux", a.linuxGoarches("rpm")...)
 		if err != nil {
 			return err
 		}
@@ -128,7 +127,7 @@ func packageCommand(args []string) error {
 		did = true
 	}
 	if gtk("flatpak") {
-		w, err := needWorkers("linux", linuxGoarches...)
+		w, err := needWorkers("linux", a.linuxGoarches("flatpak")...)
 		if err != nil {
 			return err
 		}

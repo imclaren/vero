@@ -68,3 +68,82 @@ func TestArches(t *testing.T) {
 		t.Error("sparc was taken")
 	}
 }
+
+// TestLinuxArches: RISC-V, POWER and 32-bit ARM are packaged only when a
+// section names them, under each kind of package's own name for them,
+// and only where that kind has packages for them; apt indexes them.
+func TestLinuxArches(t *testing.T) {
+	a, workers := linuxApp(t)
+	names := func(section string) string {
+		var out []string
+		for _, arch := range a.linuxArches(section) {
+			out = append(out, arch.name)
+		}
+		return strings.Join(out, " ")
+	}
+	if got := names("deb"); got != "amd64 arm64" {
+		t.Errorf("deb's arches are %s, without any named", got)
+	}
+	a.GTK.Deb.Arches = []string{"amd64", "riscv64", "ppc64el", "armhf"}
+	a.GTK.RPM.Arches = []string{"x86_64", "riscv64", "ppc64le"}
+	if err := a.GTK.checkArches(); err != nil {
+		t.Fatal(err)
+	}
+	if got := names("deb"); got != "amd64 riscv64 ppc64el armhf" {
+		t.Errorf("deb's arches are %s", got)
+	}
+	if got := names("rpm"); got != "x86_64 riscv64 ppc64le" {
+		t.Errorf("rpm's arches are %s", got)
+	}
+	if got := strings.Join(a.linuxGoarches("deb", "rpm"), " "); got != "amd64 riscv64 ppc64le arm" {
+		t.Errorf("the workers needed are %s", got)
+	}
+	for section, arch := range map[string]string{"rpm": "armhf", "flatpak": "riscv64"} {
+		b := *a.GTK
+		b.RPM.Arches, b.Flatpak.Arches = nil, nil
+		if section == "rpm" {
+			b.RPM.Arches = []string{arch}
+		} else {
+			b.Flatpak.Arches = []string{arch}
+		}
+		if err := b.checkArches(); err == nil {
+			t.Errorf("[gtk.%s] took %s", section, arch)
+		}
+	}
+
+	pkgs, site := t.TempDir(), t.TempDir()
+	if err := packageDeb(a, workers, pkgs); err != nil {
+		t.Fatal(err)
+	}
+	if err := packageRPM(a, workers, pkgs); err != nil {
+		t.Fatal(err)
+	}
+	debs, _ := filepath.Glob(filepath.Join(pkgs, "*.deb"))
+	rpms, _ := filepath.Glob(filepath.Join(pkgs, "*.rpm"))
+	if len(debs) != 4 || len(rpms) != 3 {
+		t.Fatalf("packaged %v %v", debs, rpms)
+	}
+	if c, err := readControl(filepath.Join(pkgs, "vero-example_1.2.3-beta_armhf.deb")); err != nil || c.Get("Architecture") != "armhf" {
+		t.Errorf("the armhf .deb says %v (%v)", c, err)
+	}
+	s := testKey(t)
+	if _, err := buildApt(site, debs, 3, a, s); err != nil {
+		t.Fatal(err)
+	}
+	for _, arch := range []string{"amd64", "arm64", "riscv64", "ppc64el", "armhf"} {
+		if _, err := os.Stat(filepath.Join(site, "apt", "dists", "stable", "main", "binary-"+arch, "Packages")); err != nil {
+			t.Errorf("no index for %s: %v", arch, err)
+		}
+	}
+	if _, err := buildRPM(site, rpms, 3, "https://example.com", a, s); err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(site, publicFile), s.public, 0o644)
+	c := &checker{site: site, url: "https://example.com", a: a}
+	c.keyring, _ = loadKeyring(s.public)
+	c.checkApt()
+	c.checkRPM()
+	if len(c.problems) > 0 {
+		t.Fatal(c.problems)
+	}
+}

@@ -88,6 +88,11 @@ runtime_version = "51"
 #
 #   arches = ["x86_64"]
 #
+# On Linux it can also add RISC-V, POWER and 32-bit ARM, which are
+# packaged only when named, such as in [gtk.deb]:
+#
+#   arches = ["amd64", "arm64", "riscv64", "ppc64el", "armhf"]
+#
 # FreeBSD and DragonFly: each package the app needs, with the port it
 # comes from.
 [gtk.freebsd]

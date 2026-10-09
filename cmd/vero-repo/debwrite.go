@@ -20,15 +20,15 @@ import (
 
 // packageDeb builds the app's .deb for each architecture, for Debian and
 // Ubuntu, in Go: the same files as the rpm, under /usr. workers are the
-// worker built for each of Go's architectures, which Debian names the same.
+// worker built for each of Go's architectures.
 func packageDeb(a *App, workers map[string]string, out string) error {
 	for _, arch := range a.linuxArches("deb") {
 		files, err := linuxTree(a, "/usr", workers[arch.goarch], a.Name)
 		if err != nil {
 			return err
 		}
-		control := debControl(a, arch.goarch, files)
-		name := filepath.Join(out, fmt.Sprintf("%s_%s_%s.deb", a.Name, a.Version, arch.goarch))
+		control := debControl(a, arch.name, files)
+		name := filepath.Join(out, fmt.Sprintf("%s_%s_%s.deb", a.Name, a.Version, arch.name))
 		if err := writeDeb(name, control, nil, files); err != nil {
 			return err
 		}

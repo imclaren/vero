@@ -16,12 +16,27 @@ import (
 	"golang.org/x/image/draw"
 )
 
-// linuxArches are the architectures the Linux packages are built for: Go's
-// name, and the name rpm and Flatpak use.
-var linuxArches = []struct{ goarch, name string }{
-	{"amd64", "x86_64"},
-	{"arm64", "aarch64"},
+// linuxArches are the architectures the Linux packages may be built for:
+// Go's name, and each kind of package's own, by its section of
+// vero-app.toml; a kind without one has no packages for it. The extra ones
+// are packaged only where a section's arches names them.
+var linuxArches = []struct {
+	goarch string
+	names  map[string]string
+	extra  bool
+}{
+	{"amd64", map[string]string{"deb": "amd64", "rpm": "x86_64", "arch": "x86_64", "flatpak": "x86_64", "alpine": "x86_64", "void": "x86_64"}, false},
+	{"arm64", map[string]string{"deb": "arm64", "rpm": "aarch64", "arch": "aarch64", "flatpak": "aarch64", "alpine": "aarch64", "void": "aarch64"}, false},
+	{"riscv64", map[string]string{"deb": "riscv64", "rpm": "riscv64", "arch": "riscv64", "alpine": "riscv64"}, true},
+	{"ppc64le", map[string]string{"deb": "ppc64el", "rpm": "ppc64le", "alpine": "ppc64le", "void": "ppc64le"}, true},
+	// 32-bit ARM as Raspberry Pi OS and its like have it: ARMv7, with
+	// hardware floating point.
+	{"arm", map[string]string{"deb": "armhf", "arch": "armv7h", "alpine": "armv7", "void": "armv7l"}, true},
 }
+
+// linuxArch is an architecture a kind of Linux package is made for: Go's
+// name, the kind's own, and Debian's.
+type linuxArch struct{ goarch, name, deb string }
 
 // treeFile is one file of an installed app: its path once installed,
 // what is in it, and its mode.
@@ -39,6 +54,9 @@ func buildWorker(a *App, root, worker, goos, goarch, ldflags, dir string) (strin
 	cmd := exec.Command("go", "build", "-trimpath", "-ldflags", flags, "-o", out, worker)
 	cmd.Dir, cmd.Stdout, cmd.Stderr = root, os.Stdout, os.Stderr
 	cmd.Env = append(os.Environ(), "GOOS="+goos, "GOARCH="+goarch, "CGO_ENABLED=0")
+	if goarch == "arm" {
+		cmd.Env = append(cmd.Env, "GOARM=7")
+	}
 	if goos == "darwin" && a.Worker.CGO {
 		arch := map[string]string{"amd64": "x86_64"}[goarch]
 		if arch == "" {
@@ -196,6 +214,12 @@ func goarchOf(name string) string {
 		return "amd64"
 	case "arm64", "aarch64":
 		return "arm64"
+	case "riscv64":
+		return "riscv64"
+	case "ppc64le", "ppc64el", "powerpc64le":
+		return "ppc64le"
+	case "arm", "armhf", "armv7", "armv7h", "armv7l", "armv7hl":
+		return "arm"
 	}
 	return ""
 }
@@ -214,25 +238,44 @@ func allows(arches []string, goarch string) bool {
 	return false
 }
 
-// linuxArchesOf are linuxArches, less any a section leaves out.
-func linuxArchesOf(arches []string) []struct{ goarch, name string } {
-	var out []struct{ goarch, name string }
+// linuxArchesOf are the architectures section's packages are made for,
+// given the arches it names: amd64 and arm64 when it names none, and only
+// those it names when it does.
+func linuxArchesOf(section string, arches []string) []linuxArch {
+	var out []linuxArch
 	for _, a := range linuxArches {
-		if allows(arches, a.goarch) {
-			out = append(out, a)
+		name := a.names[section]
+		if name == "" || (len(arches) == 0 && a.extra) || (len(arches) > 0 && !allows(arches, a.goarch)) {
+			continue
 		}
+		out = append(out, linuxArch{a.goarch, name, a.names["deb"]})
 	}
 	return out
 }
 
 // linuxArches are the architectures the app's Linux packages of a kind -
-// deb, rpm, arch or flatpak - are made for: all, less any its section
-// leaves out.
-func (a *App) linuxArches(section string) []struct{ goarch, name string } {
+// deb, rpm, arch, flatpak, alpine or void - are made for.
+func (a *App) linuxArches(section string) []linuxArch {
 	if a.GTK == nil {
-		return linuxArches
+		return linuxArchesOf(section, nil)
 	}
-	return linuxArchesOf(a.GTK.sectionArches()[section])
+	return linuxArchesOf(section, a.GTK.sectionArches()[section])
+}
+
+// linuxGoarches are the architectures, as Go names them, of every kind of
+// Linux package in sections.
+func (a *App) linuxGoarches(sections ...string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, s := range sections {
+		for _, arch := range a.linuxArches(s) {
+			if !seen[arch.goarch] {
+				seen[arch.goarch] = true
+				out = append(out, arch.goarch)
+			}
+		}
+	}
+	return out
 }
 
 // sectionArches are the arches each of the GTK front end's sections names,
@@ -260,7 +303,12 @@ func (g *GTK) sectionArches() map[string][]string {
 // checkArches says whether every section's arches are ones its system has.
 func (g *GTK) checkArches() error {
 	for section, arches := range g.sectionArches() {
-		has := map[string]bool{"amd64": true, "arm64": true}
+		has := map[string]bool{}
+		for _, a := range linuxArches {
+			if a.names[section] != "" {
+				has[a.goarch] = true
+			}
+		}
 		if sys := system(section); sys != nil {
 			has = map[string]bool{}
 			for _, a := range sys.arches {
