@@ -73,7 +73,9 @@ if [ "$INSTALL" = yes ]; then
             -o "$VM/oi-text.iso"
     fi
     rm -f "$VM/disk.qcow2"
-    qemu-img create -f qcow2 "$VM/disk.qcow2" 14G >/dev/null
+    # Room for GTK, WebKitGTK and an app's packages: 14G filled up. The
+    # pool can't simply be grown later, as it sits in an fdisk partition.
+    qemu-img create -f qcow2 "$VM/disk.qcow2" 32G >/dev/null
 fi
 
 boot() {   # $1: extra arguments, e.g. the install media
