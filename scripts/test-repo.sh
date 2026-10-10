@@ -356,7 +356,8 @@ mac_test() {
 windows_test() {
     . "$VERO/scripts/lib/windows-disc.sh"
     VMDIR="$HOME/vm/vero-windows"
-    SSHPORT=2222
+    # Not 2222, which is FreeBSD VM's, so that both can be tested at once.
+    SSHPORT=2227
     [ -f "$VMDIR/disk.qcow2" ] || { echo "no Windows VM in $VMDIR: scripts/run-windows.sh --install makes one" >&2; exit 1; }
     [ -f "$WINDOWS_KEY" ] || { echo "no $WINDOWS_KEY: scripts/setup-windows-ssh.sh sets up SSH into the VM" >&2; exit 1; }
     windows_running && { echo "the Windows VM is running already: stop it first" >&2; exit 1; }
@@ -448,7 +449,11 @@ finish_launch() {
     elif ! grep -Eq '"ok" ?: ?true' "$out/result.json"; then why="a step failed"
     fi
     secs=$(($(date +%s) - lb))
-    printf '%s\n%s\n%s\n' "$([ -n "$why" ] && echo FAIL || echo PASS)" "$secs" "$why" >"$out/status"
+    # Which of the app's versions it was: its git commit, and whether it
+    # had changes not yet committed.
+    commit=$(git -C "$APP_DIR" rev-parse --short HEAD 2>/dev/null || true)
+    [ -n "$commit" ] && [ -n "$(git -C "$APP_DIR" status --porcelain 2>/dev/null | head -1)" ] && commit="$commit, with changes"
+    printf '%s\n%s\n%s\n%s\n' "$([ -n "$why" ] && echo FAIL || echo PASS)" "$secs" "$why" "$commit" >"$out/status"
     summary
     grep 'vero test:' "$out/app.log" | sed 's/^vero test: /   /'
     if [ -n "$why" ]; then

@@ -1,7 +1,8 @@
 #!/bin/sh
 # results-page.sh DIR: writes DIR/index.html, every recording vero's tests
 # have made, an app at a time: each system's GIF, whether it passed, how
-# long it took and when, and its log. DIR is ~/.cache/vero/test-results,
+# long it took and when, which of the app's commits it was, and its log.
+# Systems are in the order the install page shows them. DIR is ~/.cache/vero/test-results,
 # which holds APP/SYSTEM/ folders; test-repo.sh and record-mac.sh run this
 # after each recording.
 dir=${1:?the results folder}
@@ -30,14 +31,18 @@ img { display: block; width: 100%; height: auto; } a { color: inherit; }
         counts="$pass passed"
         [ $fail -gt 0 ] && counts="$counts, $fail failed"
         echo "<h2>$a</h2><p>$counts</p><div class=grid>"
-        for d in "$app"*/; do
+        for s in $(ls "$app" | awk '{
+            n = split("macos windows debian ubuntu fedora opensuse archlinux alpine chimeralinux ghcr.io-void-linux flatpak vm-freebsd vm-dragonfly vm-netbsd vm-openbsd vm-illumos", order, " ")
+            rank = n + 1
+            for (i = 1; i <= n; i++) if (index($0, order[i]) == 1) { rank = i; break }
+            printf "%02d %s\n", rank, $0 }' | sort | cut -d" " -f2); do
+            d="$app$s"
             [ -f "$d/status" ] || continue
-            s=$(basename "$d")
-            st=$(sed -n 1p "$d/status") secs=$(sed -n 2p "$d/status") why=$(sed -n 3p "$d/status")
+            st=$(sed -n 1p "$d/status") secs=$(sed -n 2p "$d/status") why=$(sed -n 3p "$d/status") commit=$(sed -n 4p "$d/status")
             when=$(date -r "$d/status" '+%Y-%m-%d %H:%M')
             echo "<figure>"
             [ -f "$d/app.gif" ] && echo "<a href=\"$a/$s/app.gif\"><img src=\"$a/$s/app.gif\" alt=\"$a on $s\" loading=lazy></a>"
-            echo "<figcaption><b>$s</b> <span class=$st>$st</span> $why<br>${secs}s, $when · <a href=\"$a/$s/app.log\">log</a></figcaption></figure>"
+            echo "<figcaption><b>$s</b> <span class=$st>$st</span> $why<br>${secs}s, $when${commit:+, commit $commit} · <a href=\"$a/$s/app.log\">log</a></figcaption></figure>"
         done
         echo "</div>"
     done

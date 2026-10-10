@@ -83,7 +83,11 @@ rm -rf "$out/frames"
 why=""
 [ -f "$out/result.json" ] || why="the steps didn't finish in ${LIMIT}s"
 [ -z "$why" ] && ! grep -Eq '"ok" ?: ?true' "$out/result.json" && why="a step failed"
-printf '%s\n%s\n%s\n' "$([ -n "$why" ] && echo FAIL || echo PASS)" "$(($(date +%s) - began))" "$why" >"$out/status"
+# Which of the app's versions it was: its git commit, and whether it
+# had changes not yet committed.
+commit=$(git -C "$APP_DIR" rev-parse --short HEAD 2>/dev/null || true)
+[ -n "$commit" ] && [ -n "$(git -C "$APP_DIR" status --porcelain 2>/dev/null | head -1)" ] && commit="$commit, with changes"
+printf '%s\n%s\n%s\n%s\n' "$([ -n "$why" ] && echo FAIL || echo PASS)" "$(($(date +%s) - began))" "$why" "$commit" >"$out/status"
 sh "$VERO/scripts/lib/results-page.sh" "$CACHE/test-results"
 if [ -n "$why" ]; then echo "FAIL: $why (log in $out)" >&2; exit 1; fi
 echo "ok: the steps passed; recorded in $out/app.gif, and its last frame in $out/app.png"
