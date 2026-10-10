@@ -261,8 +261,9 @@ if [ -n "$MAC" ] || [ "$VMSYS" = windows ]; then
 elif [ -n "$VMSYS" ]; then
     SSH="ssh -i $VMDIR/key -p $SSH_PORT -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o IdentitiesOnly=yes root@127.0.0.1"
     in_container() { $SSH "$1"; }
-    put_dir() { tar -C "$1" -cf - . | $SSH "rm -rf $2 && mkdir -p $2 && tar -C $2 -xf -"; }
-    get_dir() { $SSH "tar -C $1 -cf - ." | tar -C "$2" -xf -; }
+    # cd, not tar -C, which illumos's tar has not got.
+    put_dir() { tar -C "$1" -cf - . | $SSH "rm -rf $2 && mkdir -p $2 && cd $2 && tar xf -"; }
+    get_dir() { $SSH "cd $1 && tar cf - ." | tar -C "$2" -xf -; }
 else
     in_container() { docker exec "$NAME" sh -c "$1"; }
     put_dir() { docker exec "$NAME" sh -c "rm -rf $2 && mkdir -p $2" && docker cp "$1/." "$NAME:$2"; }
