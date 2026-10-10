@@ -40,10 +40,12 @@ if [ "$OPEN" = yes ]; then ./scripts/run-linux.sh; else ./scripts/run-linux.sh -
 echo "==> Windows"
 set -- --vm "$VM"
 [ "$OPEN" = no ] && set -- "$@" --headless
-if [ -n "$ISO" ]; then
+# The ISO from --iso, or the one the README says to put in the VM's folder.
+[ -z "$ISO" ] && [ ! -f "$VM/disk.qcow2" ] && ISO=$(ls "$VM"/*.iso 2>/dev/null | head -1)
+if [ -n "$ISO" ] && [ ! -f "$VM/disk.qcow2" ]; then
     set -- "$@" --iso "$ISO" --install
 elif [ ! -f "$VM/disk.qcow2" ]; then
-    echo "    no VM yet - rerun with --iso ~/Downloads/win11.iso to install Windows"
+    echo "    no VM yet: put Microsoft's Windows 11 ARM64 ISO in $VM/, or rerun with --iso path/to/it.iso"
     exit 0
 fi
 ./scripts/run-windows.sh "$@" &
