@@ -21,7 +21,9 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 
 VM=${VM:-$HOME/vm/vero-netbsd}
-RELEASE=${RELEASE:-10.1}
+# The newest release: once one is out, the one before moves to NetBSD's
+# archive, and pkgsrc's packages are built for the newest.
+RELEASE=${RELEASE:-11.0}
 PORT=${PORT:-5903}          # one past FreeBSD's
 SSH_PORT=${SSH_PORT:-2223}
 PYTHON=${PYTHON:-/usr/pkg/bin/python3.12}

@@ -475,16 +475,17 @@ make_gif() {
     last=$(ls "$f"/*."$ext" | tail -1)
     # The display is black around the window: the last frame says where it is.
     crop=$(ffmpeg -hide_banner -i "$last" -vf cropdetect=limit=0.01:round=2:skip=0 -f null - 2>&1 | grep -o 'crop=[0-9:]*' | tail -1)
-    # From the first frame with the app in it: before that its part of the
-    # display is still black.
-    black=$(ffmpeg -hide_banner -i "$f/f%04d.$ext" -vf "${crop:+$crop,}blackframe=amount=90:threshold=32" -f null - 2>&1 | grep -o 'frame:[0-9]*' | cut -d: -f2)
-    n=0
+    # From the first frame with the app drawn in it: before that its part of
+    # the display is still black, or partly, while the window maps. An app
+    # dark all over would lose every frame that way, so it keeps them.
+    black=$(ffmpeg -hide_banner -i "$f/f%04d.$ext" -vf "${crop:+$crop,}blackframe=amount=30:threshold=32" -f null - 2>&1 | grep -o 'frame:[0-9]*' | cut -d: -f2)
+    n=0 drop=""
     for frame in $(ls "$f"); do
         echo "$black" | grep -qx "$n" || break
-        rm "$f/$frame"
+        drop="$drop $frame"
         n=$((n + 1))
     done
-    ls "$f" | grep -q . || { echo "   (every frame was black, so no GIF)"; return 0; }
+    [ "$n" -lt "$(ls "$f" | wc -l)" ] && for frame in $drop; do rm "$f/$frame"; done
     i=0
     for frame in $(ls "$f"); do
         i=$((i + 1))

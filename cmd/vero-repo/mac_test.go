@@ -6,8 +6,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestNestedCode: what's inside an app is signed deepest first, programs
@@ -197,5 +199,39 @@ func TestMacSite(t *testing.T) {
 	c.checkMac(latest)
 	if !strings.Contains(strings.Join(c.problems, "\n"), "latest.json says the Mac's newest is 1.0.2") {
 		t.Errorf("a mismatched latest.json wasn't caught: %v", c.problems)
+	}
+}
+
+// TestNotarisedTogether: the disk image and the package go to Apple at
+// once, and each is stapled; a failure is the error.
+func TestNotarisedTogether(t *testing.T) {
+	bin := t.TempDir()
+	log := filepath.Join(t.TempDir(), "log")
+	fake := "#!/bin/sh\n" +
+		"case $1 in\n" +
+		"notarytool) echo \"start $3\" >>" + log + "; sleep 2; echo \"end $3\" >>" + log + "; case $3 in *bad*) exit 1 ;; esac ;;\n" +
+		"stapler) echo \"staple $3\" >>" + log + " ;;\n" +
+		"esac\n"
+	os.WriteFile(filepath.Join(bin, "xcrun"), []byte(fake), 0o755)
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	began := time.Now()
+	if err := notariseAll([]string{"/x/app.dmg", "/x/app.pkg"}, "vero"); err != nil {
+		t.Fatal(err)
+	}
+	if took := time.Since(began); took > 3500*time.Millisecond {
+		t.Errorf("took %v: one after the other", took)
+	}
+	lines := strings.Split(strings.TrimSpace(string(mustRead(t, log))), "\n")
+	if len(lines) != 6 || !strings.HasPrefix(lines[0], "start") || !strings.HasPrefix(lines[1], "start") {
+		t.Errorf("not at once:\n%s", strings.Join(lines, "\n"))
+	}
+	for _, f := range []string{"staple /x/app.dmg", "staple /x/app.pkg"} {
+		if !slices.Contains(lines, f) {
+			t.Errorf("no %q", f)
+		}
+	}
+	if err := notariseAll([]string{"/x/app.dmg", "/x/bad.pkg"}, "vero"); err == nil || !strings.Contains(err.Error(), "bad.pkg") {
+		t.Errorf("a failure: %v", err)
 	}
 }

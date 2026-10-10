@@ -253,12 +253,25 @@ func packageMac(a *App, root, worker, out, ldflags, tmp string) error {
 			return err
 		}
 	}
-	if profile := os.Getenv("VERO_NOTARY_PROFILE"); profile != "" && identity != "" {
-		fmt.Println("notarising the disk image, which takes a few minutes")
-		if err := runIn("", "xcrun", "notarytool", "submit", dmg, "--keychain-profile", profile, "--wait"); err != nil {
+	pkg := ""
+	if m.Pkg {
+		pkg = filepath.Join(out, fmt.Sprintf("%s-%s-macos.pkg", a.Name, a.Version))
+		if err := buildMacPkg(a, app, pkg, filepath.Join(tmp, "pkg")); err != nil {
 			return err
 		}
-		if err := runIn("", "xcrun", "stapler", "staple", dmg); err != nil {
+	}
+
+	// Notarised together: each is minutes waiting on Apple, so the two
+	// waits overlap rather than add up.
+	var notarise []string
+	if profile := os.Getenv("VERO_NOTARY_PROFILE"); profile != "" {
+		if identity != "" {
+			notarise = append(notarise, dmg)
+		}
+		if pkg != "" && os.Getenv("VERO_MAC_INSTALLER") != "" {
+			notarise = append(notarise, pkg)
+		}
+		if err := notariseAll(notarise, profile); err != nil {
 			return err
 		}
 	}
@@ -268,25 +281,47 @@ func packageMac(a *App, root, worker, out, ldflags, tmp string) error {
 		return err
 	}
 	fmt.Println("built", dmg)
-
-	if m.Pkg {
-		pkg := filepath.Join(out, fmt.Sprintf("%s-%s-macos.pkg", a.Name, a.Version))
-		if err := buildMacPkg(a, app, pkg, filepath.Join(tmp, "pkg")); err != nil {
-			return err
-		}
-		installer := os.Getenv("VERO_MAC_INSTALLER")
-		if profile := os.Getenv("VERO_NOTARY_PROFILE"); profile != "" && installer != "" {
-			fmt.Println("notarising the installer package")
-			if err := runIn("", "xcrun", "notarytool", "submit", pkg, "--keychain-profile", profile, "--wait"); err != nil {
-				return err
-			}
-			if err := runIn("", "xcrun", "stapler", "staple", pkg); err != nil {
-				return err
-			}
-		}
+	if pkg != "" {
 		fmt.Println("built", pkg)
 	}
 	return nil
+}
+
+// notariseAll sends each file to Apple's notary service at once, waits for
+// all of them, and staples each ticket to its file. The first failure is
+// the error, once every one has finished.
+func notariseAll(files []string, profile string) error {
+	if len(files) == 0 {
+		return nil
+	}
+	names := make([]string, len(files))
+	for i, f := range files {
+		names[i] = filepath.Base(f)
+	}
+	fmt.Printf("notarising %s together, which takes a few minutes\n", strings.Join(names, " and "))
+	errs := make(chan error, len(files))
+	for _, f := range files {
+		go func() {
+			out, err := exec.Command("xcrun", "notarytool", "submit", f, "--keychain-profile", profile, "--wait").CombinedOutput()
+			if err != nil {
+				errs <- fmt.Errorf("notarising %s: %v\n%s", filepath.Base(f), err, out)
+				return
+			}
+			if out, err := exec.Command("xcrun", "stapler", "staple", f).CombinedOutput(); err != nil {
+				errs <- fmt.Errorf("stapling %s: %v\n%s", filepath.Base(f), err, out)
+				return
+			}
+			fmt.Println("notarised and stapled", filepath.Base(f))
+			errs <- nil
+		}()
+	}
+	var first error
+	for range files {
+		if err := <-errs; err != nil && first == nil {
+			first = err
+		}
+	}
+	return first
 }
 
 // setVersions writes this release's versions into an app's Info.plist.
