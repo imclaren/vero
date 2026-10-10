@@ -17,8 +17,8 @@ let package = Package(
         // it and nobody has to build one.
         .binaryTarget(
             name: "CVero",
-            url: "https://github.com/imclaren/vero/releases/download/v0.15.0/CVero.xcframework.zip",
-            checksum: "435d20cd1fae555a2ffbfb52f57a3088c373af0702fb062142197927744d0357"
+            url: "https://github.com/imclaren/vero/releases/download/v0.16.0/CVero.xcframework.zip",
+            checksum: "fd346cbf1ed36ca1c3ae333a167e7e4307e803ab6b63e521367ed98e10a5beb8"
         ),
         .target(name: "Vero", dependencies: ["CVero"]),
     ]
