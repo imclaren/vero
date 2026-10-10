@@ -13,9 +13,12 @@ import (
 // Plan is what vero ship will do with an app on this Mac: each installer
 // it can build, each system it can test, and why it cannot do the rest.
 type Plan struct {
-	Name  string     `json:"name"`
-	Build []PlanStep `json:"build"`
-	Test  []PlanStep `json:"test"`
+	Name string `json:"name"`
+	// Profile is the VERO_PROFILE the app's tests run under, which keeps
+	// the copy that a test runs apart from the one in use.
+	Profile string     `json:"profile,omitempty"`
+	Build   []PlanStep `json:"build"`
+	Test    []PlanStep `json:"test"`
 }
 
 // PlanStep is one installer or one system's test. Why is what is missing
@@ -47,6 +50,9 @@ var makeVM = map[string]string{
 // planFor works out an app's plan on this machine.
 func planFor(a *App) Plan {
 	p := Plan{Name: a.Name}
+	if a.Test != nil {
+		p.Profile = a.Test.Env["VERO_PROFILE"]
+	}
 	built := map[string]bool{}
 	for _, t := range possibleTargets(a) {
 		why := missingFor(t.name)

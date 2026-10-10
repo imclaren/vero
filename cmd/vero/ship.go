@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime/debug"
 	"strings"
 )
@@ -15,8 +16,9 @@ import (
 // shipPlan is what vero-repo plan --json says: what can be built and
 // tested on this Mac.
 type shipPlan struct {
-	Name string `json:"name"`
-	Test []struct {
+	Name    string `json:"name"`
+	Profile string `json:"profile"`
+	Test    []struct {
 		Name string `json:"name"`
 		OK   bool   `json:"ok"`
 	} `json:"test"`
@@ -115,7 +117,7 @@ func ship(args []string) error {
 	}
 	if mac {
 		fmt.Println("\nrecording the Mac app")
-		if err := recordMac(src, repo, toml, env); err != nil {
+		if err := recordMac(src, repo, toml, plan, env); err != nil {
 			return err
 		}
 	}
@@ -162,11 +164,11 @@ func shipNew(file, name, module, local string) error {
 	return cmd.Run()
 }
 
-// recordMac builds the Mac app, at a version of its own since it is
-// never released, makes a copy of it with a bundle ID of
-// its own, so that it keeps its settings apart from the copy you use, and
-// records that copy playing the app's steps.
-func recordMac(src, repo, toml string, env []string) error {
+// recordMac builds the Mac app, at a version of its own since it is never
+// released, makes a copy of it with a bundle ID of its own, so that it
+// keeps its settings apart from the copy you use, and records that copy
+// playing the app's steps.
+func recordMac(src, repo, toml string, plan shipPlan, env []string) error {
 	tmp, err := os.MkdirTemp("", "vero-mac.")
 	if err != nil {
 		return err
@@ -207,10 +209,16 @@ func recordMac(src, repo, toml string, env []string) error {
 	if err := runAt("", nil, "codesign", "--force", "--deep", "--sign", "-", app); err != nil {
 		return err
 	}
+	// It starts as a new install would: without the copy's settings, or
+	// the folder that its profile gave it last time, as kit/profile names
+	// it.
 	home, _ := os.UserHomeDir()
-	return runAt(filepath.Dir(toml), env, "sh", filepath.Join(src, "scripts", "record-mac.sh"),
-		"--app", toml, "--bundle", app,
-		"--clean", filepath.Join(home, "Library", "Preferences", testID+".plist"))
+	args := []string{filepath.Join(src, "scripts", "record-mac.sh"), "--app", toml, "--bundle", app,
+		"--clean", filepath.Join(home, "Library", "Preferences", testID+".plist")}
+	if regexp.MustCompile(`^[A-Za-z0-9-]+$`).MatchString(plan.Profile) {
+		args = append(args, "--clean", filepath.Join(home, "Library", "Application Support", plan.Name+"-"+plan.Profile))
+	}
+	return runAt(filepath.Dir(toml), env, "sh", args...)
 }
 
 // setup installs what vero needs on this Mac, then says what is still
