@@ -89,6 +89,9 @@ public final class Vero {
         let args = strdup(argsJSON)
         defer { free(path); free(args) }
         _ = try Vero.unwrap(VeroStart(path, args))
+        // vero's tests set VERO_TEST to a file of steps, played against the
+        // worker while the window shows what they do.
+        VeroTest.startIfAsked(self)
     }
 
     /// Stops the worker.
@@ -286,7 +289,7 @@ private struct RawJSON: Decodable {
     }
 }
 
-private enum JSONValue: Codable {
+enum JSONValue: Codable, Equatable {
     case null, bool(Bool), number(Double), string(String)
     case array([JSONValue]), object([String: JSONValue])
 

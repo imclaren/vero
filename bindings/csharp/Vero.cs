@@ -109,7 +109,18 @@ public sealed class VeroClient : IDisposable
         // closes when this process does.
         var reader = new Thread(Read) { IsBackground = true, Name = "vero" };
         reader.Start();
+
+        // vero's tests set VERO_TEST to a file of steps, played against the
+        // worker while the window shows what they do.
+        string? steps = Environment.GetEnvironmentVariable("VERO_TEST");
+        if (!string.IsNullOrEmpty(steps))
+        {
+            new Thread(() => VeroTest.Play(this, steps)) { IsBackground = true, Name = "vero test" }.Start();
+        }
     }
+
+    /// <summary>The state, asked of the worker when no event has come yet.</summary>
+    internal Task<JsonElement?> AskLatest() => Ask("ctl", "latest", null);
 
     /// <summary>Sorts what the host says into replies, events and state changes.</summary>
     private void Read()
@@ -372,4 +383,252 @@ public sealed class VeroClient : IDisposable
     }
 
     public void Dispose() => Stop();
+}
+
+/// <summary>
+/// The steps vero's tests play against an installed app while its window is
+/// open, as vero.py's play does: what vero-app.toml's [[test.step]]s say,
+/// from the JSON file VERO_TEST names. Each step calls a request, sends one
+/// without a name, waits until the state shows something, pauses, or copies
+/// a file; {tmp} is a new empty folder and {files} the folder of the test's
+/// files, VERO_TEST_FILES. How it went is written to VERO_TEST_RESULT, and
+/// a line for each step to standard error.
+/// </summary>
+public static class VeroTest
+{
+    public static bool Play(VeroClient vero, string stepsFile)
+    {
+        var started = DateTime.UtcNow;
+        string tmp = Path.Combine(Path.GetTempPath(), "vero-test-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tmp);
+        string files = Environment.GetEnvironmentVariable("VERO_TEST_FILES") ?? "";
+        var results = new List<Dictionary<string, object>>();
+        bool ok = true;
+        try
+        {
+            using var doc = JsonDocument.Parse(File.ReadAllText(stepsFile));
+            var steps = new List<JsonElement>();
+            if (doc.RootElement.TryGetProperty("steps", out var list))
+            {
+                foreach (var step in list.EnumerateArray()) steps.Add(step.Clone());
+            }
+            // The worker up, with a state to show.
+            var deadline = DateTime.UtcNow.AddSeconds(60);
+            while (vero.State() != "running")
+            {
+                if (DateTime.UtcNow > deadline) throw new VeroException($"the worker wasn't running after 60s ({vero.State()})");
+                Thread.Sleep(50);
+            }
+            if (vero.Latest() is null) vero.AskLatest().GetAwaiter().GetResult();
+            for (int i = 0; i < steps.Count; i++)
+            {
+                var step = Fill(steps[i], tmp, files);
+                var began = DateTime.UtcNow;
+                string what = Describe(step);
+                try
+                {
+                    Run(vero, step, files);
+                    double secs = (DateTime.UtcNow - began).TotalSeconds;
+                    results.Add(new() { ["step"] = what, ["seconds"] = Math.Round(secs, 2) });
+                    Log($"step {i + 1}/{steps.Count}, {what}: ok ({secs:F1}s)");
+                }
+                catch (Exception e)
+                {
+                    ok = false;
+                    double secs = (DateTime.UtcNow - began).TotalSeconds;
+                    results.Add(new() { ["step"] = what, ["seconds"] = Math.Round(secs, 2), ["error"] = e.Message });
+                    Log($"step {i + 1}/{steps.Count}, {what}: FAILED: {e.Message}");
+                    break;
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            ok = false;
+            results.Add(new() { ["step"] = "starting", ["error"] = e.Message });
+            Log(e.Message);
+        }
+        string? output = Environment.GetEnvironmentVariable("VERO_TEST_RESULT");
+        if (!string.IsNullOrEmpty(output))
+        {
+            var result = new Dictionary<string, object>
+            {
+                ["ok"] = ok, ["seconds"] = Math.Round((DateTime.UtcNow - started).TotalSeconds, 2), ["steps"] = results,
+            };
+            File.WriteAllText(output + ".part", JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true }));
+            File.Move(output + ".part", output, true);
+        }
+        return ok;
+    }
+
+    private static void Log(string line) => Console.Error.WriteLine("vero test: " + line);
+
+    /// <summary>step with {tmp} and {files} replaced, in every string in it.</summary>
+    private static JsonElement Fill(JsonElement step, string tmp, string files)
+    {
+        string text = step.GetRawText()
+            .Replace("{tmp}", JsonEncodedText.Encode(tmp).ToString())
+            .Replace("{files}", JsonEncodedText.Encode(files).ToString());
+        using var doc = JsonDocument.Parse(text);
+        return doc.RootElement.Clone();
+    }
+
+    private static string Op(JsonElement wait)
+    {
+        foreach (string op in new[] { "is", "not", "at_least", "contains" })
+        {
+            if (wait.TryGetProperty(op, out _)) return op;
+        }
+        return "is";
+    }
+
+    private static string Describe(JsonElement step)
+    {
+        if (step.TryGetProperty("call", out var call)) return "call " + call.GetString();
+        if (step.TryGetProperty("send", out var send)) return "send " + send.GetRawText();
+        if (step.TryGetProperty("wait", out var wait))
+        {
+            string op = Op(wait);
+            return $"wait until {wait.GetProperty("path").GetString()} {op.Replace('_', ' ')} {wait.GetProperty(op).GetRawText()}";
+        }
+        if (step.TryGetProperty("pause", out var pause)) return $"pause {pause.GetRawText()}s";
+        if (step.TryGetProperty("copy", out var copy)) return $"copy {copy.GetProperty("from").GetString()} to {copy.GetProperty("to").GetString()}";
+        return "unknown step " + step.GetRawText();
+    }
+
+    private static void Run(VeroClient vero, JsonElement step, string files)
+    {
+        if (step.TryGetProperty("call", out var call))
+        {
+            object body = step.TryGetProperty("with", out var with) ? with : new Dictionary<string, object>();
+            vero.CallAsync(call.GetString()!, body).GetAwaiter().GetResult();
+        }
+        else if (step.TryGetProperty("send", out var send))
+        {
+            vero.SendAsync(send).GetAwaiter().GetResult();
+        }
+        else if (step.TryGetProperty("pause", out var pause))
+        {
+            Thread.Sleep(TimeSpan.FromSeconds(pause.GetDouble()));
+        }
+        else if (step.TryGetProperty("copy", out var copy))
+        {
+            string from = copy.GetProperty("from").GetString()!;
+            string to = copy.GetProperty("to").GetString()!;
+            if (!Path.IsPathRooted(from)) from = Path.Combine(files, from);
+            if (to.EndsWith("/") || to.EndsWith("\\"))
+            {
+                Directory.CreateDirectory(to);
+                to = Path.Combine(to, Path.GetFileName(from));
+            }
+            else
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(to))!);
+            }
+            File.Copy(from, to, true);
+        }
+        else if (step.TryGetProperty("wait", out var wait))
+        {
+            double timeout = step.TryGetProperty("timeout", out var t) ? t.GetDouble() : 60;
+            var deadline = DateTime.UtcNow.AddSeconds(timeout);
+            string path = wait.GetProperty("path").GetString() ?? "";
+            while (true)
+            {
+                JsonElement? state = vero.Latest();
+                if (state is JsonElement s && Holds(s, wait, path)) return;
+                if (DateTime.UtcNow > deadline)
+                {
+                    string got = state is JsonElement st && At(st, path) is JsonElement g ? g.GetRawText() : "null";
+                    throw new VeroException($"after {timeout}s, {path} is {got}");
+                }
+                Thread.Sleep(250);
+            }
+        }
+        else
+        {
+            throw new VeroException("a step is call, send, wait, pause or copy");
+        }
+    }
+
+    /// <summary>What path names in state: keys and list indexes, "#" for a length.</summary>
+    private static JsonElement? At(JsonElement state, string path)
+    {
+        JsonElement v = state;
+        foreach (string part in path.Split('.', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (part == "#")
+            {
+                int n = v.ValueKind switch
+                {
+                    JsonValueKind.Array => v.GetArrayLength(),
+                    JsonValueKind.Object => CountProperties(v),
+                    JsonValueKind.String => v.GetString()!.Length,
+                    _ => -1,
+                };
+                if (n < 0) return null;
+                using var doc = JsonDocument.Parse(n.ToString());
+                v = doc.RootElement.Clone();
+            }
+            else if (v.ValueKind == JsonValueKind.Array && int.TryParse(part, out int i))
+            {
+                int len = v.GetArrayLength();
+                if (i < 0) i += len;
+                if (i < 0 || i >= len) return null;
+                v = v[i];
+            }
+            else if (v.ValueKind == JsonValueKind.Object && v.TryGetProperty(part, out var next))
+            {
+                v = next;
+            }
+            else
+            {
+                return null;
+            }
+        }
+        return v;
+    }
+
+    private static int CountProperties(JsonElement o)
+    {
+        int n = 0;
+        foreach (var _ in o.EnumerateObject()) n++;
+        return n;
+    }
+
+    private static bool Same(JsonElement a, JsonElement b)
+    {
+        if (a.ValueKind == JsonValueKind.Number && b.ValueKind == JsonValueKind.Number) return a.GetDouble() == b.GetDouble();
+        if (a.ValueKind != b.ValueKind) return false;
+        return a.ValueKind switch
+        {
+            JsonValueKind.String => a.GetString() == b.GetString(),
+            JsonValueKind.True or JsonValueKind.False or JsonValueKind.Null => true,
+            _ => a.GetRawText() == b.GetRawText(),
+        };
+    }
+
+    private static bool Holds(JsonElement state, JsonElement wait, string path)
+    {
+        JsonElement? found = At(state, path);
+        string op = Op(wait);
+        JsonElement want = wait.GetProperty(op);
+        if (found is not JsonElement got)
+        {
+            return op == "not" && want.ValueKind != JsonValueKind.Null || op == "is" && want.ValueKind == JsonValueKind.Null;
+        }
+        switch (op)
+        {
+            case "is": return Same(got, want);
+            case "not": return !Same(got, want);
+            case "at_least": return got.ValueKind == JsonValueKind.Number && got.GetDouble() >= want.GetDouble();
+            default:
+                if (got.ValueKind == JsonValueKind.String && want.ValueKind == JsonValueKind.String) return got.GetString()!.Contains(want.GetString()!);
+                if (got.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var item in got.EnumerateArray()) if (Same(item, want)) return true;
+                }
+                if (got.ValueKind == JsonValueKind.Object && want.ValueKind == JsonValueKind.String) return got.TryGetProperty(want.GetString()!, out _);
+                return false;
+        }
+    }
 }

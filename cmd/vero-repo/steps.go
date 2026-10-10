@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -28,11 +29,16 @@ import (
 //	timeout = 300
 type Test struct {
 	// Files go with the steps, into the folder {files} names.
-	Files []string         `toml:"files"`
-	Steps []map[string]any `toml:"step"`
+	Files []string `toml:"files"`
+	// Env is set for the app as the test starts it, as
+	// AUDIOBOOKS_DEVELOP = "1" lets audiobooks run for anybody.
+	Env   map[string]string `toml:"env"`
+	Steps []map[string]any  `toml:"step"`
 }
 
 var stepKinds = []string{"call", "send", "wait", "pause", "copy"}
+
+var validEnvName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 func (t *Test) check(a *App) error {
 	for i, step := range t.Steps {
@@ -83,6 +89,11 @@ func (t *Test) check(a *App) error {
 			}
 		}
 	}
+	for k := range t.Env {
+		if !validEnvName.MatchString(k) {
+			return fmt.Errorf("[test] env: %q isn't a variable's name", k)
+		}
+	}
 	for _, f := range t.Files {
 		if _, err := os.Stat(a.Path(f)); err != nil {
 			return fmt.Errorf("[test] files: %v", err)
@@ -124,6 +135,13 @@ func stepsCommand(args []string) error {
 	if err := os.WriteFile(filepath.Join(*out, "steps.json"), data, 0o644); err != nil {
 		return err
 	}
+	var env strings.Builder
+	for k, v := range t.Env {
+		fmt.Fprintf(&env, "export %s='%s'\n", k, strings.ReplaceAll(v, "'", `'\''`))
+	}
+	if err := os.WriteFile(filepath.Join(*out, "env.sh"), []byte(env.String()), 0o644); err != nil {
+		return err
+	}
 	for _, f := range t.Files {
 		data, err := os.ReadFile(a.Path(f))
 		if err != nil {
@@ -134,5 +152,33 @@ func stepsCommand(args []string) error {
 		}
 	}
 	fmt.Printf("wrote %d steps and %d files to %s\n", len(steps), len(t.Files), *out)
+	return nil
+}
+
+// showCommand prints what a script needs to know about an app, as shell
+// assignments: test-repo.sh reads them to test an app other than vero's
+// example.
+func showCommand(args []string) error {
+	fset := flag.NewFlagSet("show", flag.ExitOnError)
+	app := fset.String("app", "vero-app.toml", "the app's vero-app.toml")
+	fset.Parse(args)
+	a, err := LoadApp(*app)
+	if err != nil {
+		return err
+	}
+	exe := ""
+	if a.WPF != nil {
+		exe = a.WPF.Exe
+	}
+	file, err := filepath.Abs(*app)
+	if err != nil {
+		return err
+	}
+	for _, kv := range [][2]string{
+		{"APP_NAME", a.Name}, {"APP_DISPLAY", a.DisplayName}, {"APP_ID", a.ID},
+		{"APP_WORKER", a.Worker.Name}, {"APP_EXE", exe}, {"APP_TOML", file}, {"APP_DIR", a.dir},
+	} {
+		fmt.Printf("%s='%s'\n", kv[0], strings.ReplaceAll(kv[1], "'", `'\''`))
+	}
 	return nil
 }
