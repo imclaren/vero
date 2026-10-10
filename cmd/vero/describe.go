@@ -1,10 +1,7 @@
 package main
 
 import (
-	"bufio"
-	"fmt"
-	"io"
-	"os"
+	"os/exec"
 	"strings"
 )
 
@@ -14,33 +11,35 @@ type Description struct {
 	Summary, Text, Publisher string
 }
 
-// describe fills in what the flags left blank by asking, when vero add is
-// at a terminal and is about to write vero-app.toml for the first time.
-// Anywhere else - a script, a pipe, a file that exists - it asks nothing,
-// and the file keeps its blanks for the person to fill in.
-func describe(d Description, creating bool, in io.Reader, out io.Writer, terminal bool) Description {
-	if !creating || !terminal || (d.Summary != "" && d.Text != "" && d.Publisher != "") {
-		return d
+// describe fills in what the flags left blank, so that vero add never has
+// to ask: the summary is the app's name, the description its summary, and
+// the publisher whoever git says you are. It returns what it filled in,
+// for vero add to say so.
+func describe(d Description, display string, git func(key string) string) (Description, []string) {
+	var guessed []string
+	if d.Summary == "" {
+		d.Summary = display
+		guessed = append(guessed, "summary")
 	}
-	fmt.Fprintln(out, "vero-app.toml describes the app to the packaging. Three things it needs that the worker cannot say")
-	fmt.Fprintln(out, "(Enter leaves one blank, to fill in later):")
-	r := bufio.NewReader(in)
-	ask := func(prompt, have string) string {
-		if have != "" {
-			return have
+	if d.Text == "" {
+		d.Text = d.Summary
+		guessed = append(guessed, "description")
+	}
+	if d.Publisher == "" {
+		if name, email := git("user.name"), git("user.email"); name != "" && email != "" {
+			d.Publisher = name + " <" + email + ">"
+			guessed = append(guessed, "publisher")
 		}
-		fmt.Fprintf(out, "  %s: ", prompt)
-		line, _ := r.ReadString('\n')
-		return strings.TrimSpace(line)
 	}
-	d.Summary = ask("summary, one line about the app", d.Summary)
-	d.Text = ask("description, a sentence or two", d.Text)
-	d.Publisher = ask("publisher, as Name <email>", d.Publisher)
-	return d
+	return d, guessed
 }
 
-// terminal says whether standard input is a person at a keyboard.
-func terminal() bool {
-	fi, err := os.Stdin.Stat()
-	return err == nil && fi.Mode()&os.ModeCharDevice != 0
+// gitConfig is a setting from git's own configuration, or "" when there
+// is none.
+func gitConfig(key string) string {
+	out, err := exec.Command("git", "config", "--get", key).Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
 }

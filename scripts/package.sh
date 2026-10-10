@@ -18,5 +18,7 @@ set -e
 VERO=$(cd "$(dirname "$0")/.." && pwd)
 BIN="$HOME/.cache/vero/bin"
 mkdir -p "$BIN"
-go build -C "$VERO/cmd/vero-repo" -o "$BIN/vero-repo" .
+# vero-repo: the one VERO_REPO names (vero ship sets it), or built from
+# this checkout.
+if [ -n "$VERO_REPO" ]; then cp "$VERO_REPO" "$BIN/vero-repo"; else go build -C "$VERO/cmd/vero-repo" -o "$BIN/vero-repo" .; fi
 exec "$BIN/vero-repo" package --vero "$VERO" "$@"

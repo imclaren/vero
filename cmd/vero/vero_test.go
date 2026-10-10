@@ -173,33 +173,20 @@ func main() {
 	}
 }
 
-// TestDescribe checks that vero add asks for the words vero-app.toml needs
-// only at a terminal, only when writing the file, and only for what the
-// flags left blank - and that what it is told lands in the file, quoted.
+// TestDescribe checks that vero add fills in what the flags left blank,
+// so that it never asks, and that what it is told lands in the file,
+// quoted.
 func TestDescribe(t *testing.T) {
-	in := strings.NewReader("A small app\nIt says \"hello\".\nAnn <ann@example.com>\n")
-	var out strings.Builder
-	got := describe(Description{}, true, in, &out, true)
-	if got.Summary != "A small app" || got.Text != `It says "hello".` || got.Publisher != "Ann <ann@example.com>" {
-		t.Errorf("asked and got %+v", got)
+	git := func(key string) string {
+		return map[string]string{"user.name": "Ann", "user.email": "ann@example.com"}[key]
 	}
-	if !strings.Contains(out.String(), "summary") {
-		t.Errorf("no prompt was shown:\n%s", out.String())
+	got, guessed := describe(Description{}, "Hello", git)
+	if got.Summary != "Hello" || got.Text != "Hello" || got.Publisher != "Ann <ann@example.com>" || len(guessed) != 3 {
+		t.Errorf("guessed %v and got %+v", guessed, got)
 	}
-
-	// Not at a terminal: nothing is read, nothing is asked.
-	out.Reset()
-	in = strings.NewReader("should not be read\n")
-	got = describe(Description{Summary: "from a flag"}, true, in, &out, false)
-	if got.Summary != "from a flag" || got.Text != "" || out.Len() != 0 || in.Len() == 0 {
-		t.Errorf("off a terminal: %+v, prompt %q", got, out.String())
-	}
-
-	// The file exists already: its words are its own, so nothing is asked.
-	out.Reset()
-	got = describe(Description{}, false, strings.NewReader("x\n"), &out, true)
-	if got.Summary != "" || out.Len() != 0 {
-		t.Errorf("with a file already: %+v, prompt %q", got, out.String())
+	got, guessed = describe(Description{Summary: "from a flag"}, "Hello", func(string) string { return "" })
+	if got.Summary != "from a flag" || got.Text != "from a flag" || got.Publisher != "" || len(guessed) != 1 {
+		t.Errorf("with a flag and no git: guessed %v and got %+v", guessed, got)
 	}
 
 	// What was said is what the file gets, with quotes escaped.

@@ -53,6 +53,8 @@ func main() {
 		err = stepsCommand(os.Args[2:])
 	case "show":
 		err = showCommand(os.Args[2:])
+	case "plan":
+		err = planCommand(os.Args[2:])
 	case "deb":
 		// What scripts/package-linux.sh builds its .deb with: a folder laid
 		// out for dpkg-deb, made into a .deb in Go.
@@ -80,6 +82,7 @@ func usage() {
   vero-repo package --app vero-app.toml --version 1.2.3 [--targets deb,rpm,flatpak,macos,windows,freebsd,dragonfly,netbsd,illumos,openbsd] [--out dist/packages]
   vero-repo steps --app vero-app.toml --out DIR   what vero's tests play against the installed app
   vero-repo show --app vero-app.toml              the app's names, as shell assignments, for scripts
+  vero-repo plan --app vero-app.toml [--json]     what vero ship will build and test on this Mac, and what it cannot
   vero-repo build --app vero-app.toml --key DIR --url https://example.com/myapp [--packages dist/packages] [--out dist/site] [--keep 3] [--no-page]
 `)
 	os.Exit(2)

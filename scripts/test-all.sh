@@ -18,7 +18,7 @@
 # and needs room: run scripts/doctor.sh to see what is missing.
 #
 # Each system's log is in ~/.cache/vero/test-runs/, and a line for each
-# says PASS or FAIL as it finishes.
+# says PASS or FAIL as it finishes. It exits 1 when any system failed.
 set -e
 VERO=$(cd "$(dirname "$0")/.." && pwd)
 APP="" PARALLEL=3 ONLY="" SKIP="" NOVMS=""
@@ -78,6 +78,10 @@ if sh "$VERO/scripts/test-repo.sh" ${APP:+--app "$APP"} "$@" --port "$port" >"$l
 else
     echo "FAIL $name ($(($(date +%s) - began))s): $(grep "FAIL" "$log" | head -1 | cut -c1-120)"
 fi'
-xargs -P "$PARALLEL" -L 1 sh -c "$one" sh <"$JOBS"
+SAID=$(mktemp)
+trap 'rm -f "$JOBS" "$SAID"' EXIT
+xargs -P "$PARALLEL" -L 1 sh -c "$one" sh <"$JOBS" | tee "$SAID"
 sh "$VERO/scripts/lib/results-page.sh" "$HOME/.cache/vero/test-results"
 echo "every result: $HOME/.cache/vero/test-results/index.html"
+# It fails when any system did.
+! grep -q '^FAIL' "$SAID"

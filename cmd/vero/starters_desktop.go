@@ -13,7 +13,7 @@ func init() {
 	starters["wpf"] = &starter{folder: "windows", note: "a WPF window in C#, for Windows; needs the .NET SDK (dotnet)", files: map[string]string{
 		"README.md": wpfReadme, "App.xaml": wpfAppXaml, "App.xaml.cs": wpfAppCs, "MainWindow.xaml": wpfWindowXaml, "MainWindow.xaml.cs": wpfWindowCs,
 		"{{pascal .Name}}.csproj": wpfProj, ".gitignore": wpfIgnore}, bindings: []string{"bindings/csharp/Vero.cs"}, toml: wpfToml}
-	starters["macos"] = &starter{folder: "macos", note: "a SwiftUI menu bar app, for macOS; needs Xcode's command line tools", files: map[string]string{
+	starters["macos"] = &starter{folder: "macos", note: "a SwiftUI app, for macOS; needs Xcode's command line tools", files: map[string]string{
 		"README.md": macReadme, "Package.swift": macPackage, "Sources/{{pascal .Name}}/App.swift": macApp, "build.sh": macBuild, ".gitignore": macIgnore}, toml: macToml}
 }
 
@@ -465,11 +465,11 @@ product = "{{pascal .Name}}"
 
 const macReadme = `# {{.Display}} for macOS
 
-A SwiftUI menu bar app, written by ` + "`vero add`" + ` for the worker in ` + "`../{{.Worker}}`" + `.
-It shows the state the worker pushes and offers each of its requests; make it
-your own from there. It is a Swift package, which ` + "`swift build`" + ` builds; for an
-app with an icon, a Dock presence and the rest, make an Xcode project that uses
-` + "`Sources/{{pascal .Name}}/App.swift`" + ` and bundles the worker in Contents/Resources.
+A SwiftUI app, written by ` + "`vero add`" + ` for the worker in ` + "`../{{.Worker}}`" + `.
+It opens a window that shows the state the worker pushes and offers each of
+its requests. Make it your own from there. It is a Swift package, which
+` + "`swift build`" + ` builds. ` + "`vero ship`" + ` makes it an app with its icon and the worker
+inside, signs it, and puts it in the release.
 
     ./build.sh                        builds the worker and the app
     ./.build/debug/{{pascal .Name}}      runs it
@@ -566,10 +566,13 @@ struct {{pascal .Name}}App: App {
     @StateObject private var vero = VeroModel<JSONValue>(bundledWorker: "{{.WorkerName}}", directoryName: "{{.Name}}/bin")
 
     var body: some Scene {
-        MenuBarExtra("{{.Display}}", systemImage: "circle.grid.2x2") {
+        // A window, as on every other system. For an app that lives in
+        // the menu bar, make this a MenuBarExtra and set menubar = true in
+        // vero-app.toml's [macos].
+        Window("{{.Display}}", id: "main") {
             StarterView().environmentObject(vero)
         }
-        .menuBarExtraStyle(.window)
+        .windowResizability(.contentSize)
     }
 }
 

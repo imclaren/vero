@@ -42,7 +42,17 @@ var aliases = map[string]string{
 func main() {
 	if len(os.Args) >= 2 {
 		switch os.Args[1] {
-		case "release", "credentials", "publish", "key", "package", "build", "check", "steps", "show":
+		case "ship", "setup":
+			do := ship
+			if os.Args[1] == "setup" {
+				do = setup
+			}
+			if err := do(os.Args[2:]); err != nil {
+				fmt.Fprintf(os.Stderr, "vero %s: %v\n", os.Args[1], err)
+				os.Exit(1)
+			}
+			return
+		case "release", "credentials", "publish", "key", "package", "build", "check", "steps", "show", "plan":
 			// The packaging is vero-repo's; this hands over to it, so that
 			// one tool is all anyone installs.
 			os.Exit(veroRepo(os.Args[1:]))
@@ -73,13 +83,17 @@ func main() {
 		os.Args = append([]string{os.Args[0], "add"}, append(rest, "--dir", name)...)
 	}
 	if len(os.Args) < 2 || os.Args[1] != "add" {
-		fmt.Fprintln(os.Stderr, "usage: vero new NAME [front ends, as for add] [--module PATH] [add's flags]\n"+
+		fmt.Fprintln(os.Stderr, "usage: vero setup                 installs what vero needs on this Mac, then says what is missing\n"+
+			"       vero ship [FILE.go] [--name NAME] [--plan] [--no-release] [--no-vms] [--no-mac] [--only LIST] [--skip LIST]\n"+
+			"                 [--version 1.2.3] [--notes TEXT] [--upload user@host:/path] [--url URL]\n"+
+			"                 makes an app from a worker file, or takes the one here, tests and records it everywhere, and releases it\n"+
+			"       vero new NAME [front ends, as for add] [--module PATH] [add's flags]\n"+
 			"       vero add [desktop|mobile|all|macos|gtk|wpf|android|ios|web|wasi|plan9 ...] [--except LIST] [--dir DIR]\n"+
 			"                [--summary TEXT] [--description TEXT] [--publisher \"Name <email>\"] [--keep-worker] [--force]\n"+
 			"       vero release [--version 1.2.3] [--targets ...] [--notes \"...\"] [--upload user@host:/path]\n"+
 			"       vero credentials\n"+
 			"       vero publish --homebrew | --winget | --aur | --all\n"+
-			"       vero key | package | build | check | steps | show ...   vero-repo's own commands, which vero runs for you")
+			"       vero key | package | build | check | steps | show | plan ...   vero-repo's own commands, which vero runs for you")
 		os.Exit(2)
 	}
 	fs := flag.NewFlagSet("add", flag.ExitOnError)
@@ -111,8 +125,11 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	app.Description = describe(Description{Summary: *summary, Text: *description, Publisher: *publisher},
-		app.toml.text == "", os.Stdin, os.Stdout, terminal())
+	var guessed []string
+	app.Description = Description{Summary: *summary, Text: *description, Publisher: *publisher}
+	if app.toml.text == "" {
+		app.Description, guessed = describe(app.Description, app.Display, gitConfig)
+	}
 	app.KeepWorker = *keepWorker
 	added, err := add(app, want, *force)
 	if err != nil {
@@ -124,6 +141,13 @@ func main() {
 		return
 	}
 	fmt.Printf("added %s for %s\n", strings.Join(added, ", "), app.Name)
+	if len(guessed) > 0 {
+		list := strings.Join(guessed, ", ")
+		if n := len(guessed); n > 1 {
+			list = strings.Join(guessed[:n-1], ", ") + " and " + guessed[n-1]
+		}
+		fmt.Printf("vero-app.toml has a %s made up for you, which you can change there\n", list)
+	}
 	fmt.Println("next: read PORTING.md in " + app.Dir + ", then build each front end as its README says")
 }
 

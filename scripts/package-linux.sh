@@ -55,7 +55,7 @@ APP=$(cd "$APP" && pwd)
 mkdir -p "$OUT"
 OUT=$(cd "$OUT" && pwd)
 mkdir -p "$HOME/.cache/vero/bin"
-go build -C "$VERO/cmd/vero-repo" -o "$HOME/.cache/vero/bin/vero-repo" .
+if [ -n "$VERO_REPO" ]; then mkdir -p "$HOME/.cache/vero/bin" && cp "$VERO_REPO" "$HOME/.cache/vero/bin/vero-repo"; else go build -C "$VERO/cmd/vero-repo" -o "$HOME/.cache/vero/bin/vero-repo" .; fi
 
 echo "building the worker"
 DIST="$ROOT/dist"

@@ -25,7 +25,7 @@ else
     Xvnc :99 -geometry 1280x800 -depth 24 -SecurityTypes None >"$dir/display.log" 2>&1 &
 fi
 display=$!
-trap 'kill $app $display 2>/dev/null' EXIT
+trap 'kill $app $display 2>/dev/null || true' EXIT
 export DISPLAY=:99
 # The display up before the app, which cannot start without it: up to 30
 # seconds, since a Mac busy with other tests can be that slow to start one.

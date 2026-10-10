@@ -36,7 +36,9 @@ done
 [ -n "$TOML" ] && [ -d "$BUNDLE" ] || { echo "usage: record-mac.sh --app vero-app.toml --bundle My.app" >&2; exit 2; }
 CACHE="$HOME/.cache/vero"
 mkdir -p "$CACHE/bin"
-go build -C "$VERO/cmd/vero-repo" -o "$CACHE/bin/vero-repo" .
+# vero-repo: the one VERO_REPO names (vero ship sets it), or built from
+# this checkout.
+if [ -n "$VERO_REPO" ]; then cp "$VERO_REPO" "$CACHE/bin/vero-repo"; else go build -C "$VERO/cmd/vero-repo" -o "$CACHE/bin/vero-repo" .; fi
 [ "$CACHE/bin/winid" -nt "$VERO/scripts/lib/winid.swift" ] || swiftc -O -o "$CACHE/bin/winid" "$VERO/scripts/lib/winid.swift"
 eval "$("$CACHE/bin/vero-repo" show --app "$TOML")"
 out="$CACHE/test-results/$APP_NAME/macos" L="$CACHE/mac-launch"
@@ -44,21 +46,23 @@ rm -rf "$out" "$L" && mkdir -p "$out/frames" "$L"
 "$CACHE/bin/vero-repo" steps --app "$TOML" --out "$L" >/dev/null
 exe="$BUNDLE/Contents/MacOS/$(defaults read "$(cd "$BUNDLE" && pwd)/Contents/Info" CFBundleExecutable)"
 
-echo "$CLEAN" | while IFS= read -r path; do [ -n "$path" ] && rm -rf "$path"; done
+echo "$CLEAN" | while IFS= read -r path; do if [ -n "$path" ]; then rm -rf "$path"; fi; done
 echo "== starting $(basename "$BUNDLE") and playing its steps, recorded"
 began=$(date +%s)
 (
     . "$L/env.sh"
     # One setting a line, so that a value may have spaces in it.
-    echo "$ENVS" | while IFS= read -r kv; do [ -n "$kv" ] && echo "export '${kv%%=*}=$(printf '%s' "${kv#*=}" | sed "s/'/'\\\\''/g")'"; done >"$L/more-env.sh"
+    echo "$ENVS" | while IFS= read -r kv; do [ -z "$kv" ] || echo "export '${kv%%=*}=$(printf '%s' "${kv#*=}" | sed "s/'/'\\\\''/g")'"; done >"$L/more-env.sh"
     . "$L/more-env.sh"
     VERO_TEST="$L/steps.json" VERO_TEST_FILES="$L/files" VERO_TEST_RESULT="$L/result.json" exec "$exe"
 ) >"$out/app.log" 2>&1 &
 app=$!
-trap 'kill $app 2>/dev/null' EXIT
+trap 'kill $app 2>/dev/null || true' EXIT
 n=0
 until win=$("$CACHE/bin/winid" $app) && [ -n "$win" ]; do
-    n=$((n + 1)); [ $n -gt 60 ] && { echo "FAIL: the app showed no window" >&2; exit 1; }
+    # A copy that was signed a moment ago is checked before it starts,
+    # which can take a minute or more.
+    n=$((n + 1)); [ $n -gt 240 ] && { echo "FAIL: the app showed no window in two minutes" >&2; exit 1; }
     sleep 0.5
 done
 # In front, as somebody using it would see it.
