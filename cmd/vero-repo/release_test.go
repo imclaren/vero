@@ -58,6 +58,9 @@ func TestPossibleTargets(t *testing.T) {
 func TestSigningSummary(t *testing.T) {
 	t.Setenv("VERO_MAC_IDENTITY", "")
 	t.Setenv("VERO_ANDROID_KEYSTORE", "")
+	// A keychain with no Developer ID.
+	defer func(f func() []string) { codesigningIdentities = f }(codesigningIdentities)
+	codesigningIdentities = func() []string { return nil }
 	s := signingSummary(&App{}, "deb,macos,windows,android")
 	for _, want := range []string{"Linux", "macOS", "ad hoc", "Windows", "SmartScreen", "Android", "keystore beside your key"} {
 		if !strings.Contains(s, want) {

@@ -232,7 +232,7 @@ vero credentials
 
 | For | What it takes | Then |
 |---|---|---|
-| macOS: no Open Anyway | the Apple Developer Program; a Developer ID Application certificate in your keychain; `xcrun notarytool store-credentials` once | `VERO_MAC_IDENTITY`, `VERO_NOTARY_PROFILE` (and `VERO_MAC_INSTALLER` for a `.pkg`) in your shell |
+| macOS: no Open Anyway | the Apple Developer Program; a Developer ID Application certificate in your keychain, and a Developer ID Installer one for a `.pkg`; `vero setup`, which makes the notarytool profile named `vero` | nothing; `VERO_MAC_IDENTITY`, `VERO_MAC_INSTALLER` and `VERO_NOTARY_PROFILE` choose others |
 | Windows: no SmartScreen | a code-signing certificate, as a `.pfx`; `brew install osslsigncode` | `VERO_WINDOWS_CERT`, `VERO_WINDOWS_CERT_PASSWORD` |
 | Android: a keystore you already ship with | the keystore | `VERO_ANDROID_KEYSTORE`, `VERO_ANDROID_KEY_ALIAS`, `VERO_ANDROID_PASSWORD`; without them vero makes one and keeps it beside your key |
 | iOS: phones | the Apple Developer Program; an Apple Distribution certificate and an App Store profile | `VERO_IOS_IDENTITY`, `VERO_IOS_PROFILE`; the `.ipa` goes up with Transporter |

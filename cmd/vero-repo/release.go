@@ -291,9 +291,9 @@ func signingSummary(a *App, targets string) string {
 		}
 	}
 	if has("macos") {
-		if os.Getenv("VERO_MAC_IDENTITY") == "" {
+		if macIdentity("VERO_MAC_IDENTITY", "Developer ID Application") == "" {
 			b.WriteString("  macOS             ad hoc: people allow it once in Privacy & Security, as the page says (Developer ID: vero-repo credentials)\n")
-		} else if os.Getenv("VERO_NOTARY_PROFILE") == "" {
+		} else if notaryProfile() == "" {
 			b.WriteString("  macOS             with your Developer ID, not notarised (vero-repo credentials)\n")
 		} else {
 			b.WriteString("  macOS             with your Developer ID, notarised\n")

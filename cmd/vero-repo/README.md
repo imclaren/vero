@@ -81,20 +81,22 @@ there's no build number, whatever the Xcode project says.
   `[worker]`. The Mac worker is then built with Xcode's clang for each
   architecture and joined, universal; everywhere else it's built without
   cgo, as before.
-- **Signing.** With nothing set, the app is signed ad hoc, which runs on
-  any Mac once whoever opens it allows it in System Settings, under
-  Privacy & Security; the site's page tells them. To sign it properly, put
-  your Developer ID in the environment: `VERO_MAC_IDENTITY="Developer ID
-  Application: Name (TEAMID)"`. The app is signed from the inside out,
+- **Signing.** The app is signed with the Developer ID Application
+  certificate in your keychain. When there are several, or you want
+  another, `VERO_MAC_IDENTITY="Developer ID Application: Name (TEAMID)"`
+  chooses one. With none, the app is signed ad hoc, which runs on any Mac
+  once whoever opens it allows it in System Settings, under Privacy &
+  Security, as the site's page tells them. The app is signed from the inside out,
   with the hardened runtime: first every program and library in it, then
   the bundles around them, deepest first (such as Sparkle's helper apps
   and services, then `Sparkle.framework`), then the app itself, then the
   disk image. The result is checked with `codesign --verify --deep
-  --strict`, as Gatekeeper and notarisation check it. With
-  `VERO_NOTARY_PROFILE` naming a profile you made with `xcrun notarytool
-  store-credentials`, the disk image is notarised and stapled too.
-  `entitlements` names a plist of entitlements for the app itself.
-  `VERO_MAC_INSTALLER` signs the `.pkg`, which is then notarised as well.
+  --strict`, as Gatekeeper and notarisation check it. The disk image is
+  notarised and stapled too, with the notarytool profile named `vero`,
+  which `vero setup` makes, or the one `VERO_NOTARY_PROFILE` names.
+  `entitlements` names a plist of entitlements for the app itself. The
+  `.pkg` is signed with the keychain's Developer ID Installer certificate,
+  or the one `VERO_MAC_INSTALLER` names, and is then notarised as well.
 - **Updates.** The site's `macos/appcast.xml` is a Sparkle feed, each
   release signed with your Sparkle key. For your app to use it, its
   `Info.plist` needs `SUFeedURL`, the appcast's address, and

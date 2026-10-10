@@ -34,6 +34,46 @@ import (
 //	VERO_MAC_IDENTITY        "Developer ID Application: Name (TEAMID)"
 //	VERO_MAC_INSTALLER       "Developer ID Installer: Name (TEAMID)", for a .pkg
 //	VERO_NOTARY_PROFILE      a profile made with xcrun notarytool store-credentials
+//
+// Each has a default. The identities are the keychain's own, when it has
+// one of each kind, and the profile is one named vero, when notarytool
+// can use it.
+
+// macIdentity is the identity of a kind, "Developer ID Application" or
+// "Developer ID Installer", that signs: the one env names, or else the
+// keychain's only one of that kind.
+func macIdentity(env, kind string) string {
+	if id := os.Getenv(env); id != "" {
+		return id
+	}
+	var found []string
+	for _, id := range codesigningIdentities() {
+		if strings.HasPrefix(id, kind+":") {
+			found = append(found, id)
+		}
+	}
+	if len(found) == 1 {
+		return found[0]
+	}
+	return ""
+}
+
+// notaryProfile is the notarytool profile that notarises: the one
+// VERO_NOTARY_PROFILE names, or else one named vero, when notarytool can
+// use it. VERO_NOTARISE=no notarises nothing, for a copy that is only
+// tested.
+func notaryProfile() string {
+	if os.Getenv("VERO_NOTARISE") == "no" {
+		return ""
+	}
+	if profile := os.Getenv("VERO_NOTARY_PROFILE"); profile != "" {
+		return profile
+	}
+	if exec.Command("xcrun", "notarytool", "history", "--keychain-profile", "vero").Run() == nil {
+		return "vero"
+	}
+	return ""
+}
 
 // MacOS is the front end for macOS.
 type MacOS struct {
@@ -220,7 +260,7 @@ func packageMac(a *App, root, worker, out, ldflags, tmp string) error {
 		return err
 	}
 
-	identity := os.Getenv("VERO_MAC_IDENTITY")
+	identity := macIdentity("VERO_MAC_IDENTITY", "Developer ID Application")
 	entitlements := ""
 	if m.Entitlements != "" {
 		entitlements = a.Path(filepath.Join(m.Folder, m.Entitlements))
@@ -229,7 +269,7 @@ func packageMac(a *App, root, worker, out, ldflags, tmp string) error {
 		return err
 	}
 	if identity == "" {
-		fmt.Println("signed the Mac app ad hoc: set VERO_MAC_IDENTITY to sign it with your Developer ID")
+		fmt.Println("signed the Mac app ad hoc, since the keychain has no Developer ID Application certificate, or more than one: set VERO_MAC_IDENTITY to choose")
 	}
 
 	// The disk image: the app, and a link to Applications to drag it to.
@@ -264,11 +304,11 @@ func packageMac(a *App, root, worker, out, ldflags, tmp string) error {
 	// Notarised together: each is minutes waiting on Apple, so the two
 	// waits overlap rather than add up.
 	var notarise []string
-	if profile := os.Getenv("VERO_NOTARY_PROFILE"); profile != "" {
+	if profile := notaryProfile(); profile != "" {
 		if identity != "" {
 			notarise = append(notarise, dmg)
 		}
-		if pkg != "" && os.Getenv("VERO_MAC_INSTALLER") != "" {
+		if pkg != "" && macIdentity("VERO_MAC_INSTALLER", "Developer ID Installer") != "" {
 			notarise = append(notarise, pkg)
 		}
 		if err := notariseAll(notarise, profile); err != nil {
@@ -482,7 +522,7 @@ func buildMacPkg(a *App, app, pkg, work string) error {
 		return err
 	}
 	args := []string{"--distribution", dist, "--package-path", work}
-	if installer := os.Getenv("VERO_MAC_INSTALLER"); installer != "" {
+	if installer := macIdentity("VERO_MAC_INSTALLER", "Developer ID Installer"); installer != "" {
 		args = append(args, "--sign", installer, "--timestamp")
 	}
 	os.Remove(pkg)

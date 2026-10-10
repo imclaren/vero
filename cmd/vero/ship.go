@@ -172,7 +172,8 @@ func recordMac(src, repo, toml string, env []string) error {
 		return err
 	}
 	defer os.RemoveAll(tmp)
-	if err := runAt(filepath.Dir(toml), env, repo, "package", "--app", toml, "--version", "0.0.0", "--targets", "macos", "--out", tmp); err != nil {
+	// Never released, so never notarised.
+	if err := runAt(filepath.Dir(toml), append(env, "VERO_NOTARISE=no"), repo, "package", "--app", toml, "--version", "0.0.0", "--targets", "macos", "--out", tmp); err != nil {
 		return err
 	}
 	dmgs, _ := filepath.Glob(filepath.Join(tmp, "*.dmg"))
@@ -228,7 +229,28 @@ func setup(args []string) error {
 	if _, err := veroRepoPath(src); err != nil {
 		return err
 	}
+	if err := notaryProfile(); err != nil {
+		return err
+	}
 	return runAt("", nil, "sh", filepath.Join(src, "scripts", "doctor.sh"))
+}
+
+// notaryProfile makes the notarytool profile named vero, which vero ship
+// notarises the Mac app with, when VERO_NOTARY_PROFILE names none and
+// there is no such profile yet. notarytool asks for the Apple ID, the team
+// and an app-specific password.
+func notaryProfile() error {
+	if os.Getenv("VERO_NOTARY_PROFILE") != "" ||
+		exec.Command("xcrun", "notarytool", "history", "--keychain-profile", "vero").Run() == nil {
+		return nil
+	}
+	command := "xcrun notarytool store-credentials vero"
+	if fi, err := os.Stdin.Stat(); err != nil || fi.Mode()&os.ModeCharDevice == 0 {
+		fmt.Printf("\nTo notarise the Mac app, run %s, or set VERO_NOTARY_PROFILE to a profile you have.\n", command)
+		return nil
+	}
+	fmt.Println("\nvero notarises the Mac app with a notarytool profile named vero. It needs your Apple ID, your team ID and an app-specific password from appleid.apple.com.")
+	return runAt("", nil, "xcrun", "notarytool", "store-credentials", "vero")
 }
 
 // toolVersion is the version of vero this tool was installed at, or ""

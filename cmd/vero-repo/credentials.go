@@ -61,39 +61,37 @@ func credentialsCommand(args []string) error {
 
 	// macOS: a Developer ID, and notarisation.
 	if a.MacOS != nil {
-		id := os.Getenv("VERO_MAC_IDENTITY")
-		found := pick("Developer ID Application")
-		switch {
-		case id != "":
-			add("macOS", "Developer ID", true, "VERO_MAC_IDENTITY is set", "")
-		case found != "":
-			add("macOS", "Developer ID", false, "in your keychain, not set", fmt.Sprintf("export VERO_MAC_IDENTITY=%q", found))
-		default:
-			add("macOS", "Developer ID", false, "none in your keychain",
-				"join the Apple Developer Program (developer.apple.com, US$99 a year); in Xcode, Settings > Accounts > Manage Certificates, add a Developer ID Application certificate; then run this again")
+		// signer reports one of the Developer IDs: set, found in the
+		// keychain, or for the person to choose or add.
+		signer := func(what, env, kind, none string) {
+			switch {
+			case os.Getenv(env) != "":
+				add("macOS", what, true, env+" is set", "")
+			case macIdentity(env, kind) != "":
+				add("macOS", what, true, "found in your keychain", "")
+			case pick(kind) != "":
+				add("macOS", what, false, "more than one in your keychain", fmt.Sprintf("export %s=%q, or whichever you mean", env, pick(kind)))
+			default:
+				add("macOS", what, false, "none in your keychain", none)
+			}
 		}
+		signer("Developer ID", "VERO_MAC_IDENTITY", "Developer ID Application",
+			"join the Apple Developer Program (developer.apple.com, US$99 a year); in Xcode, Settings > Accounts > Manage Certificates, add a Developer ID Application certificate; then run this again")
 		profile := os.Getenv("VERO_NOTARY_PROFILE")
 		switch {
 		case profile != "" && exec.Command("xcrun", "notarytool", "history", "--keychain-profile", profile).Run() == nil:
 			add("macOS", "notarisation", true, "VERO_NOTARY_PROFILE works", "")
 		case profile != "":
-			add("macOS", "notarisation", false, "VERO_NOTARY_PROFILE is set but notarytool can't use it",
+			add("macOS", "notarisation", false, "VERO_NOTARY_PROFILE is set but notarytool cannot use it",
 				"xcrun notarytool store-credentials "+profile+" --apple-id you@example.com --team-id TEAMID --password <an app-specific password from appleid.apple.com>")
+		case notaryProfile() != "":
+			add("macOS", "notarisation", true, "the profile named vero works", "")
 		default:
-			add("macOS", "notarisation", false, "not set",
-				"xcrun notarytool store-credentials vero --apple-id you@example.com --team-id TEAMID --password <an app-specific password from appleid.apple.com>\n      export VERO_NOTARY_PROFILE=vero")
+			add("macOS", "notarisation", false, "no profile",
+				"xcrun notarytool store-credentials vero --apple-id you@example.com --team-id TEAMID --password <an app-specific password from appleid.apple.com>")
 		}
 		if a.MacOS.Pkg {
-			inst := os.Getenv("VERO_MAC_INSTALLER")
-			found := pick("Developer ID Installer")
-			switch {
-			case inst != "":
-				add("macOS", "installer signing", true, "VERO_MAC_INSTALLER is set", "")
-			case found != "":
-				add("macOS", "installer signing", false, "in your keychain, not set", fmt.Sprintf("export VERO_MAC_INSTALLER=%q", found))
-			default:
-				add("macOS", "installer signing", false, "no Developer ID Installer certificate", "add one in Xcode as above, for the .pkg")
-			}
+			signer("installer signing", "VERO_MAC_INSTALLER", "Developer ID Installer", "add a Developer ID Installer certificate in Xcode as above, for the .pkg")
 		}
 		add("macOS", "Homebrew tap", gh, ghState(gh), "vero-repo publish --homebrew   (a tap of your own on GitHub, kept up to date each release)")
 	}
@@ -182,9 +180,14 @@ func ghState(ok bool) string {
 }
 
 // codesigningIdentities is each identity the keychain can sign with, as
-// codesign names it: "Developer ID Application: Name (TEAMID)".
-func codesigningIdentities() []string {
-	out, err := exec.Command("security", "find-identity", "-v", "-p", "codesigning").Output()
+// codesign names it: "Developer ID Application: Name (TEAMID)". A test
+// replaces it.
+var codesigningIdentities = keychainIdentities
+
+func keychainIdentities() []string {
+	// Every valid identity, since an Installer certificate is not one
+	// for code signing.
+	out, err := exec.Command("security", "find-identity", "-v").Output()
 	if err != nil {
 		return nil
 	}
