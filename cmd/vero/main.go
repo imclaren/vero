@@ -48,8 +48,33 @@ func main() {
 			os.Exit(veroRepo(os.Args[1:]))
 		}
 	}
+	if len(os.Args) >= 3 && os.Args[1] == "new" && !strings.HasPrefix(os.Args[2], "-") {
+		// vero new NAME [front ends] [--module PATH] [--vero DIR] [add's flags]:
+		// the app, then vero add in its folder.
+		name, module, local := os.Args[2], "", ""
+		var rest []string
+		for i := 3; i < len(os.Args); i++ {
+			switch a := os.Args[i]; {
+			case (a == "--module" || a == "-module") && i+1 < len(os.Args):
+				module = os.Args[i+1]
+				i++
+			case (a == "--vero" || a == "-vero") && i+1 < len(os.Args):
+				local = os.Args[i+1]
+				i++
+			default:
+				rest = append(rest, a)
+			}
+		}
+		if err := newApp(name, module, local); err != nil {
+			fmt.Fprintln(os.Stderr, "vero new:", err)
+			os.Exit(1)
+		}
+		fmt.Printf("made %s/, a Go module with vero's example worker in cmd/worker\n", name)
+		os.Args = append([]string{os.Args[0], "add"}, append(rest, "--dir", name)...)
+	}
 	if len(os.Args) < 2 || os.Args[1] != "add" {
-		fmt.Fprintln(os.Stderr, "usage: vero add [desktop|mobile|all|macos|gtk|wpf|android|ios|web|wasi|plan9 ...] [--except LIST] [--dir DIR]\n"+
+		fmt.Fprintln(os.Stderr, "usage: vero new NAME [front ends, as for add] [--module PATH] [add's flags]\n"+
+			"       vero add [desktop|mobile|all|macos|gtk|wpf|android|ios|web|wasi|plan9 ...] [--except LIST] [--dir DIR]\n"+
 			"                [--summary TEXT] [--description TEXT] [--publisher \"Name <email>\"] [--keep-worker] [--force]\n"+
 			"       vero release [--version 1.2.3] [--targets ...] [--notes \"...\"] [--upload user@host:/path]\n"+
 			"       vero credentials\n"+
@@ -99,7 +124,7 @@ func main() {
 		return
 	}
 	fmt.Printf("added %s for %s\n", strings.Join(added, ", "), app.Name)
-	fmt.Println("next: read PORTING.md, then build each front end as its README says")
+	fmt.Println("next: read PORTING.md in " + app.Dir + ", then build each front end as its README says")
 }
 
 // choose is the front ends named, groups opened out, less the exceptions.

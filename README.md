@@ -6,6 +6,7 @@ Run a Go binary embedded in a native (e.g. macOS SwiftUI) app. The Go binary and
 
 [![Go reference](https://pkg.go.dev/badge/github.com/imclaren/vero.svg)](https://pkg.go.dev/github.com/imclaren/vero)
 
+[Make a new app in one command](#make-a-new-app-in-one-command) ·
 [Build and run the macOS example](#build-and-run-the-macos-example) ·
 [Create a vero macOS app](#create-a-vero-macos-app) ·
 [Build and run the example on all platforms using your Mac](#build-and-run-the-example-on-all-platforms-using-your-mac) ·
@@ -28,6 +29,22 @@ Run a Go binary embedded in a native (e.g. macOS SwiftUI) app. The Go binary and
 | **Plan 9** — `plan9/386`, **`plan9/amd64`**, `plan9/arm` | <a href="example/plan9-app"><img src="docs/screenshots/plan9.gif" width="300"></a> | qemu, which can be installed by running [`setup-plan9.sh`](scripts/setup-plan9.sh) | Builds and runs. The same three rows drawn with libdraw in a rio window, started in a VM by running [`scripts/run-plan9.sh`](scripts/run-plan9.sh); `--test` runs vero's test suite there instead. Plan 9 is x86 only, so the VM is emulated. We also had to fix the Go libdraw it uses because it did not build for Plan 9 until [9fans/go#147](https://github.com/9fans/go/pull/147), so the example pins our fork carrying that fix. |
 | **Solaris** — **`solaris/amd64`** | — | — | Builds by running [`scripts/build-all.sh`](scripts/build-all.sh), and does not run. Oracle Solaris needs an Oracle account and licence to download, and runs on x86, which this Mac emulates rather than virtualises. Oracle's repository ships GTK 3, not GTK 4, so the GTK example would not run there as written; the worker and vero's tests would work. |
 | **AIX** — **`aix/ppc64`** | — | — | Builds by running [`scripts/build-all.sh`](scripts/build-all.sh), and does not run. There is no public AIX media: IBM provides it only under entitlement, with POWER hardware. qemu can emulate `pseries`, but there is nothing to boot on qemu. |
+
+## Make a new app in one command
+
+```bash
+go install github.com/imclaren/vero/cmd/vero@latest
+vero new hello          # or: vero new hello all, for every system
+cd hello/macos && ./build.sh
+```
+
+`vero new` makes a Go module with vero's example worker to start from, a
+front end for each system you name (macOS, Linux and the BSDs, and
+Windows unless you say otherwise), the `vero-app.toml` that packages
+them, an icon, a starter test and a checklist, `PORTING.md`. `vero
+release` then builds every installer and an install site. [Taking your
+app to more platforms, and packaging it](PACKAGING.md) goes through it
+all; the rest of this page shows what vero is underneath, by hand.
 
 ## Build and run the macOS example
 
@@ -189,7 +206,10 @@ lipo -create worker-amd64 worker-arm64 -output worker
 In Xcode, File -> New -> Project -> macOS -> App, with Interface set to
 SwiftUI. Then:
 
-- File -> Add Package Dependencies... -> `https://github.com/imclaren/vero`
+- File -> Add Package Dependencies... -> `https://github.com/imclaren/vero`,
+  with the Dependency Rule set to **Up to Next Major Version**. Before 1.0,
+  Xcode's other rule, Up to Next Minor Version, keeps an app on 0.13 when
+  0.15 is out, so it never gets what came after.
 - drag `~/vero-example/macos-app/worker` into the project, ticking your app
   under **Add to targets**
 

@@ -343,3 +343,38 @@ func start() {
 		t.Error("the page got no placeholder")
 	}
 }
+
+// TestNew: vero new makes an app that builds, from vero's example worker,
+// with its front ends and vero-app.toml.
+func TestNew(t *testing.T) {
+	root, _ := filepath.Abs("../..")
+	dir := t.TempDir()
+	was, _ := os.Getwd()
+	os.Chdir(dir)
+	defer os.Chdir(was)
+	if err := newApp("hello", "", root); err != nil {
+		t.Fatal(err)
+	}
+	if err := newApp("hello", "", root); err == nil {
+		t.Error("made an app over one that exists")
+	}
+	if err := newApp("Hello World", "", root); err == nil {
+		t.Error("took a name with capitals and a space")
+	}
+	worker, _ := os.ReadFile(filepath.Join(dir, "hello", "cmd", "worker", "main.go"))
+	if !strings.Contains(string(worker), `var version = "0.1.0"`) || !strings.Contains(string(worker), "vero.NewWorker") {
+		t.Error("the worker is not vero's example at 0.1.0")
+	}
+	build := exec.Command("go", "build", "./...")
+	build.Dir = filepath.Join(dir, "hello")
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("it does not build: %v\n%s", err, out)
+	}
+	app, err := analyse(filepath.Join(dir, "hello"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if app.Name != "hello" || app.Worker != "cmd/worker" {
+		t.Errorf("analysed: name %q, worker %q", app.Name, app.Worker)
+	}
+}

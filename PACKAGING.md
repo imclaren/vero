@@ -2,10 +2,10 @@
 
 [Back to vero's README](README.md)
 
-Three commands do all of it: `vero add` writes a front end for each
-system, `vero release` builds the installers and the site, and `vero
-credentials` is the checklist for signing and the stores, when you want
-them. Start with [a worked example](#a-worked-example), which takes a
+A few commands do all of it. `vero new` makes an app, `vero add` writes
+a front end for each system, `vero release` builds the installers and the
+site, and `vero credentials` is the checklist for signing and the stores,
+when you want them. Start with [a worked example](#a-worked-example), which takes a
 small app from macOS to an install page with them. The rest of the guide
 has two parts. [Taking your app to more
 platforms](#taking-your-app-to-more-platforms) adds front ends for the
@@ -31,31 +31,30 @@ go install github.com/imclaren/vero/cmd/vero@latest
 go install github.com/imclaren/vero/kit/cmd/vero-site@latest
 ```
 
-**2. Make the app:** a Go module with a worker and an icon.
+**2. Make the app, with front ends for macOS, Linux and Windows.**
+`vero new` makes a Go module that requires vero, with vero's example
+worker in `cmd/worker` to start from, and then does what `vero add` does:
+it reads the worker and writes a starter app for each system, which shows
+the worker's state and has a button for each request. It also writes
+`vero-app.toml`, which describes the app to the packaging, an icon to
+replace, a starter test, and `PORTING.md`, a checklist for your own app.
 
 ```bash
-mkdir hello && cd hello
-go mod init example.com/hello
-go get github.com/imclaren/vero@latest
-VERO=$(go list -m -f '{{.Dir}}' github.com/imclaren/vero)
-mkdir -p cmd/worker && cp "$VERO/example/worker/main.go" cmd/worker/
-cp "$VERO/example/icon.png" .
-```
-
-**3. Add front ends for macOS, Linux and Windows.** `vero add` reads the
-worker and writes a starter app for each, which shows the worker's state
-and has a button for each request. It also writes `vero-app.toml`, which
-describes the app to the packaging, and `PORTING.md`, a checklist for your
-own app.
-
-```bash
-vero add desktop
+vero new hello
+cd hello
 ```
 
 It asks for the three things the packaging needs that the worker cannot
-tell it - a one-line summary, a description, and your name and email as
-the publisher - and writes them into `vero-app.toml`. (`--summary`,
-`--description` and `--publisher` answer from a script.)
+tell it, which are a one-line summary, a description, and your name and
+email as the publisher, and writes them into `vero-app.toml`. (`--summary`,
+`--description` and `--publisher` answer from a script, and `--module`
+gives the module a path such as `example.com/hello`.) An app you have
+already is the same from here on: `vero add desktop` in its folder, beside
+its `go.mod`.
+
+**3. Run it on the Mac.** `cd macos && ./build.sh`, then run what it
+prints. The Linux and Windows starters' READMEs say how to run them in a
+container and a VM.
 
 **4. Release.** One command: it makes the signing key the first time
 (which signs this and every later release, so that people's systems trust
