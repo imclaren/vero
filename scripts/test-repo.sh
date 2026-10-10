@@ -80,11 +80,17 @@ REPO="$CACHE/bin/vero-repo"
 eval "$("$REPO" show --app "${APP:-$VERO/example/vero-app.toml}")" || exit 1
 P=$APP_NAME
 [ "$P" = vero-example ] && P=example
-KEY="$CACHE/$P-key" SITE="$CACHE/$P-site" PACKAGES="$CACHE/$P-packages"
+# Each system's own site, packages and recording folder, so that tests of
+# two systems can run at once (on two --ports); the key is the app's.
+LABEL=${VMSYS:+vm-$VMSYS}
+[ -n "$FLATPAK" ] && LABEL=flatpak
+[ -n "$MAC" ] && LABEL=macos
+: "${LABEL:=$(printf '%s' "$IMAGE" | tr '/:' '--')}"
+KEY="$CACHE/$P-key" SITE="$CACHE/$P-site-$LABEL" PACKAGES="$CACHE/$P-packages-$LABEL"
 # The container reaches this Mac by this name: colima and Docker Desktop
 # both answer it.
 URL="http://host.docker.internal:$PORT"
-NAME=vero-test-repo
+NAME=vero-test-$LABEL
 [ -f "$KEY/private.asc" ] || "$REPO" key --dir "$KEY" --name "$APP_DISPLAY test" --email test@example.com
 rm -rf "$SITE"
 
@@ -415,10 +421,7 @@ RESULTS="$CACHE/test-results/$APP_NAME"
 launch_test() {
     stage "starting the app and playing its steps, recorded"
     lb=$(date +%s)
-    label=${VMSYS:+vm-$VMSYS}
-    [ -n "$FLATPAK" ] && label=flatpak
-    : "${label:=$(printf '%s' "$IMAGE" | tr '/:' '--')}"
-    out="$RESULTS/$label" L="$CACHE/launch"
+    out="$RESULTS/$LABEL" L="$CACHE/launch-$LABEL"
     rm -rf "$out" "$L" && mkdir -p "$out" "$L"
     "$REPO" steps --app "$APP_TOML" --out "$L" >/dev/null
     cp "$VERO/scripts/lib/launch-test.sh" "$L/"
@@ -444,7 +447,7 @@ finish_launch() {
     elif ! grep -Eq '"ok" ?: ?true' "$out/result.json"; then why="a step failed"
     fi
     secs=$(($(date +%s) - lb))
-    printf '%s\n%s\n%s\n' "${why:+FAIL}${why:-PASS}" "$secs" "$why" >"$out/status"
+    printf '%s\n%s\n%s\n' "$([ -n "$why" ] && echo FAIL || echo PASS)" "$secs" "$why" >"$out/status"
     summary
     grep 'vero test:' "$out/app.log" | sed 's/^vero test: /   /'
     if [ -n "$why" ]; then
@@ -493,26 +496,9 @@ make_gif() {
         -loop 0 "$1/app.gif" || echo "   (the GIF couldn't be made)"
 }
 
-# summary: index.html in the results folder, every system tested so far.
-summary() {
-    {
-        echo '<!doctype html><meta charset="utf-8"><title>vero test results</title>'
-        echo '<style>body{font:14px system-ui;margin:16px;background:#fff;color:#111}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}
-figure{margin:0;border:1px solid #ccc;padding:8px}img{max-width:100%}.FAIL{color:#b00}.PASS{color:#070}</style>'
-        echo "<h1>vero test results</h1><p>Updated $(date '+%Y-%m-%d %H:%M').</p><div class=grid>"
-        for d in "$RESULTS"/*/; do
-            [ -f "$d/status" ] || continue
-            n=$(basename "$d")
-            st=$(sed -n 1p "$d/status") secs=$(sed -n 2p "$d/status") why=$(sed -n 3p "$d/status")
-            when=$(date -r "$d/status" '+%Y-%m-%d %H:%M')
-            echo "<figure><figcaption><b>$n</b> <span class=$st>$st</span> $why<br>${secs}s, $when</figcaption>"
-            [ -f "$d/app.gif" ] && echo "<img src=\"$n/app.gif\" alt=\"$n\">"
-            echo "<br><a href=\"$n/app.log\">log</a></figure>"
-        done
-        echo '</div>'
-    } >"$RESULTS/index.html"
-}
+# summary: index.html in the results folder, every app and system tested
+# so far.
+summary() { sh "$VERO/scripts/lib/results-page.sh" "$CACHE/test-results"; }
 
 STAGES=4
 [ -n "$LAUNCH" ] && STAGES=5

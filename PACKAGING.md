@@ -135,8 +135,18 @@ notifications done one system's way - each with the files and lines, and
 what to change it to. Most of those are a `kit` package:
 [kit/README.md](kit/README.md) lists them.
 
-**4. Release.** `vero release`, as below: the new systems' packages and
-instructions are in the same site.
+**4. Test it, and record it at work.** `vero add` also gives
+`vero-app.toml` a `[test]`: steps the tests play in your installed app,
+with examples from your worker, and `testdata/` for the files they use.
+`scripts/test-repo.sh --app vero-app.toml` installs your app from a site
+it builds on each system you name, plays the steps and records a GIF;
+`scripts/record-mac.sh` does the Mac.
+[cmd/vero-repo/README.md](cmd/vero-repo/README.md#steps-and-a-gif-of-your-app-at-work)
+has how.
+
+**5. Release.** `vero release`, as below: the new systems' packages and
+instructions are in the same site, and the page shows each system's
+recording that passed.
 
 ## Creating app installers
 

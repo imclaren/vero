@@ -446,7 +446,8 @@ scripts/test-repo.sh --vm windows         # the installer and the MSIX, in vero'
 `--app path/to/vero-app.toml` tests your own app the same way, on every
 system but the Mac, which has `scripts/record-mac.sh` instead (below).
 `--no-launch` leaves out starting the app, and `--limit` is how long its
-steps may take, 600 seconds unless you say.
+steps may take, 600 seconds unless you say. Two systems can be tested at
+once, each with its own `--port`.
 
 The containers need Docker and colima. A `--vm` test uses the system's VM,
 which its `run-*.sh` script makes the first time; that downloads the
@@ -488,8 +489,11 @@ pause = 3                                # so the recording shows it
 A wait's `path` goes through the app's state by key and list index, and
 `#` is a list's length: `jobs.#`, `jobs.0.phase`. The test stops at the
 first step that fails. Each system's GIF, steps and log go in
-`~/.cache/vero/test-results/APP/SYSTEM/`, and `index.html` there shows
-every system tested so far.
+`~/.cache/vero/test-results/APP/SYSTEM/`, and
+`~/.cache/vero/test-results/index.html` shows every app and system tested
+so far. `vero release` puts the GIF of each system that passed on the
+install page, under "See it at work"; `vero-repo build --recordings
+DIR` does the same from a folder you choose.
 
 On the Mac, `scripts/record-mac.sh --app vero-app.toml --bundle My.app`
 does the same with an app you've built: it starts it on this Mac, as you,

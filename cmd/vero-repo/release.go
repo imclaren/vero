@@ -124,6 +124,10 @@ func releaseCommand(args []string) error {
 
 	fmt.Printf("==> the site, for %s\n", *url)
 	buildArgs := []string{"--app", *appPath, "--key", *keyDir, "--url", *url, "--packages", *packages, "--out", *out}
+	// The recordings vero's tests made of this app, which the page shows.
+	if home, err := os.UserHomeDir(); err == nil {
+		buildArgs = append(buildArgs, "--recordings", filepath.Join(home, ".cache", "vero", "test-results", a.Name))
+	}
 	if *notes != "" {
 		buildArgs = append(buildArgs, "--notes", *notes)
 	}

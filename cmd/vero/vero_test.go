@@ -73,6 +73,16 @@ func TestAdd(t *testing.T) {
 			t.Errorf("vero-app.toml lacks %s", want)
 		}
 	}
+	// A starter test: a step that always passes, and examples from the
+	// worker's own requests and state, with a folder for their files.
+	for _, want := range []string{"\n[test]\nfiles = []\n", "[[test.step]]\npause = 3\n", `# call = "status"`, `# wait = { path = "jobs.#", at_least = 1 }`} {
+		if !strings.Contains(string(toml), want) {
+			t.Errorf("vero-app.toml's [test] lacks %q", want)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dir, "testdata", "README.md")); err != nil {
+		t.Error("no testdata/")
+	}
 	py, _ := os.ReadFile(filepath.Join(dir, "gtk", "main.py"))
 	if !strings.Contains(string(py), `("restartJob", [("id", "int"), ]),`) {
 		t.Error("the GTK starter does not offer restartJob with its id")
@@ -84,6 +94,13 @@ func TestAdd(t *testing.T) {
 	// Asked again, nothing is added: each is there already.
 	if added, err := add(app, []string{"gtk"}, false); err != nil || len(added) != 0 {
 		t.Errorf("added again: %v, %v", added, err)
+	}
+	// One more front end leaves the [test] there alone.
+	if _, err := add(app, []string{"android"}, false); err != nil {
+		t.Fatal(err)
+	}
+	if again, _ := os.ReadFile(filepath.Join(dir, "vero-app.toml")); strings.Count(string(again), "\n[test]\n") != 1 {
+		t.Error("a second [test]")
 	}
 	// The front ends written build, where this Mac can build them: the
 	// Python compiles, and the page's wasm builds.

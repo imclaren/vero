@@ -184,7 +184,7 @@ func TestAppcastAndCask(t *testing.T) {
 	// The check sees it all, and catches a damaged image.
 	a.Version = "1.0.1"
 	latest := Latest{Name: a.Name, Version: "1.0.1", Downloads: map[string]Download{"macos-universal": newest["universal"]}}
-	if err := writeSite(site, "https://example.com/vero", a, latest, s, false); err != nil {
+	if err := writeSite(site, "https://example.com/vero", a, latest, s, false, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := checkSite(site, "https://example.com/vero", a, key.public, nil); err != nil {
@@ -210,7 +210,7 @@ func TestNoPage(t *testing.T) {
 	site := t.TempDir()
 	os.WriteFile(filepath.Join(site, "index.html"), []byte("old"), 0o644)
 	latest := Latest{Name: a.Name, Version: "1.2.3", Downloads: map[string]Download{"windows-x64": {"1.2.3", "windows/x.exe"}}}
-	if err := writeSite(site, "https://example.com", a, latest, s, true); err != nil {
+	if err := writeSite(site, "https://example.com", a, latest, s, true, nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(site, "index.html")); err == nil {

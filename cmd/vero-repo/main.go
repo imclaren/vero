@@ -128,6 +128,7 @@ func buildCommand(args []string) error {
 	noPage := fs.Bool("no-page", false, "no index.html or install.sh: for downloads you serve yourself, privately")
 	notes := fs.String("notes", "", "what's new in this release, for the Mac's update prompt: paragraphs, and lines starting \"- \" as a list")
 	notesFile := fs.String("notes-file", "", "the same as --notes, from a file")
+	recordings := fs.String("recordings", "", "vero's test recordings, ~/.cache/vero/test-results/APP: the page shows each system's that passed")
 	fs.Parse(args)
 	if *notesFile != "" {
 		data, err := os.ReadFile(*notesFile)
@@ -167,6 +168,7 @@ func buildCommand(args []string) error {
 	tgz, _ := filepath.Glob(filepath.Join(*packages, "*.tgz"))
 	in.unix = append(unix, tgz...)
 	in.noPage = *noPage
+	in.recordings = *recordings
 	// What the site offered before, which this release mustn't go back from.
 	var previous *Latest
 	if data, err := os.ReadFile(filepath.Join(*out, "latest.json")); err == nil {
@@ -210,6 +212,8 @@ type packageFiles struct {
 	unix []string
 	// noPage leaves out the public page and install.sh.
 	noPage bool
+	// recordings is the folder of vero's test recordings, for the page.
+	recordings string
 }
 
 // build adds new installers to the site in out, and writes its indexes
@@ -347,5 +351,12 @@ func build(out string, in packageFiles, keep int, url string, a *App, s *signer,
 	if len(latest.Downloads) == 0 {
 		return latest, errors.New("no installers to publish: run vero-repo package first")
 	}
-	return latest, writeSite(out, url, a, latest, s, in.noPage)
+	var recs []recording
+	if !in.noPage {
+		var err error
+		if recs, err = copyRecordings(in.recordings, out); err != nil {
+			return latest, err
+		}
+	}
+	return latest, writeSite(out, url, a, latest, s, in.noPage, recs)
 }

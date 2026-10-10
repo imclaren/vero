@@ -3,7 +3,8 @@
 # test-repo.sh does on every other system: starts the app with VERO_TEST
 # set, so that vero's Swift binding in it plays the steps, and captures its
 # window every half second until they've finished, then makes the frames a
-# GIF in ~/.cache/vero/test-results/APP/macos/.
+# GIF in ~/.cache/vero/test-results/APP/macos/, which
+# ~/.cache/vero/test-results/index.html shows with every other system's.
 #
 #   scripts/record-mac.sh --app path/to/vero-app.toml --bundle path/to/My.app
 #       [--env NAME=value]... [--clean PATH]... [--limit SECONDS]
@@ -80,6 +81,7 @@ rm -rf "$out/frames"
 why=""
 [ -f "$out/result.json" ] || why="the steps didn't finish in ${LIMIT}s"
 [ -z "$why" ] && ! grep -Eq '"ok" ?: ?true' "$out/result.json" && why="a step failed"
-printf '%s\n%s\n%s\n' "${why:+FAIL}${why:-PASS}" "$(($(date +%s) - began))" "$why" >"$out/status"
+printf '%s\n%s\n%s\n' "$([ -n "$why" ] && echo FAIL || echo PASS)" "$(($(date +%s) - began))" "$why" >"$out/status"
+sh "$VERO/scripts/lib/results-page.sh" "$CACHE/test-results"
 if [ -n "$why" ]; then echo "FAIL: $why (log in $out)" >&2; exit 1; fi
 echo "ok: the steps passed; recorded in $out/app.gif"

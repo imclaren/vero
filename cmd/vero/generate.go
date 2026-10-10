@@ -107,6 +107,9 @@ func add(app *App, want []string, force bool) ([]string, error) {
 	if len(added) == 0 {
 		return nil, nil
 	}
+	if err := addTest(app); err != nil {
+		return added, err
+	}
 	return added, writePorting(app, added)
 }
 
@@ -163,6 +166,7 @@ func writePorting(app *App, added []string) error {
 	} else if limited {
 		b.WriteString("- [ ] For iOS and the browser, the worker runs inside the app: give it a `Serve(in io.Reader, out io.Writer) error` that sets up the same worker as `main` does, in a package the front end can import, and point the starters at it where they say. (`vero add` does this itself for a worker whose main makes a vero.WorkerOptions, calls vero.NewWorker with it, and ends with Serve.)\n")
 	}
+	b.WriteString("- [ ] Give the test some steps: `[test]` in `vero-app.toml` has a pause and examples from your worker, and `testdata/` is for the files they use. `scripts/test-repo.sh --app vero-app.toml` then records your app on each system, and the install page shows the recordings.\n")
 	b.WriteString("- [ ] Release: `scripts/package.sh --app vero-app.toml --version X`, `vero-repo build`, upload.\n")
 	return os.WriteFile(filepath.Join(app.Dir, "PORTING.md"), []byte(b.String()), 0o644)
 }

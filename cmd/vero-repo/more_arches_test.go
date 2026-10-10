@@ -136,7 +136,7 @@ func TestChimera(t *testing.T) {
 	// The page and install.sh: Chimera's key and repository, fetched
 	// with the fetch it has.
 	latest := Latest{Name: a.Name, Version: "1.2.3_beta", Downloads: map[string]Download{"chimera-x86_64": newest["x86_64"]}}
-	if err := writeSite(site, "https://example.com", a, latest, s, false); err != nil {
+	if err := writeSite(site, "https://example.com", a, latest, s, false, nil); err != nil {
 		t.Fatal(err)
 	}
 	for file, want := range map[string]string{

@@ -97,6 +97,8 @@ type page struct {
 	// Linux are Alpine, Void and Chimera, if the site has their repositories,
 	// which are added as root.
 	Linux []unixSection
+	// Recordings are GIFs of the app at work, from vero's tests.
+	Recordings []recording
 }
 
 // unixSection is how to install on one of the BSDs or illumos.
@@ -116,7 +118,7 @@ type windowsDownload struct {
 // install on each system, and install.sh, which does it on every Unix the
 // site has a repository for. urls in latest are relative to the site
 // until here.
-func writeSite(site, url string, a *App, latest Latest, s *signer, noPage bool) error {
+func writeSite(site, url string, a *App, latest Latest, s *signer, noPage bool, recordings []recording) error {
 	url = strings.TrimRight(url, "/")
 	for k, d := range latest.Downloads {
 		d.URL = url + "/" + d.URL
@@ -137,7 +139,7 @@ func writeSite(site, url string, a *App, latest Latest, s *signer, noPage bool) 
 		os.Remove(filepath.Join(site, "install.sh"))
 		return nil
 	}
-	p := page{App: a, URL: url, Latest: latest, Fingerprint: s.keyFingerprint()}
+	p := page{App: a, URL: url, Latest: latest, Fingerprint: s.keyFingerprint(), Recordings: recordings}
 	if k, err := s.rsaKey(); err == nil {
 		p.VoidKey = voidFingerprint(&k.PublicKey)
 	}
@@ -395,6 +397,10 @@ var indexPage = template.Must(template.New("index").Funcs(funcs).Parse(`<!doctyp
   section { border-top: 1px solid var(--line); }
   a { color: inherit; }
   code { font-size: 0.9em; }
+  .recordings { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+  .recordings figure { margin: 0; }
+  .recordings img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 6px; }
+  .recordings figcaption { font-size: 13px; color: var(--soft); margin-top: 4px; }
 </style>
 </head>
 <body>
@@ -402,6 +408,15 @@ var indexPage = template.Must(template.New("index").Funcs(funcs).Parse(`<!doctyp
 <h1>{{.App.DisplayName}}</h1>
 <p>{{.App.Summary}}</p>
 <p class="soft">Version {{.Latest.Version}}{{if .App.Homepage}} · <a href="{{.App.Homepage}}">{{.App.Homepage}}</a>{{end}}</p>
+{{- if .Recordings}}
+<h2>See it at work</h2>
+<p class="soft">Recorded installing from this site and running, on each of these systems.</p>
+<div class="recordings">
+{{- range .Recordings}}
+<figure><a href="{{.File}}"><img src="{{.File}}" alt="{{$.App.DisplayName}} at work on {{.System}}" loading="lazy"></a><figcaption>{{.System}}</figcaption></figure>
+{{- end}}
+</div>
+{{- end}}
 <div id="systems">
 {{- if .Apt}}
 <section data-system="linux">
