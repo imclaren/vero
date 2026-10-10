@@ -26,6 +26,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/imclaren/vero/kit/site"
@@ -49,6 +50,7 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
+		previewMoved(*dir, *addr, ln.Addr().(*net.TCPAddr))
 		log.Printf("serving %s: open http://%s/", *dir, shown(ln.Addr().(*net.TCPAddr)))
 		log.Fatal(server(ln.Addr().String(), handler).Serve(ln))
 	}
@@ -82,6 +84,23 @@ func listen(addr string) (net.Listener, error) {
 	}
 	log.Printf("%s is in use, so a free port was picked instead", addr)
 	return ln, nil
+}
+
+// previewMoved warns when a site built as a preview of addr, as vero
+// release builds one with no site in vero-app.toml, is served on another
+// port: its install commands and repositories name addr's, so they would
+// not work from here.
+func previewMoved(dir, addr string, got *net.TCPAddr) {
+	_, port, err := net.SplitHostPort(addr)
+	if err != nil || port == strconv.Itoa(got.Port) {
+		return
+	}
+	latest, err := os.ReadFile(filepath.Join(dir, "latest.json"))
+	if err != nil || !strings.Contains(string(latest), "localhost:"+port) {
+		return
+	}
+	log.Printf("warning: this site was built for localhost:%s, so its install commands do not work on port %d. "+
+		"Stop what is using port %s, or build it for this port with vero release --url http://localhost:%d", port, got.Port, port, got.Port)
 }
 
 // shown is the address as a browser wants it: an unspecified host as
