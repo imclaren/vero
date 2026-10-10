@@ -75,8 +75,8 @@ wait $app 2>/dev/null || true
 cp "$L/result.json" "$out/" 2>/dev/null || true
 grep 'vero test:' "$out/app.log" | sed 's/^vero test: /   /'
 ffmpeg -loglevel error -y -framerate 2 -i "$out/frames/f%04d.png" \
-    -vf "scale='min(640,iw)':-2:flags=lanczos,split[a][b];[a]palettegen=max_colors=128[p];[b][p]paletteuse=dither=none:diff_mode=rectangle" \
-    -loop 0 "$out/app.gif"
+    -vf "mpdecimate=max=3,setpts=N/2/TB,tpad=stop_mode=clone:stop_duration=3,scale='min(640,iw)':-2:flags=lanczos,split[a][b];[a]palettegen=max_colors=128[p];[b][p]paletteuse=dither=none:diff_mode=rectangle" \
+    -fps_mode vfr -loop 0 "$out/app.gif"
 rm -rf "$out/frames"
 why=""
 [ -f "$out/result.json" ] || why="the steps didn't finish in ${LIMIT}s"

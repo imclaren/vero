@@ -461,7 +461,10 @@ finish_launch() {
 }
 
 # make_gif DIR: DIR/frames made into DIR/app.gif, cropped to the window,
-# at two frames a second, no wider than 640. Not dithered: an app's flat
+# at two frames a second, no wider than 640. Of frames that are the same
+# as the one before, three in four are left out, so that waiting goes by
+# quickly but can still be seen, and the last is held for three seconds,
+# so that the result can be seen. Not dithered: an app's flat
 # colours need none, and dithering makes every frame differ, which a GIF
 # pays for in size.
 make_gif() {
@@ -495,8 +498,8 @@ make_gif() {
     done
     for frame in "$f"/g*; do mv "$frame" "$f/f${frame##*/g}"; done
     ffmpeg -loglevel error -y -framerate 2 -i "$f/f%04d.$ext" \
-        -vf "${crop:+$crop,}scale='min(640,iw)':-2:flags=lanczos,split[a][b];[a]palettegen=max_colors=128[p];[b][p]paletteuse=dither=none:diff_mode=rectangle" \
-        -loop 0 "$1/app.gif" || echo "   (the GIF couldn't be made)"
+        -vf "${crop:+$crop,}mpdecimate=max=3,setpts=N/2/TB,tpad=stop_mode=clone:stop_duration=3,scale='min(640,iw)':-2:flags=lanczos,split[a][b];[a]palettegen=max_colors=128[p];[b][p]paletteuse=dither=none:diff_mode=rectangle" \
+        -fps_mode vfr -loop 0 "$1/app.gif" || echo "   (the GIF couldn't be made)"
 }
 
 # summary: index.html in the results folder, every app and system tested
