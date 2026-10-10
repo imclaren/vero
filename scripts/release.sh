@@ -5,8 +5,8 @@
 #   ./scripts/release.sh v0.2.0
 #   ./scripts/release.sh v0.2.0 --publish     # also create the GitHub release
 #
-# Everything lands in dist/release/.  Linux is built for both architectures,
-# which takes a few minutes: one of them runs emulated.
+# Everything lands in dist/release/. This is vero's own release, of the
+# library and its tools; an app is released with vero release.
 set -e
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -24,7 +24,7 @@ OUT="$ROOT/dist/release"
 rm -rf "$OUT"; mkdir -p "$OUT"
 
 echo "==> building everything"
-ALL_ARCHES=1 "$ROOT/scripts/build-all.sh" >/dev/null
+"$ROOT/scripts/build-all.sh" >/dev/null
 
 DIST="$ROOT/dist"
 missing=""

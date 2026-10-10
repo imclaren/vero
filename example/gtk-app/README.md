@@ -1,4 +1,4 @@
-# Linux and FreeBSD example
+# The GTK example, for Linux, the BSDs and illumos
 
 Run the following script to build and run this example on a Mac. This script
 builds the app in a container, runs it on a virtual display, and opens it in

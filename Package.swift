@@ -12,10 +12,9 @@ let package = Package(
         // application: the worker's path arrives at runtime and every message
         // is JSON.
         //
-        // On main this is only the declarations, and the application links the
-        // archive itself.  scripts/release.sh replaces this with a binaryTarget
-        // pointing at the release's CVero.xcframework.zip, so a tagged version
-        // carries the archive with it and nobody has to build one.
+        // scripts/release.sh points this binaryTarget at each release's
+        // CVero.xcframework.zip, so a tagged version carries the archive with
+        // it and nobody has to build one.
         .binaryTarget(
             name: "CVero",
             url: "https://github.com/imclaren/vero/releases/download/v0.15.0/CVero.xcframework.zip",

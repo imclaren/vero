@@ -3,7 +3,7 @@
 #
 #   scripts/setup-android.sh
 #
-# About 2GB, nearly all of it the emulator's system image.  Everything lands
+# About 5GB, nearly all of it the emulator's system image.  Everything lands
 # under $ANDROID_HOME (~/Library/Android/sdk by default) and nothing needs
 # root: the command line tools, a JDK and the Kotlin compiler come from
 # Homebrew, the rest from Google's repository.

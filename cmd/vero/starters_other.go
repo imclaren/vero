@@ -979,7 +979,7 @@ go 1.24
 
 require (
 	9fans.net/go v0.0.8-0.20260825183529-7dfa0e8c5041
-	github.com/imclaren/vero v0.13.0
+	github.com/imclaren/vero v0.15.0
 )
 
 // The upstream libdraw port does not build for Plan 9: this fork does.

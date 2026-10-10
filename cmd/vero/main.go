@@ -41,7 +41,7 @@ var aliases = map[string]string{
 func main() {
 	if len(os.Args) >= 2 {
 		switch os.Args[1] {
-		case "release", "credentials", "publish", "key", "package", "build", "check":
+		case "release", "credentials", "publish", "key", "package", "build", "check", "steps", "show":
 			// The packaging is vero-repo's; this hands over to it, so that
 			// one tool is all anyone installs.
 			os.Exit(veroRepo(os.Args[1:]))
@@ -49,10 +49,11 @@ func main() {
 	}
 	if len(os.Args) < 2 || os.Args[1] != "add" {
 		fmt.Fprintln(os.Stderr, "usage: vero add [desktop|mobile|all|macos|gtk|wpf|android|ios|web|wasi|plan9 ...] [--except LIST] [--dir DIR]\n"+
-			"                [--summary TEXT] [--description TEXT] [--publisher \"Name <email>\"] [--keep-worker]\n"+
+			"                [--summary TEXT] [--description TEXT] [--publisher \"Name <email>\"] [--keep-worker] [--force]\n"+
 			"       vero release [--version 1.2.3] [--targets ...] [--notes \"...\"] [--upload user@host:/path]\n"+
 			"       vero credentials\n"+
-			"       vero publish --homebrew | --winget | --aur | --all")
+			"       vero publish --homebrew | --winget | --aur | --all\n"+
+			"       vero key | package | build | check | steps | show ...   vero-repo's own commands, which vero runs for you")
 		os.Exit(2)
 	}
 	fs := flag.NewFlagSet("add", flag.ExitOnError)

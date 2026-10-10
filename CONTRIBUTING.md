@@ -49,18 +49,20 @@ should be quiet.
 
 ## Building for every platform
 
-`scripts/build-all.sh` builds a worker for seventeen targets into `dist/`,
+`scripts/build-all.sh` builds a worker for eighteen targets into `dist/`,
 plus the C archive the Swift package links.
 Everything but that archive is a plain cross-compile: the worker supervises
 itself, so a frontend spawns it rather than loading a library, and no foreign
 C toolchain is involved.
 
-`scripts/setup.sh` installs Docker and qemu - needed to *run* the examples,
-not to build them - and `scripts/run.sh` opens three of them at once: macOS
-natively, Linux in a container over VNC, and Windows in a VM.
-`scripts/run-freebsd.sh`, `scripts/run-netbsd.sh` and
-`scripts/run-openbsd.sh` do the same for the three BSDs, each in a VM of
-its own - the same GTK application, unchanged, on all of them.
+`scripts/setup.sh` installs what is needed to run the examples, which
+building them does not need: Docker, qemu, the .NET SDK, wasmtime and
+node, with ffmpeg and makensis for recordings and releases. Then
+`scripts/run.sh` opens three of them at once, macOS natively, Linux in a
+container over VNC, and Windows in a VM. `scripts/run-freebsd.sh`,
+`run-netbsd.sh`, `run-openbsd.sh`, `run-dragonfly.sh` and `run-illumos.sh`
+do the same for the BSDs and illumos, each in a VM of its own, with the
+same GTK application, unchanged, on all of them.
 
 The example apps all drive the same worker in
 [example/worker](example/worker):
@@ -69,15 +71,15 @@ The example apps all drive the same worker in
 |---|---|
 | [example/menubar-app](example/menubar-app) | macOS, SwiftUI |
 | [example/wpf-app](example/wpf-app) | Windows, WPF |
-| [example/gtk-app](example/gtk-app) | Linux and FreeBSD, GTK4 - the same app, unchanged |
+| [example/gtk-app](example/gtk-app) | Linux, the BSDs and illumos, GTK4, the same app, unchanged |
 | [example/android-app](example/android-app) | Android, Kotlin |
 | [example/ios-app](example/ios-app) | iOS, SwiftUI, with the worker compiled in |
 | [example/web-app](example/web-app) | a browser, in wasm, with the worker compiled in |
 | [example/wasi-app](example/wasi-app) | a terminal, driving a worker that is a `.wasm` file |
 | [example/plan9-app](example/plan9-app) | Plan 9, libdraw, in a rio window - Go on both sides |
 
-The GTK one runs unchanged on FreeBSD, because nothing in it is
-Linux-specific once the shared library is gone. The last two compile the
-worker into the application rather than starting it, because neither iOS nor
-a browser may start a program; `scripts/run-ios.sh`, `scripts/run-android.sh`
-and `scripts/run-web.sh` build and run them.
+The GTK one runs unchanged on the BSDs and illumos, because nothing in it
+is specific to Linux once the shared library is gone. The iOS and browser
+examples compile the worker into the application rather than starting it,
+because neither iOS nor a browser may start a program. `scripts/run-ios.sh`,
+`scripts/run-android.sh` and `scripts/run-web.sh` build and run those.

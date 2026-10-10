@@ -50,5 +50,5 @@ fi
 
 echo
 echo "all three are up. stop them with:"
-echo "  pkill -f MenuBarExample; pkill -f qemu-system-aarch64; docker rm -f \$(docker ps -q --filter ancestor=vero-gtk)"
+echo "  pkill -f MenuBarExample; pkill -f qemu-system-aarch64; docker ps --format '{{.ID}} {{.Image}}' | awk '\$2 ~ /^vero-gtk-/ {print \$1}' | xargs docker rm -f"
 wait

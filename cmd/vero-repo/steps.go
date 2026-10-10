@@ -30,8 +30,8 @@ import (
 type Test struct {
 	// Files go with the steps, into the folder {files} names.
 	Files []string `toml:"files"`
-	// Env is set for the app as the test starts it, as
-	// AUDIOBOOKS_DEVELOP = "1" lets audiobooks run for anybody.
+	// Env is set for the app as the test starts it: a setting that keeps a
+	// test copy's settings apart from those of a copy in use, say.
 	Env   map[string]string `toml:"env"`
 	Steps []map[string]any  `toml:"step"`
 }

@@ -2,8 +2,7 @@
 # installers and its install site need that isn't secret. Copy this one
 # beside your app's go.mod and change it. Paths are relative to this file.
 #
-#   scripts/package.sh --app example/vero-app.toml --version 1.0.0
-#   cd cmd/vero-repo && go run . build --app ../../example/vero-app.toml ...
+#   vero release                      from the folder this file is in
 #
 # The README's "Creating app installers" section goes through it all.
 

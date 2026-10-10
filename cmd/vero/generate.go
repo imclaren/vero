@@ -137,7 +137,7 @@ func writePorting(app *App, added []string) error {
 		s := starters[p]
 		fmt.Fprintf(&b, "- **%s** in `%s/`: %s\n", p, s.folder, s.note)
 	}
-	b.WriteString("\nEach folder has a README saying how to build and run it. `vero-app.toml` now lists them, so `scripts/package.sh` and `vero-repo build` package them (see vero's PACKAGING.md, \"Creating app installers\").\n\n")
+	b.WriteString("\nEach folder has a README saying how to build and run it. `vero-app.toml` now lists them, so `vero release` packages them (see vero's PACKAGING.md, \"Creating app installers\").\n\n")
 	limited := false
 	for _, p := range added {
 		limited = limited || starters[p].limited
@@ -166,8 +166,8 @@ func writePorting(app *App, added []string) error {
 	} else if limited {
 		b.WriteString("- [ ] For iOS and the browser, the worker runs inside the app: give it a `Serve(in io.Reader, out io.Writer) error` that sets up the same worker as `main` does, in a package the front end can import, and point the starters at it where they say. (`vero add` does this itself for a worker whose main makes a vero.WorkerOptions, calls vero.NewWorker with it, and ends with Serve.)\n")
 	}
-	b.WriteString("- [ ] Give the test some steps: `[test]` in `vero-app.toml` has a pause and examples from your worker, and `testdata/` is for the files they use. `scripts/test-repo.sh --app vero-app.toml` then records your app on each system, and the install page shows the recordings.\n")
-	b.WriteString("- [ ] Release: `scripts/package.sh --app vero-app.toml --version X`, `vero-repo build`, upload.\n")
+	b.WriteString("- [ ] Give the test some steps: `[test]` in `vero-app.toml` has a pause and examples from your worker, and `testdata/` is for the files they use. From a clone of vero (`git clone https://github.com/imclaren/vero`), `vero/scripts/test-repo.sh --app vero-app.toml` installs your app on each system, plays the steps and records it, and `vero/scripts/record-mac.sh` records the Mac. `vero release` puts the recordings on the install page.\n")
+	b.WriteString("- [ ] Release: `vero release`, then upload `dist/site`, or `vero release --upload user@host:/path`.\n")
 	return os.WriteFile(filepath.Join(app.Dir, "PORTING.md"), []byte(b.String()), 0o644)
 }
 

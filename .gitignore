@@ -24,3 +24,4 @@ example/wasi-app/.build/
 cmd/vero-repo/vero-repo
 dist/
 cmd/vero/vero
+/wasi-app

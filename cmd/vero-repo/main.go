@@ -89,7 +89,7 @@ func keyCommand(args []string) error {
 	fs := flag.NewFlagSet("key", flag.ExitOnError)
 	name := fs.String("name", "", "whose key it is: your name, or your company's")
 	email := fs.String("email", "", "an email address for the key")
-	dir := fs.String("dir", "", "where to keep it (default ~/.config/vero-repo/NAME)")
+	dir := fs.String("dir", "", "where to keep it (default: vero-repo/NAME in your config folder, ~/Library/Application Support on a Mac)")
 	sparkle := fs.String("import-sparkle", "", "a Sparkle private key to keep, in a file, so that copies of a Mac app already installed keep updating")
 	fs.Parse(args)
 	if *sparkle != "" {
