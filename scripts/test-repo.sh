@@ -436,7 +436,8 @@ launch_test() {
 finish_launch() {
     out=$1 lb=$2
     make_gif "$out"
-    rm -rf "$out/frames"
+    # VERO_KEEP_FRAMES=1 keeps them, to see what a recording was made from.
+    [ -n "$VERO_KEEP_FRAMES" ] || rm -rf "$out/frames"
     why=""
     if [ -f "$out/exited" ]; then why="the app exited ($(cat "$out/exited"))"
     elif [ ! -f "$out/result.json" ]; then why="the steps didn't finish in ${LIMIT}s"
@@ -464,10 +465,16 @@ make_gif() {
     f="$1/frames"
     ls "$f" | grep -q . || return 0
     for g in "$f"/*.gz; do [ -e "$g" ] && gunzip -f "$g"; done
+    # Empty, from before the display was up: ffmpeg skips them, which would
+    # put its frame numbers out of step with the files.
+    find "$f" -type f -size -100c -delete
     ext=$(ls "$f" | head -1 | sed 's/.*\.//')
-    # From the first frame with the app in it: before that the display is
-    # still black.
-    black=$(ffmpeg -hide_banner -i "$f/f%04d.$ext" -vf blackframe=amount=99:threshold=24 -f null - 2>&1 | grep -o 'frame:[0-9]*' | cut -d: -f2)
+    last=$(ls "$f"/*."$ext" | tail -1)
+    # The display is black around the window: the last frame says where it is.
+    crop=$(ffmpeg -hide_banner -i "$last" -vf cropdetect=limit=0.01:round=2:skip=0 -f null - 2>&1 | grep -o 'crop=[0-9:]*' | tail -1)
+    # From the first frame with the app in it: before that its part of the
+    # display is still black.
+    black=$(ffmpeg -hide_banner -i "$f/f%04d.$ext" -vf "${crop:+$crop,}blackframe=amount=90:threshold=32" -f null - 2>&1 | grep -o 'frame:[0-9]*' | cut -d: -f2)
     n=0
     for frame in $(ls "$f"); do
         echo "$black" | grep -qx "$n" || break
@@ -481,9 +488,6 @@ make_gif() {
         mv "$f/$frame" "$f/g$(printf %04d $i).$ext"
     done
     for frame in "$f"/g*; do mv "$frame" "$f/f${frame##*/g}"; done
-    last=$(ls "$f"/*."$ext" | tail -1)
-    # The display is black around the window: the last frame says where it is.
-    crop=$(ffmpeg -hide_banner -i "$last" -vf cropdetect=limit=0.01:round=2:skip=0 -f null - 2>&1 | grep -o 'crop=[0-9:]*' | tail -1)
     ffmpeg -loglevel error -y -framerate 2 -i "$f/f%04d.$ext" \
         -vf "${crop:+$crop,}scale='min(640,iw)':-2:flags=lanczos,split[a][b];[a]palettegen=max_colors=128[p];[b][p]paletteuse=dither=none:diff_mode=rectangle" \
         -loop 0 "$1/app.gif" || echo "   (the GIF couldn't be made)"
