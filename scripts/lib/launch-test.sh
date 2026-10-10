@@ -31,18 +31,23 @@ n=0
 until xdpyinfo >/dev/null 2>&1 || [ $n -ge 40 ]; do sleep 0.25; n=$((n+1)); done 2>/dev/null
 command -v xdpyinfo >/dev/null 2>&1 || sleep 3
 
-if command -v xwd >/dev/null 2>&1; then
+if command -v xwd >/dev/null 2>&1 && command -v gzip >/dev/null 2>&1; then
     frame() { xwd -root -silent 2>/dev/null | gzip -1 >"$dir/frames/f$1.xwd.gz"; }
+elif command -v xwd >/dev/null 2>&1; then
+    # Void's container has no gzip: the frames as they are.
+    frame() { xwd -root -silent >"$dir/frames/f$1.xwd" 2>/dev/null; }
 elif command -v magick >/dev/null 2>&1; then
     frame() { magick import -window root "$dir/frames/f$1.png" 2>/dev/null; }
 else
     frame() { import -window root "$dir/frames/f$1.png" 2>/dev/null; }
 fi
 
-# What the app's [test] env says, then no accessibility bus, and the
-# steps and their files.
+# What the app's [test] env says, then no accessibility bus, GTK's
+# software renderer (a virtual display has no GPU: without it, GTK 4 aborts
+# in Fedora's container for want of OpenGL ES, and Xvfb runs out of memory
+# on Alpine), and the steps and their files.
 [ -f "$dir/env.sh" ] && . "$dir/env.sh"
-GTK_A11Y=none NO_AT_BRIDGE=1 VERO_TEST="$dir/steps.json" VERO_TEST_FILES="$dir/files" \
+GSK_RENDERER=${GSK_RENDERER:-cairo} GTK_A11Y=none NO_AT_BRIDGE=1 VERO_TEST="$dir/steps.json" VERO_TEST_FILES="$dir/files" \
     VERO_TEST_RESULT="$dir/result.json" "$@" >"$dir/app.log" 2>&1 &
 app=$!
 

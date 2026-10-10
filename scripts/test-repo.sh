@@ -471,6 +471,7 @@ make_gif() {
     # Empty, from before the display was up: ffmpeg skips them, which would
     # put its frame numbers out of step with the files.
     find "$f" -type f -size -100c -delete
+    ls "$f" | grep -q . || { echo "   (no frames came back, so no GIF)"; return 0; }
     ext=$(ls "$f" | head -1 | sed 's/.*\.//')
     last=$(ls "$f"/*."$ext" | tail -1)
     # The display is black around the window: the last frame says where it is.
