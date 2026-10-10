@@ -91,3 +91,19 @@ func TestRecordingsOnThePage(t *testing.T) {
 		t.Error("recordings from a folder that isn't there")
 	}
 }
+
+// TestOSTreeFolders: a Flatpak repository kept in git, without its empty
+// folders, gets them back.
+func TestOSTreeFolders(t *testing.T) {
+	repo := filepath.Join(t.TempDir(), "repo")
+	os.MkdirAll(filepath.Join(repo, "refs", "heads"), 0o755)
+	os.WriteFile(filepath.Join(repo, "config"), []byte("[core]\\n"), 0o644)
+	if err := ostreeFolders(repo); err != nil {
+		t.Fatal(err)
+	}
+	for _, dir := range []string{"refs/remotes", "refs/mirrors", "tmp", "state", "objects", "extensions"} {
+		if fi, err := os.Stat(filepath.Join(repo, dir)); err != nil || !fi.IsDir() {
+			t.Errorf("no %s", dir)
+		}
+	}
+}

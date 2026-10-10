@@ -224,6 +224,8 @@ func buildFlatpak(site string, newBundles []string, keep int, url string, a *App
 	script := t.importKey
 	if err != nil {
 		script += fmt.Sprintf("ostree init --mode=archive-z2 --repo=%s\n", shellQuote(repo))
+	} else if err := ostreeFolders(repo); err != nil {
+		return nil, err
 	}
 	for _, b := range bundles {
 		dest := filepath.Join(in, filepath.Base(b.path))
@@ -308,4 +310,17 @@ func gpgKey(armored []byte) (string, error) {
 		return "", err
 	}
 	return base64.StdEncoding.EncodeToString(raw.Bytes()), nil
+}
+
+// ostreeFolders makes the folders an OSTree repository has even when they
+// are empty, which ostree init makes and ostree expects. A site kept in
+// git loses them, since git keeps no empty folder, and flatpak then stops
+// with "opendir(refs/remotes): No such file or directory".
+func ostreeFolders(repo string) error {
+	for _, dir := range []string{"objects", "refs/heads", "refs/mirrors", "refs/remotes", "state", "tmp", "extensions"} {
+		if err := os.MkdirAll(filepath.Join(repo, filepath.FromSlash(dir)), 0o755); err != nil {
+			return err
+		}
+	}
+	return nil
 }
