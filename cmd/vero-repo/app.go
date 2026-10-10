@@ -98,6 +98,22 @@ type GTK struct {
 	// Chimera is what the app needs from Chimera Linux's packages, whose
 	// apk installs the same kind of package as Alpine's.
 	Chimera *LinuxPkg `toml:"chimera"`
+	// Data are more files that every Linux, BSD and illumos package and
+	// the Flatpak install, such as a GNOME search provider or a D-Bus
+	// service.
+	Data []DataFile `toml:"data"`
+}
+
+// DataFile is one of [gtk]'s extra files: From in the repository, relative
+// to vero-app.toml, installed at To, relative to the package's prefix
+// (/usr on Linux, /usr/local on FreeBSD, /app in a Flatpak). With Expand,
+// {prefix}, {id} and {name} in the file become the package's prefix, the
+// app's ID and its name, so that one file can name the app's command on
+// every system.
+type DataFile struct {
+	From   string `toml:"from"`
+	To     string `toml:"to"`
+	Expand bool   `toml:"expand"`
 }
 
 // BSDPkg is what a FreeBSD or DragonFly package depends on: each package
@@ -340,6 +356,15 @@ func (a *App) check(path string) error {
 	if a.GTK != nil {
 		if err := a.GTK.checkArches(); err != nil {
 			return problem("%v", err)
+		}
+		for _, d := range a.GTK.Data {
+			to := filepath.ToSlash(filepath.Clean(d.To))
+			if d.From == "" || d.To == "" || strings.HasPrefix(d.To, "/") || to == "." || strings.HasPrefix(to, "../") || to == ".." {
+				return problem("each [[gtk.data]] needs from, a file in the repository, and to, a path under the package's prefix such as share/gnome-shell/search-providers/%s.search-provider.ini", a.ID)
+			}
+			if fi, err := os.Stat(a.Path(d.From)); err != nil || fi.IsDir() {
+				return problem("[[gtk.data]] from %q is not a file", d.From)
+			}
 		}
 	}
 	if a.WPF != nil {

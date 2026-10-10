@@ -73,6 +73,18 @@ func packageFlatpak(a *App, workers map[string]string, out string, t *tools) err
 	return nil
 }
 
+// flatpakExported says whether a file from [[gtk.data]] is one that the
+// desktop sees from outside the Flatpak: a GNOME search provider, a KRunner
+// plugin or a D-Bus service, named for the app, as Flatpak requires.
+func flatpakExported(a *App, rel string) bool {
+	for _, dir := range []string{"share/gnome-shell/search-providers/", "share/krunner/dbusplugins/", "share/dbus-1/services/"} {
+		if strings.HasPrefix(rel, dir) && strings.HasPrefix(rel[strings.LastIndex(rel, "/")+1:], a.ID+".") {
+			return true
+		}
+	}
+	return false
+}
+
 // flatpakBuildFolder writes the folder flatpak build-export takes: the
 // app in files/, what the desktop sees of it in export/, and metadata,
 // which says its runtime, its command, and what it may reach.
@@ -97,6 +109,16 @@ func flatpakBuildFolder(a *App, worker, arch, dir string) error {
 			}
 		case strings.HasPrefix(rel, "share/icons/"):
 			if err := writeTree(filepath.Join(dir, "export", rel), f.data, 0o644); err != nil {
+				return err
+			}
+		case flatpakExported(a, rel):
+			// A search provider or a D-Bus service from [[gtk.data]], which
+			// a service starts through flatpak, as the menu entry does.
+			data := f.data
+			if strings.HasPrefix(rel, "share/dbus-1/services/") {
+				data = regexp.MustCompile(`(?m)^Exec=.*$`).ReplaceAll(data, []byte("Exec="+command))
+			}
+			if err := writeTree(filepath.Join(dir, "export", rel), data, 0o644); err != nil {
 				return err
 			}
 		}

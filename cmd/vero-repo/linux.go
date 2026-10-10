@@ -162,6 +162,16 @@ func unixTree(a *App, prefix, workerPath, exec, python string) ([]treeFile, erro
 		treeFile{path.Join(prefix, "share", "applications", a.ID+".desktop"), desktopEntry(a, exec), 0o644},
 		treeFile{path.Join(prefix, "share", "metainfo", a.ID+".metainfo.xml"), appStream(a), 0o644},
 	)
+	for _, d := range a.GTK.Data {
+		data, err := os.ReadFile(a.Path(d.From))
+		if err != nil {
+			return nil, err
+		}
+		if d.Expand {
+			data = []byte(strings.NewReplacer("{prefix}", prefix, "{id}", a.ID, "{name}", a.Name).Replace(string(data)))
+		}
+		files = append(files, treeFile{path.Join(prefix, path.Clean(d.To)), data, 0o644})
+	}
 	icons, err := iconSizes(a.Path(a.Icon), 64, 128, 256, 512)
 	if err != nil {
 		return nil, err

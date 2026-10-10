@@ -173,3 +173,71 @@ func TestFlatpakFiles(t *testing.T) {
 		t.Error("the runtime's version wasn't the app's")
 	}
 }
+
+// TestDataFiles checks that [[gtk.data]] lands under each package's
+// prefix, filled in where it asks to be, and that LoadApp refuses one
+// that would land outside it.
+func TestDataFiles(t *testing.T) {
+	a, workers := linuxApp(t)
+	os.MkdirAll(filepath.Join(a.dir, "linux"), 0o755)
+	os.WriteFile(filepath.Join(a.dir, "linux", "search.ini"), []byte("DesktopId={id}.desktop\n"), 0o644)
+	os.WriteFile(filepath.Join(a.dir, "linux", "dbus.service"), []byte("Exec={prefix}/bin/{name}\n"), 0o644)
+	a.GTK.Data = []DataFile{
+		{From: "linux/search.ini", To: "share/gnome-shell/search-providers/dev.vero.example.search-provider.ini"},
+		{From: "linux/dbus.service", To: "share/dbus-1/services/dev.vero.example.service", Expand: true},
+	}
+	for _, prefix := range []string{"/usr", "/usr/local", "/app"} {
+		files, err := unixTree(a, prefix, workers["amd64"], a.Name, "python3")
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := map[string]string{}
+		for _, f := range files {
+			got[f.path] = string(f.data)
+		}
+		if s := got[prefix+"/share/gnome-shell/search-providers/dev.vero.example.search-provider.ini"]; s != "DesktopId={id}.desktop\n" {
+			t.Errorf("%s: the search provider is %q", prefix, s)
+		}
+		if s := got[prefix+"/share/dbus-1/services/dev.vero.example.service"]; s != "Exec="+prefix+"/bin/vero-example\n" {
+			t.Errorf("%s: the D-Bus service is %q", prefix, s)
+		}
+	}
+
+	// The Flatpak shows both to the desktop, the service started through
+	// flatpak.
+	dir := t.TempDir()
+	if err := flatpakBuildFolder(a, workers["amd64"], "x86_64", dir); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "export", "share", "gnome-shell", "search-providers", "dev.vero.example.search-provider.ini")); err != nil {
+		t.Error("the Flatpak does not export the search provider")
+	}
+	service, _ := os.ReadFile(filepath.Join(dir, "export", "share", "dbus-1", "services", "dev.vero.example.service"))
+	if !strings.Contains(string(service), "Exec=/usr/bin/flatpak run ") {
+		t.Errorf("the Flatpak's exported D-Bus service is %q", service)
+	}
+
+	toml := `name = "vero-example"
+display_name = "vero example"
+id = "dev.vero.example"
+summary = "An example"
+publisher = "Example <you@example.com>"
+[worker]
+package = "worker"
+name = "worker"
+[gtk]
+folder = "gtk"
+entry = "main.py"
+[[gtk.data]]
+from = "linux/search.ini"
+to = "%s"
+`
+	for to, ok := range map[string]bool{"share/x.ini": true, "/usr/share/x.ini": false, "../etc/x": false, "share/../../x": false} {
+		p := filepath.Join(a.dir, "vero-app.toml")
+		os.WriteFile(p, []byte(strings.Replace(toml, "%s", to, 1)), 0o644)
+		_, err := LoadApp(p)
+		if (err == nil) != ok {
+			t.Errorf("to = %q: %v", to, err)
+		}
+	}
+}

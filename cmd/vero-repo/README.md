@@ -261,6 +261,33 @@ path is the architecture, so `"ffmpeg/{arch}/ffmpeg"` takes each
 architecture's own. `prepare` is a command run before each architecture's
 Flatpak is made, with `ARCH` and `GOARCH` set, which can fetch them.
 
+An app that adds something to the desktop, such as a GNOME search provider or a
+D-Bus service that starts it, lists those files in `[[gtk.data]]`. Every
+Linux, BSD and illumos package and the Flatpak installs them. `from` is
+the file in your repository, and `to` is where it goes, under the
+package's prefix, which is /usr on Linux, /usr/local on FreeBSD and /app in
+a Flatpak. With `expand = true`, `{prefix}`, `{id}` and `{name}` in the
+file become the prefix, the app's ID and its name.
+
+```toml
+[[gtk.data]]
+from = "linux/search-provider.ini"
+to = "share/gnome-shell/search-providers/com.example.myapp.search-provider.ini"
+
+[[gtk.data]]
+from = "linux/dbus.service"
+to = "share/dbus-1/services/com.example.myapp.SearchProvider.service"
+expand = true
+```
+
+The menu entry each package installs is named after the app's ID, as
+`com.example.myapp.desktop`, so that is the `DesktopId` a search provider
+gives. The Flatpak shows a search provider, a KRunner plugin or a D-Bus
+service to the desktop only when its file name begins with the app's ID,
+and its bus name should begin with the ID too, since that is the only
+name a Flatpak may own without asking. A D-Bus service's `Exec` line is
+replaced there with the command that runs the Flatpak.
+
 The Flatpak repository holds many small files, which your web host has to
 serve exactly as they are. `vero-repo check --app vero-app.toml --url URL
 [--key DIR] dist/site` checks a site on its own, as `build` does at the
