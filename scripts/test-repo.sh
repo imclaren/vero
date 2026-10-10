@@ -24,9 +24,9 @@
 #   scripts/test-repo.sh --vm windows             # the installer and the MSIX, in vero's Windows VM, over SSH
 #   [--app path/to/vero-app.toml] [--port 8642] [--no-launch] [--limit SECONDS]
 #
-# --app tests your own app instead of vero's example, on Linux, the
-# Flatpak, the BSDs and illumos (not yet the Mac or Windows): its packages,
-# its install, and its [[test.step]]s, recorded.
+# --app tests your own app instead of vero's example, on every system but
+# the Mac so far: its packages, its install, and its [[test.step]]s,
+# recorded.
 #
 # After installing, it starts the app on a virtual display, plays the
 # steps the app's vero-app.toml gives under [[test.step]] through vero's
@@ -61,8 +61,8 @@ while [ $# -gt 0 ]; do
     esac
     shift
 done
-if [ -n "$APP" ] && { [ -n "$MAC" ] || [ "$VMSYS" = windows ]; }; then
-    echo "--app can't test the Mac or Windows yet: only Linux, the Flatpak, the BSDs and illumos" >&2
+if [ -n "$APP" ] && [ -n "$MAC" ]; then
+    echo "--app can't test the Mac yet" >&2
     exit 2
 fi
 [ -n "$VMSYS$MAC" ] || vero_docker
@@ -110,7 +110,8 @@ elif [ "$VMSYS" = windows ]; then
     # the installers are copied in, and run there a phase at a time. The
     # VM needs SSH set up, which run-windows.sh --install does, or
     # scripts/setup-windows-ssh.sh in a VM installed before.
-    URL="http://10.0.2.2:$PORT" TARGETS=windows,msix
+    URL="http://10.0.2.2:$PORT" TARGETS=windows
+    [ -n "$APP_MSIX" ] && TARGETS=windows,msix
 elif [ -n "$VMSYS" ]; then
     # A VM reaches this Mac at 10.0.2.2, as qemu's own network has it.
     URL="http://10.0.2.2:$PORT"
@@ -354,7 +355,8 @@ windows_test() {
     windows_running && { echo "the Windows VM is running already: stop it first" >&2; exit 1; }
     PAY="$CACHE/windows-test"
     rm -rf "$PAY" && mkdir -p "$PAY"
-    cp "$PACKAGES"/*-setup.exe "$PACKAGES"/*.msix "$VERO/scripts/lib/windows-test.ps1" "$PAY/"
+    cp "$PACKAGES"/*-setup.exe "$VERO/scripts/lib/windows-test.ps1" "$VERO/scripts/lib/launch-windows.ps1" "$PAY/"
+    [ -n "$APP_MSIX" ] && cp "$PACKAGES"/*.msix "$PAY/"
     echo "== booting the Windows VM (about a minute)"
     "$VERO/scripts/run-windows.sh" --headless --payload "$PAY" --ssh "$SSHPORT" >"$CACHE/windows-vm.log" 2>&1 &
     QEMU=$!
@@ -363,7 +365,7 @@ windows_test() {
     windows_scp "$SSHPORT" "$PAY"/* vero@127.0.0.1:C:/vero-test/
     # phase NAME: one of windows-test.ps1's phases, its lines printed.
     phase() {
-        windows_ssh "$SSHPORT" "powershell -NoProfile -ExecutionPolicy Bypass -File C:/vero-test/windows-test.ps1 -Phase $1 -Name vero-example -Exe VeroExample.exe -Worker worker.exe -Identity ExamplePublisher.VeroExample" | tr -d '\r' | tee -a "$PAY/results.txt"
+        windows_ssh "$SSHPORT" "powershell -NoProfile -ExecutionPolicy Bypass -File C:/vero-test/windows-test.ps1 -Phase $1 -Name $APP_NAME -Exe $APP_EXE -Worker $APP_WORKER.exe ${APP_MSIX:+-Identity $APP_MSIX} -Limit $LIMIT" | tr -d '\r' | tee -a "$PAY/results.txt"
     }
     # expect LINE: windows-test.ps1 printed that line.
     expect() { grep -qx "$1" "$PAY/results.txt" || { echo "FAIL: no \"$1\" from the VM" >&2; exit 1; }; }
@@ -372,6 +374,19 @@ windows_test() {
     for line in "nsis-worker: 1.0.0" "nsis-app: True" "nsis-startmenu: True" "nsis-uninstaller: True" "nsis-runs: True"; do expect "$line"; done
     python3 "$VERO/scripts/lib/qmp.py" /tmp/vero-qmp.sock shot "$PAY/nsis.ppm" && sips -s format png "$PAY/nsis.ppm" --out "$PAY/nsis.png" >/dev/null
     echo "ok: 1.0.0 installed and running (the desktop: $PAY/nsis.png)"
+    if [ -n "$LAUNCH" ]; then
+        echo "== starting the app and playing its steps, recorded"
+        lb=$(date +%s)
+        L="$PAY/launch" out="$RESULTS/windows"
+        rm -rf "$L" "$out" && mkdir -p "$L" "$out"
+        "$REPO" steps --app "$APP_TOML" --out "$L" >/dev/null
+        sed -n "s/^export \([^=]*\)='\(.*\)'\$/\1=\2/p" "$L/env.sh" >"$L/env.txt"
+        windows_scp "$SSHPORT" -r "$L" vero@127.0.0.1:C:/vero-test/
+        phase launch
+        windows_scp "$SSHPORT" -r vero@127.0.0.1:C:/vero-test/launch "$out.tmp" && cp -R "$out.tmp/." "$out/" && rm -rf "$out.tmp"
+        rm -rf "$out/files" "$out/steps.json" "$out/env.txt"
+        finish_launch "$out" "$lb"
+    fi
     echo "== releasing 1.0.1, and installing it over 1.0.0"
     release 1.0.1
     cp "$PACKAGES"/*-1.0.1-*-setup.exe "$PAY/"
@@ -381,6 +396,10 @@ windows_test() {
     phase nsis-done
     expect "nsis-uninstalled: True"; expect "nsis-uninstall-entry-gone: True"
     echo "ok: 1.0.1 installed over it, and uninstalled cleanly"
+    if [ -z "$APP_MSIX" ]; then
+        echo "PASS (no MSIX: the app's vero-app.toml has no [wpf.msix])"
+        return
+    fi
     echo "== the MSIX"
     phase msix
     for line in "msix-installed: True" "msix-worker: 1.0.0" "msix-runs: True"; do expect "$line"; done
@@ -409,12 +428,19 @@ launch_test() {
     get_dir /var/tmp/vero-launch "$out"
     rm -f "$out/launch-test.sh" "$out/steps.json"
     rm -rf "$out/files"
+    finish_launch "$out" "$lb"
+}
+
+# finish_launch DIR START: DIR's frames made a GIF, and whether the app
+# stayed up and its steps passed, judged and put in the summary.
+finish_launch() {
+    out=$1 lb=$2
     make_gif "$out"
     rm -rf "$out/frames"
     why=""
     if [ -f "$out/exited" ]; then why="the app exited ($(cat "$out/exited"))"
     elif [ ! -f "$out/result.json" ]; then why="the steps didn't finish in ${LIMIT}s"
-    elif ! grep -q '"ok": true' "$out/result.json"; then why="a step failed"
+    elif ! grep -Eq '"ok" ?: ?true' "$out/result.json"; then why="a step failed"
     fi
     secs=$(($(date +%s) - lb))
     printf '%s\n%s\n%s\n' "${why:+FAIL}${why:-PASS}" "$secs" "$why" >"$out/status"
@@ -430,18 +456,36 @@ launch_test() {
 }
 
 # make_gif DIR: DIR/frames made into DIR/app.gif, cropped to the window,
-# at two frames a second, no wider than 640.
+# at two frames a second, no wider than 640. Not dithered: an app's flat
+# colours need none, and dithering makes every frame differ, which a GIF
+# pays for in size.
 make_gif() {
     command -v ffmpeg >/dev/null || { echo "   (no ffmpeg here, so no GIF: brew install ffmpeg)"; return 0; }
     f="$1/frames"
     ls "$f" | grep -q . || return 0
     for g in "$f"/*.gz; do [ -e "$g" ] && gunzip -f "$g"; done
     ext=$(ls "$f" | head -1 | sed 's/.*\.//')
+    # From the first frame with the app in it: before that the display is
+    # still black.
+    black=$(ffmpeg -hide_banner -i "$f/f%04d.$ext" -vf blackframe=amount=99:threshold=24 -f null - 2>&1 | grep -o 'frame:[0-9]*' | cut -d: -f2)
+    n=0
+    for frame in $(ls "$f"); do
+        echo "$black" | grep -qx "$n" || break
+        rm "$f/$frame"
+        n=$((n + 1))
+    done
+    ls "$f" | grep -q . || { echo "   (every frame was black, so no GIF)"; return 0; }
+    i=0
+    for frame in $(ls "$f"); do
+        i=$((i + 1))
+        mv "$f/$frame" "$f/g$(printf %04d $i).$ext"
+    done
+    for frame in "$f"/g*; do mv "$frame" "$f/f${frame##*/g}"; done
     last=$(ls "$f"/*."$ext" | tail -1)
     # The display is black around the window: the last frame says where it is.
     crop=$(ffmpeg -hide_banner -i "$last" -vf cropdetect=limit=0.01:round=2:skip=0 -f null - 2>&1 | grep -o 'crop=[0-9:]*' | tail -1)
     ffmpeg -loglevel error -y -framerate 2 -i "$f/f%04d.$ext" \
-        -vf "${crop:+$crop,}scale='min(640,iw)':-2:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer" \
+        -vf "${crop:+$crop,}scale='min(640,iw)':-2:flags=lanczos,split[a][b];[a]palettegen=max_colors=128[p];[b][p]paletteuse=dither=none:diff_mode=rectangle" \
         -loop 0 "$1/app.gif" || echo "   (the GIF couldn't be made)"
 }
 

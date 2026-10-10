@@ -166,9 +166,9 @@ func showCommand(args []string) error {
 	if err != nil {
 		return err
 	}
-	exe := ""
+	exe, msix := "", ""
 	if a.WPF != nil {
-		exe = a.WPF.Exe
+		exe, msix = a.WPF.Exe, a.WPF.MSIX.IdentityName
 	}
 	file, err := filepath.Abs(*app)
 	if err != nil {
@@ -176,7 +176,7 @@ func showCommand(args []string) error {
 	}
 	for _, kv := range [][2]string{
 		{"APP_NAME", a.Name}, {"APP_DISPLAY", a.DisplayName}, {"APP_ID", a.ID},
-		{"APP_WORKER", a.Worker.Name}, {"APP_EXE", exe}, {"APP_TOML", file}, {"APP_DIR", a.dir},
+		{"APP_WORKER", a.Worker.Name}, {"APP_EXE", exe}, {"APP_MSIX", msix}, {"APP_TOML", file}, {"APP_DIR", a.dir},
 	} {
 		fmt.Printf("%s='%s'\n", kv[0], strings.ReplaceAll(kv[1], "'", `'\''`))
 	}

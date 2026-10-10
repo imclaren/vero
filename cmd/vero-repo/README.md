@@ -416,17 +416,18 @@ a file that's there, that each package holds your worker and front end,
 and that no system's version has gone backwards, which would leave people
 never offered the update. It refuses to finish otherwise.
 
-## vero's own tests
+## vero's own tests, and your app's
 
 [`scripts/test-repo.sh`](../../scripts/test-repo.sh) checks all of it for real.
 It builds the example's site, serves it from your Mac, and installs the
 example from it on a clean system, as the site tells people to. It checks
 that the worker answers, that the command, menu entry and front end are
-there, that Python can load GTK 4, and that GTK 4 can read the app's icon,
-which the app loads when it starts. It doesn't open the app's window, so
-try your own app by hand on each system too. Then it
-releases version 1.0.1 and checks that the system's own updates bring it.
-It tries Debian, in a container, unless you say otherwise:
+there, that Python can load GTK 4, and that GTK 4 can read the app's icon.
+Then it starts the installed app on a virtual display, plays the steps its
+`vero-app.toml` gives (below), and records the window as it goes, as a GIF.
+Last, it releases version 1.0.1 and checks that the system's own updates
+bring it. Each stage is numbered, with the time so far. It tries Debian, in
+a container, unless you say otherwise:
 
 ```bash
 scripts/test-repo.sh --image ubuntu:24.04
@@ -442,15 +443,62 @@ scripts/test-repo.sh --mac                # the disk image, on this Mac, and the
 scripts/test-repo.sh --vm windows         # the installer and the MSIX, in vero's Windows VM, over SSH
 ```
 
+`--app path/to/vero-app.toml` tests your own app the same way, on every
+system but the Mac, which has `scripts/record-mac.sh` instead (below).
+`--no-launch` leaves out starting the app, and `--limit` is how long its
+steps may take, 600 seconds unless you say.
+
 The containers need Docker and colima. A `--vm` test uses the system's VM,
 which its `run-*.sh` script makes the first time; that downloads the
 system and its GTK, a few gigabytes. The Windows test reaches vero's
 Windows VM over SSH: it installs, starts, updates and uninstalls the
-installer, registers the MSIX's files in developer mode and starts the
-app, and leaves a screenshot of the desktop. A VM made with
+installer, and registers the MSIX's files in developer mode and starts the
+app, for an app with `[wpf.msix]`. A VM made with
 `scripts/run-windows.sh --install` has SSH; one made before that gets it
 with `scripts/setup-windows-ssh.sh`, which the
 [VM's notes](../../.windows/unattend/README.md) describe.
+
+### Steps, and a GIF of your app at work
+
+`[[test.step]]`s in `vero-app.toml` say what the test does with the app
+once its window is open. vero's binding in the app plays them (vero.py,
+Vero.cs and the Swift package all do), so the window shows each one as a
+person would see it:
+
+```toml
+[test]
+files = ["testdata/sample.mp3"]          # copied onto the system, as {files}
+env = { MYAPP_PROFILE = "test" }         # set for the app as it starts
+
+[[test.step]]
+call = "setLibrary"                      # a request, by name
+with = { path = "{tmp}" }                # {tmp} is a new empty folder
+
+[[test.step]]
+copy = { from = "sample.mp3", to = "{tmp}/imports/" }
+
+[[test.step]]
+wait = { path = "stats.books", at_least = 1 }   # or is, not, contains
+timeout = 300
+
+[[test.step]]
+pause = 3                                # so the recording shows it
+```
+
+A wait's `path` goes through the app's state by key and list index, and
+`#` is a list's length: `jobs.#`, `jobs.0.phase`. The test stops at the
+first step that fails. Each system's GIF, steps and log go in
+`~/.cache/vero/test-results/APP/SYSTEM/`, and `index.html` there shows
+every system tested so far.
+
+On the Mac, `scripts/record-mac.sh --app vero-app.toml --bundle My.app`
+does the same with an app you've built: it starts it on this Mac, as you,
+and captures its window. So the copy it starts must not touch the copy you
+use. Give it its own settings through `[test] env`, build it with its own
+bundle ID (`PRODUCT_BUNDLE_IDENTIFIER=...`), and check that before
+recording; `--clean` clears what the last recording left under
+`~/Library`. Capturing a window needs Screen Recording permission for the
+terminal.
 
 Some packages have been checked only by vero's own checks, not installed
 on the system they are for: Debian's armel, openSUSE's armv7hl and

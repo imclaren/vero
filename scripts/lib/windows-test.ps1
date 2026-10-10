@@ -11,12 +11,14 @@
 #                 no Windows SDK to sign the package), checks the worker,
 #                 and starts the app
 #   msix-done     stops it and removes it
+#   launch        starts the installed app with its test steps, recording
+#                 its window (launch-windows.ps1), from C:\vero-test\launch
 #
 # The app is started by a scheduled task, which runs it on the desktop of
 # whoever is logged in: started from SSH it would have no desktop.
 param(
     [Parameter(Mandatory = $true)][string]$Phase,
-    [string]$Name, [string]$Exe, [string]$Worker, [string]$Identity
+    [string]$Name, [string]$Exe, [string]$Worker, [string]$Identity, [int]$Limit = 600
 )
 $ErrorActionPreference = "Continue"
 $here = $PSScriptRoot
@@ -37,7 +39,7 @@ function onDesktop($command, $arguments) {
 # asUser: runs PowerShell commands in the logged-in user's session, and
 # returns what they print. Installing an app package needs that session:
 # from SSH, Windows refuses ("Access is denied").
-function asUser($commands) {
+function asUser($commands, $seconds = 120) {
     $script = "$env:TEMP\vero-as-user.ps1"
     $out = "$env:TEMP\vero-as-user.txt"
     Remove-Item $out, "$out.done" -ErrorAction SilentlyContinue
@@ -46,7 +48,7 @@ function asUser($commands) {
     $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive
     Register-ScheduledTask -TaskName "vero-test-user" -Action $action -Principal $principal -Force | Out-Null
     Start-ScheduledTask -TaskName "vero-test-user"
-    for ($i = 0; $i -lt 120 -and -not (Test-Path "$out.done"); $i++) { Start-Sleep 1 }
+    for ($i = 0; $i -lt $seconds -and -not (Test-Path "$out.done"); $i++) { Start-Sleep 1 }
     Unregister-ScheduledTask -TaskName "vero-test-user" -Confirm:$false
     if (Test-Path $out) { Get-Content $out }
 }
@@ -66,6 +68,11 @@ function install($version) {
 }
 
 switch ($Phase) {
+    "launch" {
+        stopApp $dir
+        asUser "& '$here\launch-windows.ps1' -Exe '$dir\$Exe' -Dir '$here\launch' -Limit $Limit" ($Limit + 120) | Out-Null
+        note "launch-result" (Test-Path "$here\launch\result.json")
+    }
     "nsis" {
         if (install "1.0.0") {
             note "nsis-worker" (& "$dir\$Worker" -version 2>&1)
