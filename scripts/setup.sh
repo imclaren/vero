@@ -20,6 +20,10 @@
 #   scripts/setup-illumos.sh    qemu
 #   scripts/setup-wasm.sh       wasmtime, node
 #   scripts/setup-android.sh    the Android SDK, a JDK, Kotlin
+#   scripts/setup-release.sh    makensis and ffmpeg, for vero release and recordings
+#
+# scripts/doctor.sh says what is there and what is missing, without
+# installing anything.
 #
 # Safe to re-run: anything already present is left alone.
 set -e
@@ -44,7 +48,7 @@ command -v brew >/dev/null 2>&1 || {
 sh "$ROOT/scripts/setup-macos.sh" || exit 1
 
 FAILED=""
-for os in ios linux windows freebsd netbsd openbsd dragonfly illumos plan9 wasm; do
+for os in ios linux windows freebsd netbsd openbsd dragonfly illumos plan9 wasm release; do
     echo
     echo "==> $os"
     sh "$ROOT/scripts/setup-$os.sh" || FAILED="$FAILED $os"
