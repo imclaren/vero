@@ -23,7 +23,8 @@ while [ $# -gt 0 ]; do
     case $1 in
         --app) TOML=$2; shift ;;
         --bundle) BUNDLE=$2; shift ;;
-        --env) ENVS="$ENVS $2"; shift ;;
+        --env) ENVS="$ENVS
+$2"; shift ;;
         --clean) case $2 in "$HOME"/Library/?*) CLEAN="$CLEAN
 $2" ;; *) echo "--clean takes a path under ~/Library: $2" >&2; exit 2 ;; esac; shift ;;
         --limit) LIMIT=$2; shift ;;
@@ -47,7 +48,9 @@ echo "== starting $(basename "$BUNDLE") and playing its steps, recorded"
 began=$(date +%s)
 (
     . "$L/env.sh"
-    for kv in $ENVS; do export "$kv"; done
+    # One setting a line, so that a value may have spaces in it.
+    echo "$ENVS" | while IFS= read -r kv; do [ -n "$kv" ] && echo "export '${kv%%=*}=$(printf '%s' "${kv#*=}" | sed "s/'/'\\\\''/g")'"; done >"$L/more-env.sh"
+    . "$L/more-env.sh"
     VERO_TEST="$L/steps.json" VERO_TEST_FILES="$L/files" VERO_TEST_RESULT="$L/result.json" exec "$exe"
 ) >"$out/app.log" 2>&1 &
 app=$!
