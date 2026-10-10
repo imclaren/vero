@@ -27,8 +27,12 @@ from __future__ import annotations
 import json
 import os
 import queue
+import shutil
 import subprocess
+import sys
+import tempfile
 import threading
+import time
 from typing import Any, Iterator
 
 
@@ -92,6 +96,11 @@ class Vero:
         # closes when this process does.
         self._reader = threading.Thread(target=self._read, daemon=True)
         self._reader.start()
+
+        # vero's tests set VERO_TEST to a file of steps, which are played
+        # against the worker while the window shows what they do.
+        if os.environ.get("VERO_TEST"):
+            threading.Thread(target=play, args=(self, os.environ["VERO_TEST"]), daemon=True).start()
 
     def _read(self) -> None:
         """Sort what the host says into replies, events and state changes."""
@@ -290,3 +299,160 @@ def run_in_thread(vero: Vero, on_event) -> threading.Thread:
     thread = threading.Thread(target=loop, daemon=True)
     thread.start()
     return thread
+
+
+def play(vero: Vero, steps_file: str) -> bool:
+    """Plays the steps vero's tests give an installed app, while its window
+    is open: what vero-app.toml's [[test.step]]s say, as JSON. Each step is
+    one of
+
+        {"call": "name", "with": {...}}   a request to a named handler
+        {"send": {...}}                    a request without a name
+        {"wait": {"path": "jobs.0.phase", "is": "waiting"}, "timeout": 60}
+        {"pause": 2}                       seconds, so a recording shows it
+        {"copy": {"from": "sample.mp3", "to": "{tmp}/library/imports/"}}
+
+    A wait's path goes through the state by key and list index, and "#" is a
+    list's length; it can be "is", "not", "at_least" or "contains". In any
+    string, {tmp} is a new empty folder and {files} the folder of the test's
+    files, VERO_TEST_FILES. How it went is written as JSON to
+    VERO_TEST_RESULT, and a line for each step to standard error. True if
+    every step passed; it stops at the first that doesn't.
+    """
+    started = time.time()
+    folders = {"tmp": tempfile.mkdtemp(prefix="vero-test-"),
+               "files": os.environ.get("VERO_TEST_FILES", "")}
+    results: list[dict] = []
+    ok = True
+    events: queue.Queue = queue.Queue()
+    with vero._lock:
+        vero._subscribers.append(events)
+    try:
+        with open(steps_file) as f:
+            steps = json.load(f).get("steps", [])
+        # The worker up, with a state to show, as the window waits for too.
+        deadline = time.time() + 60
+        while vero.state() != "running":
+            if time.time() > deadline:
+                raise VeroError(f"the worker wasn't running after 60s ({vero.state()})")
+            time.sleep(0.05)
+        vero.latest()
+        for n, step in enumerate(steps, 1):
+            step = _fill(step, folders)
+            began = time.time()
+            what = _describe(step)
+            try:
+                _step(vero, step, events)
+                results.append({"step": what, "seconds": round(time.time() - began, 2)})
+                print(f"vero test: step {n}/{len(steps)}, {what}: ok ({time.time() - began:.1f}s)",
+                      file=sys.stderr, flush=True)
+            except Exception as e:  # noqa: BLE001 - any failure is the step's
+                ok = False
+                results.append({"step": what, "seconds": round(time.time() - began, 2), "error": str(e)})
+                print(f"vero test: step {n}/{len(steps)}, {what}: FAILED: {e}", file=sys.stderr, flush=True)
+                break
+    except Exception as e:  # noqa: BLE001 - the file, or the worker
+        ok = False
+        results.append({"step": "starting", "error": str(e)})
+        print(f"vero test: {e}", file=sys.stderr, flush=True)
+    finally:
+        with vero._lock:
+            if events in vero._subscribers:
+                vero._subscribers.remove(events)
+    out = os.environ.get("VERO_TEST_RESULT")
+    if out:
+        with open(out + ".part", "w") as f:
+            json.dump({"ok": ok, "seconds": round(time.time() - started, 2), "steps": results}, f, indent=1)
+        os.replace(out + ".part", out)
+    return ok
+
+
+def _fill(value: Any, folders: dict[str, str]) -> Any:
+    """value with {tmp} and {files} replaced, in every string in it."""
+    if isinstance(value, str):
+        for name, folder in folders.items():
+            value = value.replace("{" + name + "}", folder)
+        return value
+    if isinstance(value, list):
+        return [_fill(v, folders) for v in value]
+    if isinstance(value, dict):
+        return {k: _fill(v, folders) for k, v in value.items()}
+    return value
+
+
+def _describe(step: dict) -> str:
+    if "call" in step:
+        return "call " + step["call"]
+    if "send" in step:
+        return "send " + json.dumps(step["send"])
+    if "wait" in step:
+        w = step["wait"]
+        op = next((k for k in ("is", "not", "at_least", "contains") if k in w), "is")
+        return f"wait until {w.get('path')} {op.replace('_', ' ')} {json.dumps(w.get(op))}"
+    if "pause" in step:
+        return f"pause {step['pause']}s"
+    if "copy" in step:
+        return f"copy {step['copy'].get('from')} to {step['copy'].get('to')}"
+    return "unknown step " + json.dumps(step)
+
+
+def _step(vero: Vero, step: dict, events: queue.Queue) -> None:
+    if "call" in step:
+        vero.call(step["call"], step.get("with"))
+    elif "send" in step:
+        vero.send(step["send"])
+    elif "pause" in step:
+        time.sleep(float(step["pause"]))
+    elif "copy" in step:
+        c = step["copy"]
+        src = c["from"] if os.path.isabs(c["from"]) else os.path.join(os.environ.get("VERO_TEST_FILES", ""), c["from"])
+        dest = c["to"]
+        if dest.endswith("/"):
+            os.makedirs(dest, exist_ok=True)
+            dest = os.path.join(dest, os.path.basename(src))
+        else:
+            os.makedirs(os.path.dirname(dest) or ".", exist_ok=True)
+        shutil.copy(src, dest)
+    elif "wait" in step:
+        w = step["wait"]
+        deadline = time.time() + float(step.get("timeout", 60))
+        state = vero.latest()
+        while not _holds(state, w):
+            left = deadline - time.time()
+            if left <= 0:
+                raise VeroError(f"after {step.get('timeout', 60)}s, {w.get('path')} is {json.dumps(_at(state, w.get('path', '')))}")
+            try:
+                state = events.get(timeout=min(left, 1))
+            except queue.Empty:
+                state = vero.latest()
+            if state is _CLOSED:
+                raise NotRunning("the worker host has stopped")
+    else:
+        raise VeroError("a step is call, send, wait, pause or copy")
+
+
+def _at(state: Any, path: str) -> Any:
+    """What path names in state: keys and list indexes, "#" for a length."""
+    for part in [p for p in path.split(".") if p]:
+        if part == "#" and isinstance(state, (list, dict, str)):
+            state = len(state)
+        elif isinstance(state, list) and part.lstrip("-").isdigit() and -len(state) <= int(part) < len(state):
+            state = state[int(part)]
+        elif isinstance(state, dict) and part in state:
+            state = state[part]
+        else:
+            return None
+    return state
+
+
+def _holds(state: Any, wait: dict) -> bool:
+    got = _at(state, wait.get("path", ""))
+    if "is" in wait:
+        return got == wait["is"]
+    if "not" in wait:
+        return got != wait["not"]
+    if "at_least" in wait:
+        return isinstance(got, (int, float)) and not isinstance(got, bool) and got >= wait["at_least"]
+    if "contains" in wait:
+        return got is not None and wait["contains"] in got
+    raise VeroError("a wait is is, not, at_least or contains")

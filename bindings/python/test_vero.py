@@ -16,7 +16,9 @@ import time
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from vero import NotRunning, Refused, Vero  # noqa: E402
+import json  # noqa: E402
+
+from vero import NotRunning, Refused, Vero, play  # noqa: E402
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 
@@ -168,6 +170,83 @@ class NamedRouteTests(unittest.TestCase):
     def test_a_handler_error_is_a_refusal(self) -> None:
         with self.assertRaises(Refused):
             self.vero.call("restartJob", {"id": 0})
+
+
+class PlayTests(unittest.TestCase):
+    """The steps vero's tests play against an installed app."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.tmp = tempfile.mkdtemp()
+        cls.worker, _ = build(cls.tmp)
+
+    def play(self, steps: list, files: str = "") -> tuple[bool, dict]:
+        stepfile = os.path.join(self.tmp, "steps.json")
+        result = os.path.join(self.tmp, "result.json")
+        with open(stepfile, "w") as f:
+            json.dump({"steps": steps}, f)
+        os.environ["VERO_TEST_RESULT"] = result
+        os.environ["VERO_TEST_FILES"] = files
+        self.addCleanup(os.environ.pop, "VERO_TEST_RESULT", None)
+        self.addCleanup(os.environ.pop, "VERO_TEST_FILES", None)
+        with Vero(self.worker) as v:
+            ok = play(v, stepfile)
+        with open(result) as f:
+            return ok, json.load(f)
+
+    def test_steps_that_hold_pass(self) -> None:
+        ok, result = self.play([
+            {"wait": {"path": "jobs.#", "is": 3}},
+            {"send": {"type": "restart", "id": 1}},
+            {"wait": {"path": "jobs.0.id", "at_least": 1}},
+            {"wait": {"path": "jobs.0.name", "not": ""}},
+            {"pause": 0.1},
+        ])
+        self.assertTrue(ok, result)
+        self.assertEqual(len(result["steps"]), 5)
+        self.assertNotIn("error", json.dumps(result))
+
+    def test_a_wait_that_never_holds_fails_with_what_it_saw(self) -> None:
+        ok, result = self.play([
+            {"wait": {"path": "jobs.#", "is": 4}, "timeout": 1},
+            {"pause": 0.1},
+        ])
+        self.assertFalse(ok)
+        self.assertEqual(len(result["steps"]), 1, "it stops at the first failure")
+        self.assertIn("jobs.# is 3", result["steps"][0]["error"])
+
+    def test_a_refused_request_fails_the_step(self) -> None:
+        ok, result = self.play([{"send": {"type": "restart", "id": 99}}])
+        self.assertFalse(ok)
+        self.assertIn("no job with id 99", result["steps"][0]["error"])
+
+    def test_copy_fills_in_the_folders(self) -> None:
+        files = tempfile.mkdtemp()
+        with open(os.path.join(files, "sample.txt"), "w") as f:
+            f.write("hello")
+        marker = os.path.join(self.tmp, "where")
+        ok, result = self.play([
+            {"copy": {"from": "sample.txt", "to": "{tmp}/a/b/"}},
+            {"copy": {"from": "{tmp}/a/b/sample.txt", "to": marker}},
+        ], files)
+        self.assertTrue(ok, result)
+        with open(marker) as f:
+            self.assertEqual(f.read(), "hello")
+
+    def test_vero_test_plays_the_steps_by_itself(self) -> None:
+        stepfile = os.path.join(self.tmp, "auto.json")
+        result = os.path.join(self.tmp, "auto-result.json")
+        with open(stepfile, "w") as f:
+            json.dump({"steps": [{"wait": {"path": "jobs.#", "is": 3}}]}, f)
+        os.environ.update(VERO_TEST=stepfile, VERO_TEST_RESULT=result)
+        self.addCleanup(os.environ.pop, "VERO_TEST", None)
+        self.addCleanup(os.environ.pop, "VERO_TEST_RESULT", None)
+        with Vero(self.worker):
+            deadline = time.time() + 10
+            while not os.path.exists(result) and time.time() < deadline:
+                time.sleep(0.05)
+        with open(result) as f:
+            self.assertTrue(json.load(f)["ok"])
 
 
 if __name__ == "__main__":

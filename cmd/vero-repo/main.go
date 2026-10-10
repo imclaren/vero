@@ -49,6 +49,8 @@ func main() {
 		err = publishCommand(os.Args[2:])
 	case "check":
 		err = checkCommand(os.Args[2:])
+	case "steps":
+		err = stepsCommand(os.Args[2:])
 	case "deb":
 		// What scripts/package-linux.sh builds its .deb with: a folder laid
 		// out for dpkg-deb, made into a .deb in Go.
@@ -74,6 +76,7 @@ func usage() {
   vero-repo key --dir DIR --import-sparkle FILE
   vero-repo check --app vero-app.toml --url https://example.com/myapp [--key DIR] [dist/site]
   vero-repo package --app vero-app.toml --version 1.2.3 [--targets deb,rpm,flatpak,macos,windows,freebsd,dragonfly,netbsd,illumos,openbsd] [--out dist/packages]
+  vero-repo steps --app vero-app.toml --out DIR   what vero's tests play against the installed app
   vero-repo build --app vero-app.toml --key DIR --url https://example.com/myapp [--packages dist/packages] [--out dist/site] [--keep 3] [--no-page]
 `)
 	os.Exit(2)

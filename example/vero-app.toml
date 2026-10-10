@@ -208,3 +208,27 @@ simulator_app = ".build/VeroExample.app"
 [plan9]
 frontend = "plan9-app"
 arches = ["amd64", "386"]
+
+# What vero's tests do with the app once it's installed and its window is
+# open, recorded as they go: scripts/test-repo.sh plays these steps through
+# vero's binding in the app, so the window shows each one. A step calls a
+# request (call, with), waits until the state shows something (wait, with
+# timeout in seconds), pauses so the recording shows a moment, or copies a
+# file from [test] files (copy). {tmp} is a new empty folder, and {files}
+# the folder the files are in.
+[[test.step]]
+wait = { path = "jobs.#", is = 3 }
+
+[[test.step]]
+wait = { path = "working", is = true }
+timeout = 30
+
+[[test.step]]
+pause = 2
+
+[[test.step]]
+call = "restartJob"
+with = { id = 1 }
+
+[[test.step]]
+pause = 3

@@ -44,6 +44,9 @@ type App struct {
 	WASI    *WASI    `toml:"wasi"`
 	Plan9   *Plan9   `toml:"plan9"`
 	Needs   Needs    `toml:"needs"`
+	// Test is what vero's tests do with the app once it's installed and
+	// its window is open.
+	Test *Test `toml:"test"`
 
 	// dir is the folder the file is in, which its paths are relative to.
 	dir string
@@ -291,8 +294,12 @@ func LoadApp(path string) (*App, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
-	if extra := md.Undecoded(); len(extra) > 0 {
-		return nil, fmt.Errorf("%s: unknown setting %s", path, extra[0])
+	for _, key := range md.Undecoded() {
+		// A step's own tables, such as wait's, are the step's to check.
+		if len(key) > 3 && key[0] == "test" && key[1] == "step" {
+			continue
+		}
+		return nil, fmt.Errorf("%s: unknown setting %s", path, key)
 	}
 	abs, err := filepath.Abs(path)
 	if err != nil {
@@ -352,6 +359,11 @@ func (a *App) check(path string) error {
 	}
 	if a.WPF != nil && (a.WPF.Folder == "" || a.WPF.Exe == "") {
 		return problem("[wpf] needs folder and exe")
+	}
+	if a.Test != nil {
+		if err := a.Test.check(a); err != nil {
+			return problem("%v", err)
+		}
 	}
 	return nil
 }
