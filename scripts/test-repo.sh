@@ -22,7 +22,18 @@
 #   scripts/test-repo.sh --vm illumos             # pkgin, with pkgsrc, in vero's OpenIndiana VM
 #   scripts/test-repo.sh --mac                    # the disk image, on this Mac, and the appcast
 #   scripts/test-repo.sh --vm windows             # the installer and the MSIX, in vero's Windows VM, over SSH
-#   [--port 8642]
+#   [--app path/to/vero-app.toml] [--port 8642] [--no-launch] [--limit SECONDS]
+#
+# --app tests your own app instead of vero's example, on Linux, the
+# Flatpak, the BSDs and illumos (not yet the Mac or Windows): its packages,
+# its install, and its [[test.step]]s, recorded.
+#
+# After installing, it starts the app on a virtual display, plays the
+# steps the app's vero-app.toml gives under [[test.step]] through vero's
+# binding in the app, and records the window as it goes, as a GIF. Each
+# run's GIF, steps and log go in ~/.cache/vero/test-results/SYSTEM/, and
+# ~/.cache/vero/test-results/index.html shows every system tested so far.
+# --no-launch skips that; --limit is how long the steps may take (600).
 #
 # A VM test starts the system's VM with its run script (scripts/run-*.sh
 # --shell), which makes it the first time, and stops it at the end; the
@@ -36,28 +47,45 @@
 set -e
 VERO=$(cd "$(dirname "$0")/.." && pwd)
 . "$VERO/scripts/lib/docker.sh"
-IMAGE=debian:bookworm PORT=8642 FLATPAK="" VMSYS="" MAC=""
+IMAGE=debian:bookworm PORT=8642 FLATPAK="" VMSYS="" MAC="" LAUNCH=yes LIMIT=600 APP=""
 while [ $# -gt 0 ]; do
     case $1 in
         --image) IMAGE=$2; shift ;; --port) PORT=$2; shift ;;
         --flatpak) FLATPAK=yes ;;
         --vm) VMSYS=$2; shift ;;
         --mac) MAC=yes ;;
+        --no-launch) LAUNCH="" ;;
+        --limit) LIMIT=$2; shift ;;
+        --app) APP=$2; shift ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
     shift
 done
+if [ -n "$APP" ] && { [ -n "$MAC" ] || [ "$VMSYS" = windows ]; }; then
+    echo "--app can't test the Mac or Windows yet: only Linux, the Flatpak, the BSDs and illumos" >&2
+    exit 2
+fi
 [ -n "$VMSYS$MAC" ] || vero_docker
 CACHE="$HOME/.cache/vero"
-KEY="$CACHE/example-key" SITE="$CACHE/example-site" PACKAGES="$CACHE/example-packages"
+# Each stage, numbered, with the time so far: a run can take an hour.
+BEGAN=$(date +%s) STAGE=0
+stage() {
+    STAGE=$((STAGE + 1)) t=$(($(date +%s) - BEGAN))
+    printf '== [%d/%s] %s (%d:%02d)\n' "$STAGE" "${STAGES:-?}" "$1" $((t / 60)) $((t % 60))
+}
+mkdir -p "$CACHE/bin"
+go build -C "$VERO/cmd/vero-repo" -o "$CACHE/bin/vero-repo" .
+REPO="$CACHE/bin/vero-repo"
+# The app's names: APP_NAME, APP_ID, APP_WORKER, APP_TOML and the rest.
+eval "$("$REPO" show --app "${APP:-$VERO/example/vero-app.toml}")" || exit 1
+P=$APP_NAME
+[ "$P" = vero-example ] && P=example
+KEY="$CACHE/$P-key" SITE="$CACHE/$P-site" PACKAGES="$CACHE/$P-packages"
 # The container reaches this Mac by this name: colima and Docker Desktop
 # both answer it.
 URL="http://host.docker.internal:$PORT"
 NAME=vero-test-repo
-mkdir -p "$CACHE/bin"
-go build -C "$VERO/cmd/vero-repo" -o "$CACHE/bin/vero-repo" .
-REPO="$CACHE/bin/vero-repo"
-[ -f "$KEY/private.asc" ] || "$REPO" key --dir "$KEY" --name "vero example" --email example@example.com
+[ -f "$KEY/private.asc" ] || "$REPO" key --dir "$KEY" --name "$APP_DISPLAY test" --email test@example.com
 rm -rf "$SITE"
 
 # GTK 4 for Python, as the example starts it: the package's dependencies
@@ -69,7 +97,7 @@ GTK="import gi; gi.require_version('Gtk', '4.0'); from gi.repository import Gtk"
 # ID: GTK 4 from SmartOS's pkgsrc crashed doing that on illumos, which
 # installing alone didn't show. It needs no display. Its argument is the
 # prefix the package installs under.
-ICONS="import gi, glob, sys; gi.require_version('Gdk', '4.0'); from gi.repository import Gdk; [Gdk.Texture.new_from_filename(f) for f in glob.glob(sys.argv[1] + '/share/icons/hicolor/*/apps/dev.vero.example.png')]"
+ICONS="import gi, glob, sys; gi.require_version('Gdk', '4.0'); from gi.repository import Gdk; [Gdk.Texture.new_from_filename(f) for f in glob.glob(sys.argv[1] + '/share/icons/hicolor/*/apps/$APP_ID.png')]"
 
 # What to build, and how to install, check and update, on this system.
 if [ -n "$MAC" ]; then
@@ -91,11 +119,13 @@ elif [ -n "$VMSYS" ]; then
     case $VMSYS in
         freebsd) SSH_PORT=2222 PREFIX=/usr/local PY=python3
             INSTALL="fetch -q -o - $URL/install.sh | sh"
+            XSETUP="pkg install -y tigervnc-server ImageMagick7 > /dev/null"
             UPDATE="pkg upgrade -y > /dev/null" ;;
         netbsd) SSH_PORT=2223 PREFIX=/usr/pkg PY=python3.12
             # pkgin, which the install page says to add if it's missing.
             SETUP="[ -x /usr/pkg/bin/pkgin ] || PKG_PATH=https://cdn.netbsd.org/pub/pkgsrc/packages/NetBSD/\$(uname -p)/\$(uname -r | cut -d. -f1-2)/All /usr/sbin/pkg_add pkgin"
             INSTALL="ftp -V -o - $URL/install.sh | sh"
+            XSETUP="pkgin -y install tigervnc ImageMagick > /dev/null"
             UPDATE="pkgin -y -f upgrade > /dev/null" ;;
         openbsd) SSH_PORT=2224 PREFIX=/usr/local PY=python3
             # Python crashes importing GTK 4 on OpenBSD 7.9 for ARM, with
@@ -104,45 +134,54 @@ elif [ -n "$VMSYS" ]; then
             GTK="import os; assert os.path.exists('/usr/local/lib/girepository-1.0/Gtk-4.0.typelib')"
             ICONS="pass"
             INSTALL="ftp -V -o - $URL/install.sh | sh"
-            UPDATE="PKG_PATH=$URL/openbsd/%a/:installpath pkg_add -u vero-example" ;;
+            XSETUP="pkg_add -I tigervnc ImageMagick > /dev/null"
+            UPDATE="PKG_PATH=$URL/openbsd/%a/:installpath pkg_add -u $APP_NAME" ;;
         dragonfly) SSH_PORT=2225 PREFIX=/usr/local PY=python3.11
             INSTALL="fetch -q -o - $URL/install.sh | sh"
             # Just the example: an upgrade of everything takes in
             # whatever DragonFly's own repository is changing that day,
             # which has been known to remove packages the example needs.
-            UPDATE="pkg upgrade -y vero-example > /dev/null" ;;
+            XSETUP="pkg install -y tigervnc-server ImageMagick7 > /dev/null"
+            UPDATE="pkg upgrade -y $APP_NAME > /dev/null" ;;
         illumos) SSH_PORT=2226 PREFIX=/opt/local PY=/opt/local/bin/python3.12
             # pkgsrc, as pkgsrc.smartos.org says to add it to OpenIndiana.
             SETUP="[ -x /opt/local/bin/pkgin ] || { cd /tmp && curl -fsSLO https://pkgsrc.smartos.org/packages/SmartOS/bootstrap/bootstrap-trunk-x86_64-20260811.tar.gz &&
                 [ \$(/bin/digest -a sha1 bootstrap-trunk-x86_64-20260811.tar.gz) = e5e620ade4b45695aa385aea25227e94f49f078f ] &&
                 gtar -zxpf bootstrap-trunk-x86_64-20260811.tar.gz -C / && /opt/local/bin/pkgin -y update > /dev/null; }"
             INSTALL="PATH=/opt/local/bin:/opt/local/sbin:\$PATH; curl -fsSL $URL/install.sh | sh"
+            # OpenIndiana's own Xvnc and ImageMagick, as run-illumos.sh has.
+            XSETUP="pkg install -q x11/server/xvnc image/imagemagick; true"
             UPDATE="/opt/local/bin/pkgin -y -f upgrade > /dev/null" ;;
         *) echo "unknown VM: $VMSYS (freebsd, dragonfly, netbsd, openbsd or illumos)" >&2; exit 2 ;;
     esac
     : "${SETUP:=true}"
-    WORKER="$PREFIX/lib/vero-example/worker -version"
-    CHECK="PATH=$PREFIX/bin:\$PATH; command -v vero-example && ls $PREFIX/share/applications/dev.vero.example.desktop $PREFIX/lib/vero-example/vero.py && $PY -c \"$GTK\""
+    WORKER="$PREFIX/lib/$APP_NAME/$APP_WORKER -version"
+    APPCMD="$PREFIX/bin/$APP_NAME"
+    CHECK="PATH=$PREFIX/bin:\$PATH; command -v $APP_NAME && ls $PREFIX/share/applications/$APP_ID.desktop $PREFIX/lib/$APP_NAME/vero.py && $PY -c \"$GTK\""
     ICON_CHECK="$PY -c \"$ICONS\" $PREFIX"
 elif [ -n "$FLATPAK" ]; then
     IMAGE=debian:trixie TARGETS=flatpak
     # The volume keeps GNOME's runtime between runs; the example, and
     # the remote its .flatpakref added, go, so that it's installed afresh.
     SETUP="apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq flatpak curl ca-certificates > /dev/null
-        flatpak uninstall -y --noninteractive dev.vero.example > /dev/null 2>&1 || true
+        flatpak uninstall -y --noninteractive $APP_ID > /dev/null 2>&1 || true
         for r in \$(flatpak remotes --columns=name); do [ \$r = flathub ] || flatpak remote-delete --force \$r; done"
-    INSTALL="flatpak install -y --noninteractive $URL/flatpak/vero-example.flatpakref > /dev/null"
-    WORKER="flatpak run --command=/app/lib/vero-example/worker dev.vero.example -version"
-    CHECK="ls /var/lib/flatpak/exports/share/applications/dev.vero.example.desktop /var/lib/flatpak/exports/share/icons/hicolor/128x128/apps/dev.vero.example.png && flatpak run --command=python3 dev.vero.example -c \"$GTK\""
-    ICON_CHECK="flatpak run --command=python3 dev.vero.example -c \"$ICONS\" /app"
+    INSTALL="flatpak install -y --noninteractive $URL/flatpak/$APP_NAME.flatpakref > /dev/null"
+    WORKER="flatpak run --command=/app/lib/$APP_NAME/$APP_WORKER $APP_ID -version"
+    CHECK="ls /var/lib/flatpak/exports/share/applications/$APP_ID.desktop /var/lib/flatpak/exports/share/icons/hicolor/128x128/apps/$APP_ID.png && flatpak run --command=python3 $APP_ID -c \"$GTK\""
+    ICON_CHECK="flatpak run --command=python3 $APP_ID -c \"$ICONS\" /app"
+    # /tmp is the sandbox's own, so the steps are in /var/tmp.
+    APPCMD="flatpak run --filesystem=/var/tmp/vero-launch $APP_ID"
+    XSETUP="DEBIAN_FRONTEND=noninteractive apt-get install -y -qq xvfb x11-apps x11-utils > /dev/null"
     UPDATE="flatpak update -y --noninteractive > /dev/null"
     RUN="--privileged -v vero-test-flatpak:/var/lib/flatpak"
 else
     INSTALL="curl -fsSL $URL/install.sh | sh"
-    WORKER="/usr/lib/vero-example/worker -version"
+    WORKER="/usr/lib/$APP_NAME/$APP_WORKER -version"
     RUN=""
-    CHECK="command -v vero-example && ls /usr/share/applications/dev.vero.example.desktop /usr/share/metainfo/dev.vero.example.metainfo.xml /usr/lib/vero-example/vero.py && python3 -c \"$GTK\""
+    CHECK="command -v $APP_NAME && ls /usr/share/applications/$APP_ID.desktop /usr/share/metainfo/$APP_ID.metainfo.xml /usr/lib/$APP_NAME/vero.py && python3 -c \"$GTK\""
     ICON_CHECK="python3 -c \"$ICONS\" /usr"
+    APPCMD=$APP_NAME
     case $IMAGE in
         archlinux*)
             # Arch's image is x86_64 only: Docker runs it emulated here,
@@ -156,13 +195,15 @@ else
                 pacman -Syu --noconfirm --needed curl > /dev/null 2>&1"
             # pacman refuses a package or an index that isn't signed by a
             # key it trusts; this checks that it was checked.
-            CHECK="$CHECK && pacman -Qi vero-example | grep -q '^Validated By *: Signature'"
+            CHECK="$CHECK && pacman -Qi $APP_NAME | grep -q '^Validated By *: Signature'"
+            XSETUP="pacman -S --noconfirm --needed xorg-server-xvfb xorg-xwd xorg-xdpyinfo > /dev/null 2>&1"
             UPDATE="pacman -Syu --noconfirm > /dev/null" ;;
         alpine*)
             # Alpine has wget, as BusyBox's, but no curl.
             TARGETS=alpine
             SETUP=true
             INSTALL="wget -qO- $URL/install.sh | sh"
+            XSETUP="apk add -q xvfb xwd xdpyinfo"
             UPDATE="apk upgrade -U > /dev/null" ;;
         *chimera*)
             # Chimera's image is a minimal install, without the fetch the
@@ -170,28 +211,33 @@ else
             TARGETS=chimera SLEEP=86400
             SETUP="apk add chimerautils-extra > /dev/null"
             INSTALL="fetch -qo - $URL/install.sh | sh"
+            XSETUP="apk add -q xserver-xorg-xvfb xwd xdpyinfo"
             UPDATE="apk upgrade -U > /dev/null" ;;
         *void*)
             TARGETS=void
             SETUP="xbps-install -Syu xbps > /dev/null && xbps-install -y curl > /dev/null"
+            XSETUP="xbps-install -y xorg-server-xvfb xwd xdpyinfo > /dev/null"
             UPDATE="xbps-install -Syu > /dev/null" ;;
         opensuse*)
             TARGETS=rpm
             SETUP="zypper -n -q install curl gzip > /dev/null"
-            CHECK="$CHECK && rpm -qi vero-example | grep -A1 '^Signature' | grep -q RSA"
+            XSETUP="zypper -n -q install xorg-x11-server-Xvfb xwd xdpyinfo > /dev/null"
+            CHECK="$CHECK && rpm -qi $APP_NAME | grep -A1 '^Signature' | grep -q RSA"
             UPDATE="zypper -n -q refresh > /dev/null && zypper -n -q update > /dev/null" ;;
         fedora*)
             TARGETS=rpm
             SETUP="dnf install -y -q curl > /dev/null"
+            XSETUP="dnf install -y -q xorg-x11-server-Xvfb xwd xdpyinfo > /dev/null"
             # dnf refuses a package or an index that isn't signed; this
             # checks that the package is.
-            CHECK="$CHECK && rpm -qi vero-example | grep -A1 '^Signature' | grep -q RSA"
+            CHECK="$CHECK && rpm -qi $APP_NAME | grep -A1 '^Signature' | grep -q RSA"
             # --refresh: dnf looks for a new index every six hours
             # otherwise.
             UPDATE="dnf upgrade --refresh -y -q > /dev/null" ;;
         *)
             TARGETS=deb
             SETUP="apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl ca-certificates > /dev/null"
+            XSETUP="DEBIAN_FRONTEND=noninteractive apt-get install -y -qq xvfb x11-apps x11-utils > /dev/null"
             UPDATE="apt-get update -qq && apt-get upgrade -y -qq > /dev/null" ;;
     esac
 fi
@@ -200,16 +246,20 @@ fi
 # version, and what's new, for the update prompt.
 release() {
     rm -rf "$PACKAGES"
-    (cd "$VERO" && scripts/package.sh --app example/vero-app.toml --version "$1" ${2:+--build "$2"} --targets "$TARGETS" --out "$PACKAGES")
-    "$REPO" build --app "$VERO/example/vero-app.toml" --packages "$PACKAGES" --key "$KEY" --url "$URL" --out "$SITE" ${3:+--notes "$3"}
+    (cd "$VERO" && scripts/package.sh --app "$APP_TOML" --version "$1" ${2:+--build "$2"} --targets "$TARGETS" --out "$PACKAGES")
+    "$REPO" build --app "$APP_TOML" --packages "$PACKAGES" --key "$KEY" --url "$URL" --out "$SITE" ${3:+--notes "$3"}
 }
 if [ -n "$MAC" ] || [ "$VMSYS" = windows ]; then
     in_container() { sh -c "$1"; }
 elif [ -n "$VMSYS" ]; then
     SSH="ssh -i $VMDIR/key -p $SSH_PORT -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o IdentitiesOnly=yes root@127.0.0.1"
     in_container() { $SSH "$1"; }
+    put_dir() { tar -C "$1" -cf - . | $SSH "rm -rf $2 && mkdir -p $2 && tar -C $2 -xf -"; }
+    get_dir() { $SSH "tar -C $1 -cf - ." | tar -C "$2" -xf -; }
 else
     in_container() { docker exec "$NAME" sh -c "$1"; }
+    put_dir() { docker exec "$NAME" sh -c "rm -rf $2 && mkdir -p $2" && docker cp "$1/." "$NAME:$2"; }
+    get_dir() { docker cp "$NAME:$1/." "$2"; }
 fi
 cleanup() {
     if [ -n "$MAC" ]; then
@@ -340,11 +390,97 @@ windows_test() {
     echo "PASS"
 }
 
-echo "== releasing 1.0.0"
+# launch_test: the installed app started on a virtual display, the steps
+# played in it, and the window recorded, as a GIF in the results folder.
+RESULTS="$CACHE/test-results/$APP_NAME"
+launch_test() {
+    stage "starting the app and playing its steps, recorded"
+    lb=$(date +%s)
+    label=${VMSYS:+vm-$VMSYS}
+    [ -n "$FLATPAK" ] && label=flatpak
+    : "${label:=$(printf '%s' "$IMAGE" | tr '/:' '--')}"
+    out="$RESULTS/$label" L="$CACHE/launch"
+    rm -rf "$out" "$L" && mkdir -p "$out" "$L"
+    "$REPO" steps --app "$APP_TOML" --out "$L" >/dev/null
+    cp "$VERO/scripts/lib/launch-test.sh" "$L/"
+    in_container "${XSETUP:-true}" || { echo "FAIL: couldn't add a virtual display" >&2; exit 1; }
+    put_dir "$L" /var/tmp/vero-launch
+    in_container "sh /var/tmp/vero-launch/launch-test.sh $LIMIT $APPCMD" || true
+    get_dir /var/tmp/vero-launch "$out"
+    rm -f "$out/launch-test.sh" "$out/steps.json"
+    rm -rf "$out/files"
+    make_gif "$out"
+    rm -rf "$out/frames"
+    why=""
+    if [ -f "$out/exited" ]; then why="the app exited ($(cat "$out/exited"))"
+    elif [ ! -f "$out/result.json" ]; then why="the steps didn't finish in ${LIMIT}s"
+    elif ! grep -q '"ok": true' "$out/result.json"; then why="a step failed"
+    fi
+    secs=$(($(date +%s) - lb))
+    printf '%s\n%s\n%s\n' "${why:+FAIL}${why:-PASS}" "$secs" "$why" >"$out/status"
+    summary
+    grep 'vero test:' "$out/app.log" | sed 's/^vero test: /   /'
+    if [ -n "$why" ]; then
+        echo "FAIL: $why; the app said:" >&2
+        grep -v 'vero test:' "$out/app.log" | tail -15 >&2
+        echo "(recording and log in $out)" >&2
+        exit 1
+    fi
+    echo "ok: the app started and its steps passed; recorded in $out/app.gif"
+}
+
+# make_gif DIR: DIR/frames made into DIR/app.gif, cropped to the window,
+# at two frames a second, no wider than 640.
+make_gif() {
+    command -v ffmpeg >/dev/null || { echo "   (no ffmpeg here, so no GIF: brew install ffmpeg)"; return 0; }
+    f="$1/frames"
+    ls "$f" | grep -q . || return 0
+    for g in "$f"/*.gz; do [ -e "$g" ] && gunzip -f "$g"; done
+    ext=$(ls "$f" | head -1 | sed 's/.*\.//')
+    last=$(ls "$f"/*."$ext" | tail -1)
+    # The display is black around the window: the last frame says where it is.
+    crop=$(ffmpeg -hide_banner -i "$last" -vf cropdetect=limit=0.01:round=2:skip=0 -f null - 2>&1 | grep -o 'crop=[0-9:]*' | tail -1)
+    ffmpeg -loglevel error -y -framerate 2 -i "$f/f%04d.$ext" \
+        -vf "${crop:+$crop,}scale='min(640,iw)':-2:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer" \
+        -loop 0 "$1/app.gif" || echo "   (the GIF couldn't be made)"
+}
+
+# summary: index.html in the results folder, every system tested so far.
+summary() {
+    {
+        echo '<!doctype html><meta charset="utf-8"><title>vero test results</title>'
+        echo '<style>body{font:14px system-ui;margin:16px;background:#fff;color:#111}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:16px}
+figure{margin:0;border:1px solid #ccc;padding:8px}img{max-width:100%}.FAIL{color:#b00}.PASS{color:#070}</style>'
+        echo "<h1>vero test results</h1><p>Updated $(date '+%Y-%m-%d %H:%M').</p><div class=grid>"
+        for d in "$RESULTS"/*/; do
+            [ -f "$d/status" ] || continue
+            n=$(basename "$d")
+            st=$(sed -n 1p "$d/status") secs=$(sed -n 2p "$d/status") why=$(sed -n 3p "$d/status")
+            when=$(date -r "$d/status" '+%Y-%m-%d %H:%M')
+            echo "<figure><figcaption><b>$n</b> <span class=$st>$st</span> $why<br>${secs}s, $when</figcaption>"
+            [ -f "$d/app.gif" ] && echo "<img src=\"$n/app.gif\" alt=\"$n\">"
+            echo "<br><a href=\"$n/app.log\">log</a></figure>"
+        done
+        echo '</div>'
+    } >"$RESULTS/index.html"
+}
+
+STAGES=4
+[ -n "$LAUNCH" ] && STAGES=5
+stage "releasing 1.0.0"
 if [ -n "$MAC" ]; then release 1.0.0 100; else release 1.0.0; fi
 go build -o "$CACHE/bin/serve" "$VERO/scripts/lib/serve.go"
 "$CACHE/bin/serve" "$SITE" "$PORT" &
 SERVER=$!
+# Up before anything asks it: the last run's may still hold the port.
+n=0
+until nc -z 127.0.0.1 "$PORT" 2>/dev/null && kill -0 $SERVER 2>/dev/null; do
+    n=$((n + 1))
+    [ $n -gt 60 ] && { echo "FAIL: the site's server isn't answering on port $PORT; is another test still running?" >&2; exit 1; }
+    kill -0 $SERVER 2>/dev/null || { sleep 1; "$CACHE/bin/serve" "$SITE" "$PORT" & SERVER=$!; }
+    sleep 0.5
+done
 
 if [ -n "$MAC" ]; then
     mac_test
@@ -363,7 +499,7 @@ else
     docker run -d --name "$NAME" $RUN --add-host=host.docker.internal:host-gateway "$IMAGE" sleep "${SLEEP:-infinity}" >/dev/null
 fi
 
-echo "== installing it as the site says, in $IMAGE${FLATPAK:+, with Flatpak}"
+stage "installing it as the site says, in $IMAGE${FLATPAK:+, with Flatpak}"
 in_container "$SETUP"
 in_container "$INSTALL"
 got=$(in_container "$WORKER")
@@ -373,9 +509,11 @@ in_container "$CHECK" >/dev/null ||
 in_container "$ICON_CHECK" >/dev/null 2>&1 ||
     { echo "FAIL: GTK 4 crashed or failed reading the app's icon, which the app loads when it starts" >&2; exit 1; }
 echo "ok: 1.0.0 installed from the repository, and its worker answers"
+[ -n "$LAUNCH" ] && launch_test
 
-echo "== releasing 1.0.1 into the same site"
+stage "releasing 1.0.1 into the same site"
 release 1.0.1
+stage "updating to 1.0.1 with the system's own updates"
 in_container "$UPDATE"
 got=$(in_container "$WORKER")
 [ "$got" = 1.0.1 ] || { echo "FAIL: after updating, the worker says $got, not 1.0.1" >&2; exit 1; }

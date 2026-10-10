@@ -23,7 +23,10 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 
 VM=${VM:-$HOME/vm/vero-freebsd}
-RELEASE=${RELEASE:-15.0}
+# The newest release: FreeBSD builds its packages on the newest of a
+# branch, so on 15.0 they no longer run once 15.1 is out (xkbcomp needs
+# FBSD_1.9 from 15.1's libc).
+RELEASE=${RELEASE:-15.1}
 PORT=${PORT:-5902}          # the guest's x11vnc, forwarded; one past Linux's
 SSH_PORT=${SSH_PORT:-2222}
 GOBJECT=${GOBJECT:-py312-pygobject}  # the GTK binding for Python, as FreeBSD names it
