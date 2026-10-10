@@ -73,9 +73,11 @@ if [ "$INSTALL" = yes ]; then
             -o "$VM/oi-text.iso"
     fi
     rm -f "$VM/disk.qcow2"
-    # DISK_SIZE=24G for more room. OpenIndiana's text installer crashed on
-    # its Users screen with a 32G disk, twice, and 14G is known to work.
-    qemu-img create -f qcow2 "$VM/disk.qcow2" "${DISK_SIZE:-14G}" >/dev/null
+    # 32G: an app with GTK and ffmpeg from pkgsrc fills 14G. The file
+    # takes only what the VM uses. (The installer's crash on its Users
+    # screen, once blamed on the size, was a race in reading Esc-2, which
+    # illumos-install.py now sends as F2's own key code.)
+    qemu-img create -f qcow2 "$VM/disk.qcow2" "${DISK_SIZE:-32G}" >/dev/null
 fi
 
 boot() {   # $1: extra arguments, e.g. the install media
