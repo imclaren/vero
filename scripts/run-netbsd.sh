@@ -21,9 +21,10 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 
 VM=${VM:-$HOME/vm/vero-netbsd}
-# The newest release: once one is out, the one before moves to NetBSD's
-# archive, and pkgsrc's packages are built for the newest.
-RELEASE=${RELEASE:-11.0}
+# 10.1, from NetBSD's archive now that 11.0 is out: 11.0's kernel stops
+# with an illegal instruction as it starts, in a VM on Apple silicon
+# (-accel hvf -cpu host). pkgsrc still builds packages for 10.1.
+RELEASE=${RELEASE:-10.1}
 PORT=${PORT:-5903}          # one past FreeBSD's
 SSH_PORT=${SSH_PORT:-2223}
 PYTHON=${PYTHON:-/usr/pkg/bin/python3.12}
@@ -149,12 +150,17 @@ def send(line, wait=2.0):
     s.sendall(line.encode() + b"\n")
     return drain(wait)
 
-# Wait for the login prompt, which is the end of a two-minute first boot.
-deadline, seen = time.time() + 300, ""
+# Wait for the login prompt, which is the end of a two-minute first boot,
+# or a much longer one on a Mac busy with other VMs.
+deadline, seen, started = time.time() + 600, "", time.time()
 while time.time() < deadline:
     seen += drain(5)
     if "login:" in seen:
         break
+    # Return on the console, which has getty say "login:" again, in case
+    # the first one went by before anything was listening.
+    if time.time() - started > 120 and int(time.time() - started) % 20 < 5:
+        s.sendall(b"\r")
 else:
     raise SystemExit("NetBSD never reached a login prompt")
 
