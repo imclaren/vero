@@ -460,47 +460,8 @@ finish_launch() {
     echo "ok: the app started and its steps passed; recorded in $out/app.gif"
 }
 
-# make_gif DIR: DIR/frames made into DIR/app.gif, cropped to the window,
-# at two frames a second, no wider than 640. Of frames that are the same
-# as the one before, three in four are left out, so that waiting goes by
-# quickly but can still be seen, and the last is held for three seconds,
-# so that the result can be seen. Not dithered: an app's flat
-# colours need none, and dithering makes every frame differ, which a GIF
-# pays for in size.
-make_gif() {
-    command -v ffmpeg >/dev/null || { echo "   (no ffmpeg here, so no GIF: brew install ffmpeg)"; return 0; }
-    f="$1/frames"
-    ls "$f" | grep -q . || return 0
-    for g in "$f"/*.gz; do [ -e "$g" ] && gunzip -f "$g"; done
-    # Empty, from before the display was up: ffmpeg skips them, which would
-    # put its frame numbers out of step with the files.
-    find "$f" -type f -size -100c -delete
-    ls "$f" | grep -q . || { echo "   (no frames came back, so no GIF)"; return 0; }
-    ext=$(ls "$f" | head -1 | sed 's/.*\.//')
-    last=$(ls "$f"/*."$ext" | tail -1)
-    # The display is black around the window: the last frame says where it is.
-    crop=$(ffmpeg -hide_banner -i "$last" -vf cropdetect=limit=0.01:round=2:skip=0 -f null - 2>&1 | grep -o 'crop=[0-9:]*' | tail -1)
-    # From the first frame with the app drawn in it: before that its part of
-    # the display is still black, or partly, while the window maps. An app
-    # dark all over would lose every frame that way, so it keeps them.
-    black=$(ffmpeg -hide_banner -i "$f/f%04d.$ext" -vf "${crop:+$crop,}blackframe=amount=30:threshold=32" -f null - 2>&1 | grep -o 'frame:[0-9]*' | cut -d: -f2)
-    n=0 drop=""
-    for frame in $(ls "$f"); do
-        echo "$black" | grep -qx "$n" || break
-        drop="$drop $frame"
-        n=$((n + 1))
-    done
-    [ "$n" -lt "$(ls "$f" | wc -l)" ] && for frame in $drop; do rm "$f/$frame"; done
-    i=0
-    for frame in $(ls "$f"); do
-        i=$((i + 1))
-        mv "$f/$frame" "$f/g$(printf %04d $i).$ext"
-    done
-    for frame in "$f"/g*; do mv "$frame" "$f/f${frame##*/g}"; done
-    ffmpeg -loglevel error -y -framerate 2 -i "$f/f%04d.$ext" \
-        -vf "${crop:+$crop,}mpdecimate=max=3,setpts=N/2/TB,tpad=stop_mode=clone:stop_duration=3,scale='min(640,iw)':-2:flags=lanczos,split[a][b];[a]palettegen=max_colors=128[p];[b][p]paletteuse=dither=none:diff_mode=rectangle" \
-        -fps_mode vfr -loop 0 "$1/app.gif" || echo "   (the GIF couldn't be made)"
-}
+# make_gif DIR: DIR/frames made into DIR/app.gif and DIR/app.png.
+make_gif() { sh "$VERO/scripts/lib/make-gif.sh" "$1"; }
 
 # summary: index.html in the results folder, every app and system tested
 # so far.

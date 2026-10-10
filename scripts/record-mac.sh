@@ -3,7 +3,8 @@
 # test-repo.sh does on every other system: starts the app with VERO_TEST
 # set, so that vero's Swift binding in it plays the steps, and captures its
 # window every half second until they've finished, then makes the frames a
-# GIF in ~/.cache/vero/test-results/APP/macos/, which
+# GIF and a picture of the last frame, app.gif and app.png, in
+# ~/.cache/vero/test-results/APP/macos/, which
 # ~/.cache/vero/test-results/index.html shows with every other system's.
 #
 #   scripts/record-mac.sh --app path/to/vero-app.toml --bundle path/to/My.app
@@ -77,9 +78,7 @@ wait $app 2>/dev/null || true
 wait $app 2>/dev/null || true
 cp "$L/result.json" "$out/" 2>/dev/null || true
 grep 'vero test:' "$out/app.log" | sed 's/^vero test: /   /'
-ffmpeg -loglevel error -y -framerate 2 -i "$out/frames/f%04d.png" \
-    -vf "mpdecimate=max=3,setpts=N/2/TB,tpad=stop_mode=clone:stop_duration=3,scale='min(640,iw)':-2:flags=lanczos,split[a][b];[a]palettegen=max_colors=128[p];[b][p]paletteuse=dither=none:diff_mode=rectangle" \
-    -fps_mode vfr -loop 0 "$out/app.gif"
+sh "$VERO/scripts/lib/make-gif.sh" "$out"
 rm -rf "$out/frames"
 why=""
 [ -f "$out/result.json" ] || why="the steps didn't finish in ${LIMIT}s"
@@ -87,4 +86,4 @@ why=""
 printf '%s\n%s\n%s\n' "$([ -n "$why" ] && echo FAIL || echo PASS)" "$(($(date +%s) - began))" "$why" >"$out/status"
 sh "$VERO/scripts/lib/results-page.sh" "$CACHE/test-results"
 if [ -n "$why" ]; then echo "FAIL: $why (log in $out)" >&2; exit 1; fi
-echo "ok: the steps passed; recorded in $out/app.gif"
+echo "ok: the steps passed; recorded in $out/app.gif, and its last frame in $out/app.png"
