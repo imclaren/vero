@@ -326,6 +326,11 @@ func (a *App) check(path string) error {
 	case a.Worker.Package == "" || a.Worker.Name == "":
 		return problem("[worker] needs package and name")
 	}
+	if a.Icon != "" {
+		if _, err := os.Stat(a.Path(a.Icon)); err != nil {
+			return problem("icon %q is not there: a square PNG, 512 or 1024 pixels", a.Icon)
+		}
+	}
 	if _, err := mail.ParseAddress(a.Publisher); err != nil {
 		return problem("publisher %q should be \"Name <email>\"", a.Publisher)
 	}

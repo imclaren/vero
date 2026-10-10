@@ -22,6 +22,10 @@ func testStarter(app *App) string {
 # each system's GIF on the install page.
 [test]
 files = []
+# A copy of its own, so that a test on your own computer cannot see or
+# change the settings and sign-ins of the copy you use: kit/keychain and
+# kit/profile follow VERO_PROFILE, and vero's Swift package does too.
+env = { VERO_PROFILE = "test" }
 
 [[test.step]]
 pause = 3
@@ -102,4 +106,28 @@ something to show, so put in what your app works on: a few sample
 documents, songs or photos, small and yours to share, since the
 recordings of it go on your install page.
 `), 0o644)
+}
+
+// addIcon gives the app vero's example icon when the one vero-app.toml
+// names is not there, so that it can be packaged straight away; the
+// checklist in PORTING.md says to replace it.
+func addIcon(app *App) error {
+	name := app.toml.get("", "icon")
+	if name == "" {
+		name = "icon.png"
+	}
+	path := filepath.Join(app.Dir, filepath.FromSlash(name))
+	if _, err := os.Stat(path); err == nil {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	if err := copyBinding(app, "example/icon.png", filepath.Dir(path)); err != nil {
+		return err
+	}
+	if filepath.Base(path) != "icon.png" {
+		return os.Rename(filepath.Join(filepath.Dir(path), "icon.png"), path)
+	}
+	return nil
 }

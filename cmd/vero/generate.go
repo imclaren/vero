@@ -110,6 +110,9 @@ func add(app *App, want []string, force bool) ([]string, error) {
 	if err := addTest(app); err != nil {
 		return added, err
 	}
+	if err := addIcon(app); err != nil {
+		fmt.Printf("icon: %v\n", err)
+	}
 	return added, writePorting(app, added)
 }
 
@@ -160,7 +163,8 @@ func writePorting(app *App, added []string) error {
 	b.WriteString("## Checklist\n\n")
 	b.WriteString("- [ ] Build each front end as its README says, and run it against the worker.\n")
 	b.WriteString("- [ ] Make the starter windows your own: they show every field of the state and a control for every request, which is a start, not a design.\n")
-	b.WriteString("- [ ] Fill in `vero-app.toml`: the summary, description, publisher, homepage, licence and icon, and what each system's package needs.\n")
+	b.WriteString("- [ ] Fill in `vero-app.toml`: the summary, description, publisher, homepage, licence and site, and what each system's package needs.\n")
+	b.WriteString("- [ ] Replace the icon, which is vero's example's until you do: a square PNG, 512 or 1024 pixels.\n")
 	if limited && app.ServeImport != "" {
 		fmt.Fprintf(&b, "- [x] For iOS and the browser, the worker runs inside the app. `vero add` moved its code to `%s/`, which has a `Serve` those front ends call, and left `%s/main.go` to start it for the rest. Nothing else changed; check it builds and keep working in `%s/`.\n", servePackage, app.Worker, servePackage)
 	} else if limited {

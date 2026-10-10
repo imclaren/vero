@@ -45,6 +45,20 @@ public struct VeroWorkerBundle {
     /// Directory under Application Support to run it from, e.g. "calmdocs/bin".
     public let directoryName: String
 
+    /// The folder for VERO_PROFILE's copy of the app, when it is set, as Go's
+    /// kit/profile has it: "MyApp/bin" becomes "MyApp-demo/bin", so that a
+    /// test never runs or replaces the worker of the copy in use.
+    static func forProfile(_ directoryName: String) -> String {
+        let profile = ProcessInfo.processInfo.environment["VERO_PROFILE"] ?? ""
+        guard !profile.isEmpty,
+              profile.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-") }) else {
+            return directoryName
+        }
+        var parts = directoryName.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
+        parts[0] += "-" + profile
+        return parts.joined(separator: "/")
+    }
+
     /// Names left behind by an earlier scheme, removed on preparation.
     /// Superseded per-architecture copies, typically.
     public var supersededNames: [String]
@@ -64,7 +78,7 @@ public struct VeroWorkerBundle {
         useBundleInDebugBuilds: Bool = true
     ) {
         self.bundledName = bundledName
-        self.directoryName = directoryName
+        self.directoryName = VeroWorkerBundle.forProfile(directoryName)
         self.supersededNames = supersededNames
         self.useBundleInDebugBuilds = useBundleInDebugBuilds
     }

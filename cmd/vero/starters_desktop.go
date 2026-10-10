@@ -50,6 +50,9 @@ const plan9Ignore = `{{.WorkerName}}
 `
 
 const gtkToml = `# The GTK front end, which vero add wrote: Linux, the BSDs and illumos.
+# Each system is packaged for when its section is here, with what the app
+# needs from that system's own packages. A font is among them where GTK
+# brings none, since without one the window cannot open.
 [gtk]
 folder = "gtk"
 entry = "main.py"
@@ -66,10 +69,35 @@ requires = "python3 >= 3.10, python3-gobject, (typelib(Gtk) = 4.0 if openSUSE-re
 depends = "python, python-gobject, gtk4"
 
 [gtk.alpine]
-depends = "python3, py3-gobject3, gtk4.0"
+depends = "python3, py3-gobject3, gtk4.0, font-dejavu"
 
 [gtk.void]
-depends = "python3, python3-gobject, gtk4"
+depends = "python3, python3-gobject, gtk4, dejavu-fonts-ttf"
+
+[gtk.chimera]
+depends = "python, python-gobject, gtk4"
+
+# FreeBSD and DragonFly: each package the app needs, with the port it
+# comes from.
+[gtk.freebsd]
+deps = { python3 = "lang/python3", gtk4 = "x11-toolkits/gtk40", py312-pygobject = "devel/py-pygobject@py312", dejavu = "x11-fonts/dejavu" }
+
+[gtk.dragonfly]
+deps = { gtk4 = "x11-toolkits/gtk40", py311-pygobject = "devel/py-pygobject@py311", dejavu = "x11-fonts/dejavu" }
+python = "python3.11"
+
+# NetBSD and illumos use pkgsrc: what the app needs, as patterns.
+[gtk.netbsd]
+depends = ["gtk4-[0-9]*", "py312-gobject3-[0-9]*", "dejavu-ttf-[0-9]*"]
+python = "python3.12"
+
+[gtk.illumos]
+depends = ["gtk4-[0-9]*", "py312-gobject3-[0-9]*", "dejavu-ttf-[0-9]*"]
+python = "python3.12"
+
+# OpenBSD, which installs DejaVu with X: port:pattern:package.
+[gtk.openbsd]
+depends = ["x11/gtk+4:gtk+4-*:gtk+4-4.0", "devel/py-gobject3:py3-gobject3-*:py3-gobject3-3.0"]
 `
 
 const gtkReadme = `# {{.Display}} for Linux, the BSDs and illumos

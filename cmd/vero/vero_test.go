@@ -83,6 +83,14 @@ func TestAdd(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "testdata", "README.md")); err != nil {
 		t.Error("no testdata/")
 	}
+	if icon, err := os.ReadFile(filepath.Join(dir, "icon.png")); err != nil || len(icon) < 1000 {
+		t.Errorf("no icon.png: %v", err)
+	}
+	for _, want := range []string{"[gtk.freebsd]", "[gtk.netbsd]", "[gtk.openbsd]", "[gtk.dragonfly]", "[gtk.illumos]", "[gtk.chimera]", "font-dejavu"} {
+		if !strings.Contains(string(toml), want) {
+			t.Errorf("vero-app.toml lacks %s", want)
+		}
+	}
 	py, _ := os.ReadFile(filepath.Join(dir, "gtk", "main.py"))
 	if !strings.Contains(string(py), `("restartJob", [("id", "int"), ]),`) {
 		t.Error("the GTK starter does not offer restartJob with its id")

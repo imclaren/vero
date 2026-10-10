@@ -8,6 +8,7 @@ brings it in. [PACKAGING.md](../PACKAGING.md) is the guide that uses it.
 | Package | What it does | Where |
 |---|---|---|
 | `kit/keychain` | Keeps sign-ins and other secrets | The login keychain on macOS, the Credential Manager on Windows, the Secret Service on Linux and the BSDs, and a file only this user can read elsewhere |
+| `kit/profile` | Keeps a test or demo copy of the app apart from the copy in use: with `VERO_PROFILE=demo`, `profile.Dir("myapp")` is `myapp-demo` in the user's configuration folder, and `kit/keychain` keeps its items under `com.example.myapp.demo` | Every system; vero's tests set it through `vero-app.toml`'s `[test] env`, and vero's Swift package follows it for the folder it runs the worker from |
 | `kit/autostart` | Opens the app at sign-in | A LaunchAgent on macOS (from an app bundle, `SMAppService` from Swift is better), the Run key on Windows, an autostart `.desktop` file on Linux and the BSDs |
 | `kit/notify` | Shows a notification from the worker | The desktop's notification service on Linux and the BSDs, a toast on Windows; on macOS and iOS notifications come from the app, so keep what is new in the state and let the front end notify |
 | `kit/update` | Says whether a newer version is on your site | Reads the `latest.json` and the Sparkle appcast that `vero-repo build` writes |

@@ -17,6 +17,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+
+	"github.com/imclaren/vero/kit/profile"
 )
 
 // ErrNotFound is a secret that is not there.
@@ -37,12 +39,16 @@ type Item struct {
 	File bool
 }
 
+// service is the keychain service, for VERO_PROFILE's copy of the app
+// when it is set (kit/profile), so that a test never sees the app's own.
+func (it Item) service() string { return profile.Service(it.Service) }
+
 // Load reads the secret. Nothing kept is not an error: it returns nil.
 func (it Item) Load() ([]byte, error) {
 	if it.File || !available {
 		return readFile(it.Path)
 	}
-	data, err := get(it.Service, it.Account)
+	data, err := get(it.service(), it.Account)
 	if err == nil {
 		return data, nil
 	}
@@ -54,7 +60,7 @@ func (it Item) Load() ([]byte, error) {
 	if err != nil || data == nil {
 		return data, err
 	}
-	if err := set(it.Service, it.Account, data); err != nil {
+	if err := set(it.service(), it.Account, data); err != nil {
 		return data, nil // still readable; moved next time
 	}
 	os.Remove(it.Path)
@@ -66,7 +72,7 @@ func (it Item) Save(data []byte) error {
 	if it.File || !available {
 		return writeFile(it.Path, data)
 	}
-	if err := set(it.Service, it.Account, data); err != nil {
+	if err := set(it.service(), it.Account, data); err != nil {
 		return err
 	}
 	if it.Path != "" {
@@ -79,7 +85,7 @@ func (it Item) Save(data []byte) error {
 func (it Item) Remove() error {
 	var err error
 	if !it.File && available {
-		if err = del(it.Service, it.Account); errors.Is(err, ErrNotFound) {
+		if err = del(it.service(), it.Account); errors.Is(err, ErrNotFound) {
 			err = nil
 		}
 	}

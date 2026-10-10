@@ -35,6 +35,7 @@ var groups = map[string][]string{
 // Other names people use for a front end.
 var aliases = map[string]string{
 	"mac": "macos", "darwin": "macos", "linux": "gtk", "bsd": "gtk", "freebsd": "gtk", "windows": "wpf",
+	"openbsd": "gtk", "netbsd": "gtk", "dragonfly": "gtk", "illumos": "gtk",
 	"win": "wpf", "browser": "web", "wasm": "web", "plan-9": "plan9",
 }
 
