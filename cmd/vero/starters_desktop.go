@@ -481,7 +481,7 @@ import PackageDescription
 let package = Package(
     name: "{{pascal .Name}}",
     platforms: [.macOS(.v13)],
-    dependencies: [.package(url: "https://github.com/imclaren/vero", from: "0.15.0")],
+    dependencies: [.package(url: "https://github.com/imclaren/vero", from: "0.17.0")],
     targets: [
         .executableTarget(name: "{{pascal .Name}}", dependencies: [.product(name: "Vero", package: "vero")])
     ]
