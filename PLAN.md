@@ -87,15 +87,13 @@ opening the app from the menu shows its small window.
    app run it as a program of its own. calmtasks no longer needs its C
    archive, and its App Store build can bundle the worker as the others
    do.
-6. **`vero ship` refuses to record the Mac without `VERO_PROFILE`**, so
-   that a recording can never use the settings of the copy in use.
-7. **libadwaita 1.5 on every system and processor that the apps ship.**
+6. **libadwaita 1.5 on every system and processor that the apps ship.**
    audiobooks ships for many processors, such as i386, armhf, riscv64 and
    loong64. vero's container and virtual-machine tests check each. A
    system without libadwaita 1.5 is dropped, as Debian 12 is, and the
    download page says why. illumos and NetBSD are checked first, since
    they are the most likely to lack it.
-8. **Typed requests generated from the worker.** The worker's handlers are
+7. **Typed requests generated from the worker.** The worker's handlers are
    typed in Go (`vero.Handle[Req, Rep]`), but the front ends call them by
    name with untyped JSON, and each Mac app keeps its own `Requests.swift`
    by hand. `vero gen` reads the worker's handlers and writes the matching
@@ -103,7 +101,7 @@ opening the app from the menu shows its small window.
    records and Python dataclasses. `vero ship` and `vero upgrade` run it,
    so that a field renamed in Go fails to build in Swift and C# and fails
    a type check in Python, rather than failing when a test runs.
-9. **Library files protected from edits.** Every file that vero copies
+8. **Library files protected from edits.** Every file that vero copies
    into an app says that vero wrote it and that it is not to be edited,
    and vero records its hash. `vero upgrade` stops and names any such file
    that has been edited. An app that needs something different changes it
