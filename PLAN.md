@@ -106,6 +106,15 @@ opening the app from the menu shows its small window.
    and vero records its hash. `vero upgrade` stops and names any such file
    that has been edited. An app that needs something different changes it
    through the library's settings or subclasses.
+9. **Local builds numbered above the release.** A local build numbered
+   below the newest release is replaced by it, because Sparkle installs
+   any release with a higher number and vero keeps whichever worker has
+   the higher number. treehouse found this, and its
+   `macos/scripts/install.sh` numbers the app and the worker as
+   `<published>.<date and time>`, which is above the release that is out
+   and below the next. `vero install` does the same for every app, reading
+   the published version from the app's `latest.json`, and the Mac's
+   prebuild uses the same number for Xcode's own builds.
 
 vero's own tests check both starter shapes on every system that vero
 tests, and `vero ship counter.go` is run again as a new app would be.
