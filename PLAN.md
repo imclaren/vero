@@ -91,8 +91,27 @@ opening the app from the menu shows its small window.
    audiobooks ships for many processors, such as i386, armhf, riscv64 and
    loong64. vero's container and virtual-machine tests check each. A
    system without libadwaita 1.5 is dropped, as Debian 12 is, and the
-   download page says why. illumos and NetBSD are checked first, since
-   they are the most likely to lack it.
+   download page says why.
+
+   The package indexes, checked on 11 October 2026, give these versions:
+
+   | System | libadwaita |
+   |---|---|
+   | Debian 12 | 1.2.2, too old, so Debian 12 is dropped |
+   | Debian 13 | 1.7.6, on amd64, arm64, armel, armhf, i386, ppc64el, riscv64 and s390x. The other processors that audiobooks ships for are Debian's ports, which follow unstable (1.10). |
+   | Ubuntu 24.04 | 1.5.0 |
+   | Fedora | 1.9.4 |
+   | openSUSE Tumbleweed | 1.9.4. Leap 15.6 has 1.4.2 and is not supported. |
+   | Alpine | 1.9.2 |
+   | Void | 1.9.1 |
+   | Chimera | 1.10.0 |
+   | FreeBSD | 1.8.5 |
+   | DragonFly | 1.7.2 |
+   | NetBSD 10 and 11 | 1.9.1 on x86_64 and i386, 1.8.0 on aarch64 |
+   | OpenBSD | 1.9.4 |
+   | illumos | None in SmartOS's pkgsrc, from which vero installs GTK on OpenIndiana. OpenIndiana's own repository has 1.6.10. |
+
+   vero's tests use Debian 12 by default today, and move to Debian 13.
 7. **Typed requests generated from the worker.** The worker's handlers are
    typed in Go (`vero.Handle[Req, Rep]`), but the front ends call them by
    name with untyped JSON, and each Mac app keeps its own `Requests.swift`
