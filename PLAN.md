@@ -313,7 +313,7 @@ want of ffmpeg, and its README says why.
    the published version from the app's `latest.json`, and the Mac's
    prebuild uses the same number for Xcode's own builds.
 
-10. **Workers checked on every target.** `vero ship` and `vero-repo plan`
+10. **Workers checked on every target.** Done on 12 October 2026 (5000cff). `ncruces/go-sqlite3` has since also run on emulated ARMv5 and ARMv6 processors. `vero ship` and `vero-repo plan`
     build the worker for every system and processor first, and name each
     one that fails and why. vero's documentation names `ncruces/go-sqlite3`
     as the SQLite for workers.
