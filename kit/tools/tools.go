@@ -3,9 +3,12 @@
 // macOS, beside the worker on Windows, under the app's lib folder on
 // Linux, the BSDs and illumos, or anywhere the app names.
 //
-// Ship each as the plain program for each system and architecture, in the
-// place vero-app.toml's [tools] section packages it to, and ask for it by
-// name here; the path back is what os/exec takes.
+// Ship each as the plain program for each system and architecture, beside
+// the worker or in a tools folder beside it, and ask for it by name here.
+// The path back is what os/exec takes. vero-app.toml has no section for
+// tools: the Windows project copies them into its output, the Flatpak
+// takes them through [gtk.flatpak] resources, the Mac app keeps them in its
+// bundle, and other packages depend on the system's own.
 package tools
 
 import (
