@@ -157,7 +157,9 @@ if first:
     # /usr/local already holds pkg itself, so move it in rather than over it.
     send("sh -c 'cd /usr/local && tar cf - . | (cd /mnt && tar xf -)'", 120)
     send("sh -c 'umount /mnt'", 15)
-send("sh -c 'mount /dev/vbd1s0 /usr/local'", 20)
+# A run whose VM was stopped hard leaves this disk unclean, which DragonFly
+# will not mount until it is checked.
+send("sh -c 'fsck -y /dev/vbd1s0 >/dev/null 2>&1; mount /dev/vbd1s0 /usr/local'", 120)
 send("sh -c 'dhclient vtnet0 >/dev/null 2>&1'", 30)
 
 send("sh -c 'mkdir -p /root/.ssh'", 6)
