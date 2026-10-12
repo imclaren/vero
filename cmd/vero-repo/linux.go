@@ -79,13 +79,14 @@ type treeFile struct {
 }
 
 // buildWorker cross-compiles the app's worker for goos on goarch, as
-// build-all.sh does, with main.version set, into dir.
-func buildWorker(a *App, root, worker, goos, goarch, ldflags, dir string) (string, error) {
+// build-all.sh does, with main.version set, into dir. env adds to the
+// environment, such as GOTOOLCHAIN for another Go.
+func buildWorker(a *App, root, worker, goos, goarch, ldflags, dir string, env ...string) (string, error) {
 	out := filepath.Join(dir, a.Worker.Name+"-"+goos+"-"+goarch)
 	flags := strings.TrimSpace("-s -w -X main.version=" + a.Version + " " + ldflags)
 	cmd := exec.Command("go", "build", "-trimpath", "-ldflags", flags, "-o", out, worker)
 	cmd.Dir, cmd.Stdout, cmd.Stderr = root, os.Stdout, os.Stderr
-	cmd.Env = append(append(os.Environ(), "GOOS="+goos, "GOARCH="+goBuildArch(goarch), "CGO_ENABLED=0"), goarchEnv(goarch)...)
+	cmd.Env = append(append(append(os.Environ(), "GOOS="+goos, "GOARCH="+goBuildArch(goarch), "CGO_ENABLED=0"), goarchEnv(goarch)...), env...)
 	if goos == "darwin" && a.Worker.CGO {
 		arch := map[string]string{"amd64": "x86_64"}[goarch]
 		if arch == "" {

@@ -127,6 +127,12 @@ public struct VeroWorkerBundle {
     // MARK: - Locations
 
     private func bundledURL() throws -> URL {
+        // On a macOS older than the current Go builds for, the second worker
+        // that vero ship builds with an older Go, where the app has one.
+        if ProcessInfo.processInfo.operatingSystemVersion.majorVersion < 13,
+           let url = Bundle.main.url(forResource: bundledName + "-macos12", withExtension: nil) {
+            return url
+        }
         if let url = Bundle.main.url(forResource: bundledName, withExtension: nil) {
             return url
         }

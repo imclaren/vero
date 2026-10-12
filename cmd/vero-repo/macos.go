@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -207,6 +208,16 @@ func packageMac(a *App, root, worker, out, ldflags, tmp string) error {
 	if err := runIn("", "lipo", append([]string{"-create", "-output", universal}, workers...)...); err != nil {
 		return err
 	}
+	// For a macOS older than the current Go builds for, a second worker,
+	// built with the last Go that builds for it, which vero's Swift package
+	// runs only there.
+	old := ""
+	if macOlderThanGo(m) {
+		var err error
+		if old, err = buildOldMacWorker(a, root, worker, ldflags, filepath.Join(tmp, "old")); err != nil {
+			return err
+		}
+	}
 
 	if m.Prebuild != "" {
 		cmd := exec.Command("sh", "-c", m.Prebuild)
@@ -239,6 +250,15 @@ func packageMac(a *App, root, worker, out, ldflags, tmp string) error {
 	}
 	if err := os.Chmod(filepath.Join(resources, a.Worker.Name), 0o755); err != nil {
 		return err
+	}
+	if old != "" {
+		dest := filepath.Join(resources, a.Worker.Name+oldMacSuffix)
+		if err := copyFile(old, dest); err != nil {
+			return err
+		}
+		if err := os.Chmod(dest, 0o755); err != nil {
+			return err
+		}
 	}
 	for _, r := range m.Resources {
 		src := a.Path(filepath.Join(m.Folder, r))
@@ -397,8 +417,26 @@ func signApp(app, identity, entitlements string) error {
 	if err != nil {
 		return err
 	}
+	// In a sandboxed app, each program inside it, such as the worker, is
+	// signed to run in the app's sandbox, as its helper: without, macOS
+	// refuses to start it from the app.
+	helper := ""
+	if sandboxed(entitlements) {
+		f, err := os.CreateTemp("", "vero-inherit-*.entitlements")
+		if err != nil {
+			return err
+		}
+		defer os.Remove(f.Name())
+		f.WriteString(inheritEntitlements)
+		f.Close()
+		helper = f.Name()
+	}
 	for _, path := range nested {
-		if err := quietSign(append(append([]string{}, args...), path)); err != nil {
+		sign := append([]string{}, args...)
+		if st, err := os.Stat(path); err == nil && !st.IsDir() && helper != "" {
+			sign = append(sign, "--entitlements", helper)
+		}
+		if err := quietSign(append(sign, path)); err != nil {
 			return err
 		}
 	}
@@ -1162,4 +1200,87 @@ func installMacApp(a *App, app string) error {
 		return nil
 	}
 	return runIn("", "open", dest)
+}
+
+// inheritEntitlements are a sandboxed app's helper's: the sandbox, and the
+// app's own, inherited.
+const inheritEntitlements = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<key>com.apple.security.inherit</key>
+	<true/>
+</dict>
+</plist>
+`
+
+// sandboxed says whether an entitlements file puts the app in the sandbox.
+func sandboxed(entitlements string) bool {
+	if entitlements == "" {
+		return false
+	}
+	data, err := os.ReadFile(entitlements)
+	if err != nil {
+		return false
+	}
+	return regexp.MustCompile(`<key>com\.apple\.security\.app-sandbox</key>\s*<true/>`).Match(data)
+}
+
+// oldMacSuffix names the second worker, for macOS 12, beside the first:
+// vero's Swift package looks for it there.
+const oldMacSuffix = "-macos12"
+
+// macOlderThanGo says whether the app supports a macOS older than 13,
+// which the current Go builds for.
+func macOlderThanGo(m *MacOS) bool {
+	major, _ := strconv.Atoi(strings.SplitN(macMinimum(m), ".", 2)[0])
+	return major > 0 && major < 13
+}
+
+// oldMacGo is the newest Go 1.26, the last Go that builds for macOS 12.
+func oldMacGo() (string, error) {
+	cmd := exec.Command("go", "list", "-m", "-versions", "golang.org/toolchain")
+	cmd.Dir = os.TempDir()
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("finding Go 1.26, for macOS 12: %w", err)
+	}
+	best := -1
+	for _, m := range regexp.MustCompile(`go1\.26\.(\d+)\.`).FindAllStringSubmatch(string(out), -1) {
+		if n, _ := strconv.Atoi(m[1]); n > best {
+			best = n
+		}
+	}
+	if best < 0 {
+		return "", errors.New("finding Go 1.26, for macOS 12: Go's list of toolchains has none")
+	}
+	return fmt.Sprintf("go1.26.%d", best), nil
+}
+
+// buildOldMacWorker builds the worker for both of the Mac's processors
+// with the newest Go 1.26, for macOS 12, into one file in dir.
+func buildOldMacWorker(a *App, root, worker, ldflags, dir string) (string, error) {
+	toolchain, err := oldMacGo()
+	if err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	var workers []string
+	for _, arch := range macArches {
+		w, err := buildWorker(a, root, worker, "darwin", arch.goarch, ldflags, dir, "GOTOOLCHAIN="+toolchain)
+		if err != nil {
+			return "", fmt.Errorf("building the worker for macOS 12 with %s, whose go.mod must allow Go 1.26: %w", toolchain, err)
+		}
+		workers = append(workers, w)
+	}
+	universal := filepath.Join(dir, a.Worker.Name+"-darwin")
+	if err := runIn("", "lipo", append([]string{"-create", "-output", universal}, workers...)...); err != nil {
+		return "", err
+	}
+	fmt.Printf("built the worker for macOS 12 with %s\n", toolchain)
+	return universal, nil
 }

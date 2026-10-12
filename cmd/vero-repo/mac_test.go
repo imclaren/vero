@@ -235,3 +235,51 @@ func TestNotarisedTogether(t *testing.T) {
 		t.Errorf("a failure: %v", err)
 	}
 }
+
+// TestSignSandboxed: in a sandboxed app, the worker is signed to run as
+// the app's helper, in its sandbox; in an app that is not, it is signed
+// with no entitlements of its own.
+func TestSignSandboxed(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("codesign is the Mac's")
+	}
+	for _, sandbox := range []bool{true, false} {
+		dir := t.TempDir()
+		app := filepath.Join(dir, "Example.app")
+		for _, d := range []string{"MacOS", "Resources"} {
+			os.MkdirAll(filepath.Join(app, "Contents", d), 0o755)
+		}
+		for _, p := range []string{"Contents/MacOS/Example", "Contents/Resources/example-worker"} {
+			exec.Command("cp", "/usr/bin/true", filepath.Join(app, p)).Run()
+		}
+		a := &App{Name: "example", DisplayName: "Example", ID: "com.example.app", Version: "1.0.0", MacOS: &MacOS{Product: "Example"}}
+		os.WriteFile(filepath.Join(app, "Contents", "Info.plist"), infoPlist(a), 0o644)
+		entitlements := filepath.Join(dir, "app.entitlements")
+		key := "com.apple.security.network.client"
+		if sandbox {
+			key = "com.apple.security.app-sandbox"
+		}
+		os.WriteFile(entitlements, []byte(`<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict><key>`+key+`</key><true/></dict></plist>
+`), 0o644)
+		if err := signApp(app, "", entitlements); err != nil {
+			t.Fatal(err)
+		}
+		out, _ := exec.Command("codesign", "-d", "--entitlements", "-", "--xml", filepath.Join(app, "Contents", "Resources", "example-worker")).CombinedOutput()
+		inherits := strings.Contains(string(out), "com.apple.security.inherit")
+		if inherits != sandbox {
+			t.Errorf("sandboxed %v: the worker inherits the sandbox %v:\n%s", sandbox, inherits, out)
+		}
+	}
+}
+
+// TestMacOlderThanGo: an app for macOS 12 gets a second worker; one for
+// 13 or later, or with no minimum, does not.
+func TestMacOlderThanGo(t *testing.T) {
+	for minimum, want := range map[string]bool{"12.0": true, "12": true, "13.0": false, "15.2": false, "": false} {
+		if got := macOlderThanGo(&MacOS{Minimum: minimum}); got != want {
+			t.Errorf("minimum %q: %v, want %v", minimum, got, want)
+		}
+	}
+}
