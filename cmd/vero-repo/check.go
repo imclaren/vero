@@ -175,6 +175,8 @@ func checkSite(site, url string, a *App, sparkle ed25519.PublicKey, previous *La
 			c.checkPkgsrc(sys)
 		case "openbsd":
 			c.checkOpenBSD(sys)
+		case "ips":
+			c.checkIPS(sys)
 		}
 	}
 	if exists("flatpak") {

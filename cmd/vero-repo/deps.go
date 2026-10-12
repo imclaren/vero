@@ -111,10 +111,11 @@ var dragonflyDeps = bsdDeps{
 // listDeps are pkgsrc's and OpenBSD's, as patterns; only, when set, names
 // the processors on which a use's packages exist.
 type listDeps struct {
-	base   []string
-	need   map[string][]string
-	only   map[string][]string
-	python string
+	base      []string
+	need      map[string][]string
+	recommend map[string][]string
+	only      map[string][]string
+	python    string
 }
 
 var netbsdDeps = listDeps{
@@ -123,11 +124,14 @@ var netbsdDeps = listDeps{
 	python: "python3.12",
 }
 
-// SmartOS's pkgsrc, from which illumos gets GTK, has no libadwaita.
+// OpenIndiana's own packages, for IPS, whose PyGObject is for Python 3.9.
+// recommend are group dependencies, which pkg installs and lets the person
+// remove. OpenIndiana has no ffmpeg of its own.
 var illumosDeps = listDeps{
-	base:   []string{"gtk4-[0-9]*", "py312-gobject3-[0-9]*", "dejavu-ttf-[0-9]*"},
-	need:   map[string][]string{"ffmpeg": {"ffmpeg8-[0-9]*"}},
-	python: "python3.12",
+	base:      []string{"runtime/python-39", "library/python/pygobject-39", "library/desktop/gtk4", "system/font/truetype/dejavu"},
+	need:      map[string][]string{"adwaita": {"library/desktop/libadwaita"}},
+	recommend: map[string][]string{"webview": {"library/desktop/webkitgtk2-60"}, "keyring": {"gnome/gnome-keyring", "library/libsecret"}},
+	python:    "/usr/bin/python3.9",
 }
 
 // OpenBSD's are port:pattern:package. Its packages for arm and powerpc64
@@ -213,6 +217,11 @@ func (g *GTK) resolveDeps() error {
 			continue
 		}
 		s.pkg.Depends = mergeList(listMerge(s.deps, wanted), s.pkg.Depends)
+		var rec []string
+		for _, w := range wanted {
+			rec = append(rec, s.deps.recommend[w]...)
+		}
+		s.pkg.Recommends = mergeList(rec, s.pkg.Recommends)
 		if s.pkg.Python == "" {
 			s.pkg.Python = s.deps.python
 		}

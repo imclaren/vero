@@ -1,0 +1,1 @@
+{"vero":{"application/demo":[{"signature-sha-1":"4a5a44ca5286e7be81387bb2efc0c767a99d9c66","version":"1.0.0,5.11-0:20261012T090553Z"}]},"_SIGNATURE":{"sha-1":"f27d4ff87473c75df54521e2cb388794a315677b"}}

@@ -323,6 +323,17 @@ func unixInstructions(p page, sys unixSystem, yes string) unixSection {
 		} else {
 			s.Note = "These need pkgsrc, in " + prefix + ". SmartOS has it; for OmniOS and OpenIndiana, pkgsrc.smartos.org says how to add it."
 		}
+	case "ips":
+		// OpenIndiana's own pkg, with the app's repository as a publisher
+		// of its own, added once.
+		pub := p.App.ID
+		s.Commands = []string{
+			fmt.Sprintf("pkg publisher %s >/dev/null 2>&1 || pkg set-publisher -g %s/%s/ %s", pub, u, sys.name, pub),
+			// 4: installed already, which a second run finds.
+			"pkg install application/" + n + " || [ $? -eq 4 ]",
+		}
+		s.Update = "pkg update application/" + n
+		s.Note = "These use OpenIndiana's own pkg, as root or with pfexec. They install GTK 4, libadwaita and PyGObject from OpenIndiana's repository."
 	case "openbsd":
 		path := fmt.Sprintf("PKG_PATH=%s/%s/%%a/:installpath", u, sys.name)
 		y := ""

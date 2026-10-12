@@ -152,15 +152,14 @@ elif [ -n "$VMSYS" ]; then
             # which has been known to remove packages the example needs.
             XSETUP="pkg install -y tigervnc-server ImageMagick7 > /dev/null"
             UPDATE="pkg upgrade -y $APP_NAME > /dev/null" ;;
-        illumos) SSH_PORT=2226 PREFIX=/opt/local PY=/opt/local/bin/python3.12
-            # pkgsrc, as pkgsrc.smartos.org says to add it to OpenIndiana.
-            SETUP="[ -x /opt/local/bin/pkgin ] || { cd /tmp && curl -fsSLO https://pkgsrc.smartos.org/packages/SmartOS/bootstrap/bootstrap-trunk-x86_64-20260811.tar.gz &&
-                [ \$(/bin/digest -a sha1 bootstrap-trunk-x86_64-20260811.tar.gz) = e5e620ade4b45695aa385aea25227e94f49f078f ] &&
-                gtar -zxpf bootstrap-trunk-x86_64-20260811.tar.gz -C / && /opt/local/bin/pkgin -y update > /dev/null; }"
-            INSTALL="PATH=/opt/local/bin:/opt/local/sbin:\$PATH; curl -fsSL $URL/install.sh | sh"
+        illumos) SSH_PORT=2226 PREFIX=/usr PY=/usr/bin/python3.9
+            # OpenIndiana's own packages, from which the app's IPS package
+            # takes GTK 4, libadwaita and PyGObject.
+            INSTALL="curl -fsSL $URL/install.sh | sh"
             # OpenIndiana's own Xvnc and ImageMagick, as run-illumos.sh has.
             XSETUP="pkg install -q x11/server/xvnc image/imagemagick; true"
-            UPDATE="/opt/local/bin/pkgin -y -f upgrade > /dev/null" ;;
+            # 4 is pkg's "nothing to do".
+            UPDATE="pkg update -q application/$APP_NAME; s=\$?; [ \$s -eq 0 ] || [ \$s -eq 4 ]" ;;
         *) echo "unknown VM: $VMSYS (freebsd, dragonfly, netbsd, openbsd or illumos)" >&2; exit 2 ;;
     esac
     : "${SETUP:=true}"

@@ -49,7 +49,6 @@ func TestUpgradeToml(t *testing.T) {
 		"void depends":    {splitList(before.Void.Depends), splitList(after.Void.Depends)},
 		"netbsd depends":  {before.NetBSD.Depends, after.NetBSD.Depends},
 		"openbsd depends": {before.OpenBSD.Depends, after.OpenBSD.Depends},
-		"illumos depends": {before.Illumos.Depends, after.Illumos.Depends},
 	} {
 		for _, d := range pair[0] {
 			if !covered(d, pair[1]) {
@@ -64,6 +63,10 @@ func TestUpgradeToml(t *testing.T) {
 	}
 	if after.FreeBSD.ByArch["armv7"].Python != "python3.11" || after.DragonFly.Python != "python3.11" || after.NetBSD.Python != "python3.12" {
 		t.Error("a system's Python changed")
+	}
+	// illumos: OpenIndiana's own packages, in place of pkgsrc's.
+	if !strings.Contains(strings.Join(after.Illumos.Depends, " "), "library/desktop/gtk4") || strings.Contains(strings.Join(after.Illumos.Depends, " "), "[0-9]*") || after.Illumos.Python != "/usr/bin/python3.9" {
+		t.Errorf("illumos: %+v", after.Illumos)
 	}
 	// What vero does not work out stays: the processors, the section, the
 	// Flatpak's own ffmpeg.

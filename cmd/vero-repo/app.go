@@ -185,7 +185,10 @@ func (b *BSDPkg) pythonFor(arch string) string {
 // patterns pkg_add matches, such as "gtk4-[0-9]*".
 type Pkgsrc struct {
 	Depends []string `toml:"depends"`
-	Python  string   `toml:"python"`
+	// Recommends are packages installed with the app that can be
+	// removed, as IPS's group dependencies are: illumos only.
+	Recommends []string `toml:"recommends"`
+	Python     string   `toml:"python"`
 	// Arches are the architectures packaged: x86-64 and ARM64, where the
 	// system has them, when it's empty. Naming some narrows them, such as
 	// ["x86_64"] where the system's own packages lack something on ARM, or

@@ -65,7 +65,9 @@ var unixSystems = []unixSystem{
 		{"amd64", "x86:64", "dragonfly:*:x86:64", "dragonfly:*:x86:64", false}}},
 	{name: "netbsd", label: "NetBSD", goos: "netbsd", prefix: "/usr/pkg", format: "pkgsrc", opsys: "NetBSD", osVersion: "10.0",
 		arches: []unixArch{{"amd64", "x86_64", "", "", false}, {"arm64", "aarch64", "", "", false}, {"386", "i386", "", "", true}}},
-	{name: "illumos", label: "illumos", goos: "illumos", prefix: "/opt/local", format: "pkgsrc", opsys: "SunOS", osVersion: "5.11",
+	// illumos: IPS packages, for OpenIndiana's own pkg and its repository
+	// (ips.go).
+	{name: "illumos", label: "illumos", goos: "illumos", prefix: "/usr", format: "ips", opsys: "SunOS", osVersion: "5.11",
 		arches: []unixArch{{"amd64", "x86_64", "", "", false}}},
 	{name: "openbsd", label: "OpenBSD", goos: "openbsd", prefix: "/usr/local", format: "openbsd",
 		arches: []unixArch{{"amd64", "amd64", "", "", false}, {"arm64", "aarch64", "", "", false},
@@ -110,13 +112,13 @@ func bsdVersion(v string) string { return strings.ReplaceAll(v, "-", ".") }
 
 // unixPackageName is the file vero-repo package makes for sys on arch.
 func unixPackageName(a *App, sys *unixSystem, arch unixArch) string {
-	ext := map[string]string{"pkg": ".pkg", "pkgsrc": ".tgz", "openbsd": ".tgz"}[sys.format]
+	ext := map[string]string{"pkg": ".pkg", "pkgsrc": ".tgz", "openbsd": ".tgz", "ips": ".ips"}[sys.format]
 	return fmt.Sprintf("%s-%s-%s-%s%s", a.Name, bsdVersion(a.Version), sys.name, fileArch(arch), ext)
 }
 
 // unixPackage is NAME-VERSION-SYSTEM-ARCH.EXT, as packageUnix names them.
 func unixPackage(name string) *regexp.Regexp {
-	return regexp.MustCompile(`^` + regexp.QuoteMeta(name) + `-(.+)-(freebsd|dragonfly|netbsd|illumos|openbsd)-([a-z0-9_]+)\.(pkg|tgz)$`)
+	return regexp.MustCompile(`^` + regexp.QuoteMeta(name) + `-(.+)-(freebsd|dragonfly|netbsd|illumos|openbsd)-([a-z0-9_]+)\.(pkg|tgz|ips)$`)
 }
 
 // packageUnix builds the app's package for sys, for each architecture:
@@ -134,7 +136,7 @@ func packageUnix(a *App, sys *unixSystem, workers map[string]string, out string)
 		if err != nil {
 			return err
 		}
-		if sys.name == "illumos" {
+		if sys.format == "pkgsrc" && sys.name == "illumos" {
 			files = iconOutsideTheme(a, sys.prefix, files)
 		}
 		name := filepath.Join(out, unixPackageName(a, sys, arch))
@@ -145,6 +147,8 @@ func packageUnix(a *App, sys *unixSystem, workers map[string]string, out string)
 			err = writePkgsrc(name, a, sys, arch, files)
 		case "openbsd":
 			err = writeOpenBSD(name, a, sys, arch, files)
+		case "ips":
+			err = writeIPS(name, a, sys, arch, files)
 		}
 		if err != nil {
 			return err

@@ -173,7 +173,8 @@ func buildCommand(args []string) error {
 	in.void, _ = filepath.Glob(filepath.Join(*packages, "*.xbps"))
 	unix, _ := filepath.Glob(filepath.Join(*packages, "*.pkg"))
 	tgz, _ := filepath.Glob(filepath.Join(*packages, "*.tgz"))
-	in.unix = append(unix, tgz...)
+	ips, _ := filepath.Glob(filepath.Join(*packages, "*.ips"))
+	in.unix = append(append(unix, tgz...), ips...)
 	in.noPage = *noPage
 	in.recordings = *recordings
 	// What the site offered before, which this release mustn't go back from.
@@ -321,6 +322,8 @@ func build(out string, in packageFiles, keep int, url string, a *App, s *signer,
 			newest, err = buildPkgsrcRepo(out, sys, mine, keep, a, s)
 		case "openbsd":
 			newest, err = buildOpenBSDRepo(out, sys, mine, keep, a, s)
+		case "ips":
+			newest, err = buildIPSRepo(out, sys, mine, keep, a)
 		}
 		if err != nil {
 			return latest, fmt.Errorf("the %s repository: %w", sys.label, err)

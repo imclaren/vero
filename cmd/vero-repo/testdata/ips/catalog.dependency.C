@@ -1,0 +1,1 @@
+{"vero":{"application/demo":[{"actions":["depend fmri=library/desktop/gtk4 type=require"],"version":"1.0.0,5.11-0:20261012T090553Z"}]},"_SIGNATURE":{"sha-1":"ab9443e5994cfd9dc6d7f5370193afffe7f5dce5"}}

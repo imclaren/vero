@@ -125,7 +125,9 @@ func upgradeToml(text string) (string, []string) {
 		case arrays[key] != nil && strings.HasPrefix(value, "["):
 			var keep []string
 			for _, o := range regexp.MustCompile(`"([^"]*)"`).FindAllStringSubmatch(value, -1) {
-				if covered(o[1], arrays[key]) {
+				// illumos now installs from OpenIndiana's own packages, so
+				// pkgsrc's patterns there go.
+				if covered(o[1], arrays[key]) || (key == "gtk.illumos/depends" && strings.Contains(o[1], "-[0-9]*")) {
 					removed = append(removed, o[1])
 				} else {
 					keep = append(keep, `"`+o[1]+`"`)
@@ -150,6 +152,9 @@ func upgradeToml(text string) (string, []string) {
 			}
 		case pythons[key] != "" && value == `"`+pythons[key]+`"`:
 			removed, kept = []string{pythons[key]}, ""
+		case key == "gtk.illumos/python" && !strings.HasPrefix(strings.Trim(value, `"`), "/"):
+			// pkgsrc's Python, by its name in /opt/local/bin.
+			removed, kept = []string{strings.Trim(value, `"`)}, ""
 		default:
 			out = append(out, l)
 			continue

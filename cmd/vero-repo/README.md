@@ -25,7 +25,8 @@ run them.
 | Chimera Linux | an apk repository, if you ask for one | Go |
 | Any Linux, with Flatpak | a Flatpak repository, if you ask for one | Docker and colima |
 | FreeBSD, DragonFly | a pkg repository | Go |
-| NetBSD, illumos | a pkgsrc repository, for pkgin | Go |
+| NetBSD | a pkgsrc repository, for pkgin | Go |
+| illumos (OpenIndiana) | an IPS repository, for pkg, with GTK 4, libadwaita and PyGObject from OpenIndiana's own | Go |
 | OpenBSD | signed packages for pkg_add | Go |
 | macOS | a disk image, a Sparkle appcast for updates, and a Homebrew cask | Xcode; a Developer ID and an Apple account to notarise |
 | Windows | an installer, and a winget manifest; one for 32-bit Windows, and an MSIX for the Microsoft Store, if you ask | makensis and dotnet |
@@ -242,7 +243,7 @@ dist/site/
   freebsd/       the FreeBSD repository for each processor, signed; its .conf; key.pem
   dragonfly/     the same, for DragonFly
   netbsd/        the NetBSD pkgsrc repository for each processor
-  illumos/       the illumos pkgsrc repository, signed, and key.gpg, which the page adds to pkgsrc's keyring
+  illumos/       the illumos IPS repository, as plain files at the paths pkg asks a depot for, and the packages
   openbsd/       the OpenBSD packages for each processor, signed, and the key that checks them
   flatpak/       if you made one: the Flatpak repository, signed; the .flatpakref that installs
                  from it in one click; and the newest Flatpaks as single files
@@ -365,18 +366,16 @@ later, so not a Power Mac G5.
 Void has i686 packages only for glibc, so there is no i686-musl one. The
 MIPS packages are little-endian, as Debian 12's are.
 
-The illumos packages are signed, because pkgsrc there, as SmartOS sets it
-up, installs only signed packages: the page's commands add your key to its
-keyring first. The NetBSD packages aren't signed, since NetBSD's pkgsrc
+The illumos packages are IPS packages for OpenIndiana's own `pkg`, and
+depend on OpenIndiana's GTK 4, libadwaita, PyGObject (for its Python 3.9)
+and web view. An IPS repository is usually served by `pkg.depotd`; vero
+writes it as plain files at the paths `pkg` asks a depot for, so any web
+host serves it, and signs its catalog as `pkgsend` does
+([ips.go](ips.go)). The page's commands add it as a publisher of its own,
+and `pkg update` brings each new version. The NetBSD packages aren't signed, since NetBSD's pkgsrc
 doesn't check unless it's set up to, so your site's HTTPS vouches for
 them. Everything else that installs from your site checks your signature.
 
-On illumos the icon isn't put in the icon theme. GTK 4 from SmartOS's
-pkgsrc crashes there reading a PNG, and a GTK 4 app loads its window's
-icon from the theme, so the app would not start. The package keeps the
-icon in `share/<name>/` instead, and the menu entry names it by its whole
-path: the menu, MATE's on OpenIndiana, is GTK 3, which reads it safely.
-The app's window has no icon of its own there.
 
 `scripts/package.sh` runs `vero-repo package`, which builds the Windows
 installers with [`package-windows.sh`](../../scripts/package-windows.sh).

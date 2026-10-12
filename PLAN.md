@@ -278,6 +278,13 @@ want of ffmpeg, and its README says why.
    vero's tests use Debian 13 by default, with Debian 12 kept as the test
    of the plain GTK 4 path (3eea4b4).
 
+   Done on 12 October 2026: vero-repo makes IPS packages and a static IPS
+   repository, and `scripts/test-repo.sh --vm illumos` installs from it,
+   runs the app's steps and updates it, in vero's OpenIndiana VM.
+   OpenIndiana has the GTK 4 web view (webkitgtk2-60, 2.54.1), and its
+   PyGObject is for Python 3.9 alone, which is the libraries' floor. It
+   has no ffmpeg of its own that vero found, which audiobooks needs.
+
    illumos moves from SmartOS's pkgsrc to OpenIndiana's own repository.
    SmartOS is a server system, and its pkgsrc lacks libadwaita and a GTK 4
    web view, and its GTK 4 has crashed loading an app's icon. vero-repo
