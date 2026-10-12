@@ -63,7 +63,10 @@ echo "$all" | while read -r name args; do
     [ -n "$ONLY" ] && case " $ONLY " in *" $name "*) ;; *) continue ;; esac
     case $args in --vm*) [ -n "$NOVMS" ] && continue ;; esac
     [ "$name" = mac ] && [ -n "$APP" ] && { echo "mac: an app of your own records the Mac with scripts/record-mac.sh" >&2; continue; }
+    # A port nothing listens on, so that two runs at once, or another
+    # server, never answer for this one.
     port=$((port + 1))
+    while lsof -nP -iTCP:$port -sTCP:LISTEN >/dev/null 2>&1; do port=$((port + 1)); done
     echo "$name $port $args"
 done >"$JOBS"
 [ -s "$JOBS" ] || { echo "no systems to test" >&2; exit 2; }
