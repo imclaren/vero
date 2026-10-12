@@ -61,6 +61,18 @@ public static class VeroWeb
         return script => view.CoreWebView2.ExecuteScriptAsync(script);
     }
 
+    /// <summary>What a page may load: its own styles, and pictures that come
+    /// with it.</summary>
+    public const string HtmlPolicy = "default-src 'none'; style-src 'unsafe-inline'; img-src data: cid:";
+
+    /// <summary>The page with its policy, which allows pictures from the web
+    /// too when remote is set.</summary>
+    public static string WithPolicy(string html, string policy, bool remote)
+    {
+        if (remote) policy = policy.Contains("img-src") ? policy.Replace("img-src", "img-src https: http:") : policy + "; img-src https: http: data:";
+        return $"<meta http-equiv=\"Content-Security-Policy\" content=\"{WebUtility.HtmlEncode(policy)}\">{html}";
+    }
+
     /// <summary>HTML's text, for where there is no web view.</summary>
     public static string PlainText(string html)
     {
@@ -72,15 +84,22 @@ public static class VeroWeb
 }
 
 /// <summary>Shows HTML, such as a message, with scripts off and nothing
-/// loaded from the network unless Remote is set. Links open in the browser.
-/// Where there is no web view it shows the text of the HTML instead, never
-/// the page in the browser, since what it shows may be private.</summary>
+/// loaded from the network unless Remote is set, which can change before
+/// each load. Policy is the Content Security Policy, VeroWeb.HtmlPolicy
+/// unless the app sets its own. Links to the web and mailto: open in the
+/// browser. A link in one of the app's own schemes, such as
+/// myapp-attachment:, goes to LinkClicked, which returns true when it has
+/// dealt with it. Where there is no web view it shows the text of the HTML
+/// instead, never the page in the browser, since what it shows may be
+/// private.</summary>
 public class VeroHtmlView : ContentControl
 {
     readonly WebView2? web;
     readonly TextBox? text;
     readonly string dataFolder;
     public bool Remote { get; set; }
+    public string Policy { get; set; } = VeroWeb.HtmlPolicy;
+    public Func<string, bool>? LinkClicked { get; set; }
 
     public VeroHtmlView(string app)
     {
@@ -118,12 +137,88 @@ public class VeroHtmlView : ContentControl
             {
                 if (e.Uri.StartsWith("data:") || e.Uri.StartsWith("about:")) return;
                 e.Cancel = true;
-                VeroOpen.Uri(e.Uri);
+                Clicked(e.Uri);
             };
-            core.NewWindowRequested += (_, e) => { e.Handled = true; VeroOpen.Uri(e.Uri); };
+            core.NewWindowRequested += (_, e) => { e.Handled = true; Clicked(e.Uri); };
         }
-        string policy = "default-src 'none'; style-src 'unsafe-inline'; img-src data: cid:" + (Remote ? " https: http:" : "");
-        web.CoreWebView2!.NavigateToString($"<meta http-equiv=\"Content-Security-Policy\" content=\"{policy}\">{html}");
+        web.CoreWebView2!.NavigateToString(VeroWeb.WithPolicy(html, Policy, Remote));
+    }
+
+    void Clicked(string uri)
+    {
+        if (LinkClicked?.Invoke(uri) == true) return;
+        if (uri.StartsWith("http:") || uri.StartsWith("https:") || uri.StartsWith("mailto:")) VeroOpen.Uri(uri);
+    }
+
+    /// <summary>For tests: a link clicked in the page.</summary>
+    public void Click(string uri) => Clicked(uri);
+}
+
+/// <summary>Turns HTML into PDF files without showing it, one after another
+/// through one web view in a window that is never seen, so that thousands
+/// can be written in turn:
+///
+///     var pdf = new VeroPdfWriter("myapp");
+///     string error = await pdf.Write(html, @"C:\path\message.pdf");
+///
+/// Write returns "" once the file is written, or what went wrong. Scripts
+/// are off and nothing is loaded from the network unless Remote is set.
+/// Where there is no web view, every write says so; VeroWeb.HasWebView
+/// tells an app beforehand. Call it on the window's thread.</summary>
+public sealed class VeroPdfWriter : IDisposable
+{
+    readonly string dataFolder;
+    readonly System.Threading.SemaphoreSlim one = new(1, 1);
+    Window? host;
+    WebView2? web;
+    public bool Remote { get; set; }
+    public string Policy { get; set; } = VeroWeb.HtmlPolicy;
+
+    public VeroPdfWriter(string app) => dataFolder = VeroWeb.DataFolder(app, "WebView2-pdf");
+
+    public async Task<string> Write(string html, string path)
+    {
+        if (!VeroWeb.HasWebView) return "This computer has no web view, which writing a PDF needs.";
+        await one.WaitAsync();
+        try
+        {
+            if (web is null)
+            {
+                // A web view needs a window, so it has one far off the
+                // screen, which is never activated or shown in the taskbar.
+                web = new WebView2();
+                host = new Window
+                {
+                    Content = web, Width = 800, Height = 1000, Left = -32000, Top = -32000,
+                    WindowStyle = WindowStyle.None, ShowInTaskbar = false, ShowActivated = false,
+                };
+                host.Show();
+                var env = await CoreWebView2Environment.CreateAsync(null, dataFolder);
+                await web.EnsureCoreWebView2Async(env);
+                web.CoreWebView2.Settings.IsScriptEnabled = false;
+                web.CoreWebView2.NavigationStarting += (_, e) =>
+                {
+                    if (!e.Uri.StartsWith("data:") && !e.Uri.StartsWith("about:")) e.Cancel = true;
+                };
+            }
+            var loaded = new TaskCompletionSource<bool>();
+            void Done(object? _, CoreWebView2NavigationCompletedEventArgs e) => loaded.TrySetResult(e.IsSuccess);
+            web.CoreWebView2.NavigationCompleted += Done;
+            web.CoreWebView2.NavigateToString(VeroWeb.WithPolicy(html, Policy, Remote));
+            bool ok = await loaded.Task;
+            web.CoreWebView2.NavigationCompleted -= Done;
+            if (!ok) return "The page could not be shown.";
+            string full = Path.GetFullPath(path);
+            return await web.CoreWebView2.PrintToPdfAsync(full) && File.Exists(full) ? "" : "The PDF was not written.";
+        }
+        catch (Exception e) { return e.Message; }
+        finally { one.Release(); }
+    }
+
+    public void Dispose()
+    {
+        web?.Dispose();
+        host?.Close();
     }
 }
 

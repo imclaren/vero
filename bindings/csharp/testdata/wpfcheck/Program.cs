@@ -132,6 +132,29 @@ public sealed class CheckApp : VeroApp
             NotificationPressed("n1", 0);
             Expect(pressed.SequenceEqual(new[] { "archive" }), "the notification's button");
 
+            // A link in the app's own scheme reaches LinkClicked, and HTML
+            // becomes PDF files offscreen, two in turn.
+            var links = new List<string>();
+            var mail = new VeroHtmlView("vero-check") { LinkClicked = uri => { links.Add(uri); return uri.StartsWith("vero-check:"); } };
+            mail.Click("vero-check:attachment/1");
+            Expect(links.SequenceEqual(new[] { "vero-check:attachment/1" }), $"the app's own link: {string.Join(",", links)}");
+            using (var pdf = new VeroPdfWriter("vero-check"))
+            {
+                string folder = Path.Combine(Path.GetTempPath(), "vero-check-pdf");
+                Directory.CreateDirectory(folder);
+                foreach (var n in new[] { 1, 2 })
+                {
+                    string path = Path.Combine(folder, $"{n}.pdf");
+                    File.Delete(path);
+                    string error = await pdf.Write($"<h1>Message {n}</h1><p>Hello.</p>", path);
+                    if (VeroWeb.HasWebView)
+                        Expect(error == "" && File.ReadAllText(path).StartsWith("%PDF-"), $"PDF {n}: {error}");
+                    else
+                        Expect(error.Contains("web view"), $"no PDF without a web view: {error}");
+                }
+                Note($"pdf: web view {VeroWeb.HasWebView}");
+            }
+
             // Opening at sign-in.
             Expect(SetOpensAtLogin(true) == "" && OpensAtLogin, "opens at login");
             Expect(SetOpensAtLogin(false) == "" && !OpensAtLogin, "no longer opens at login");

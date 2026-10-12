@@ -360,19 +360,22 @@ want of ffmpeg, and its README says why.
     answers the cancel with an error that is dropped. The Swift side needs
     the C archive's new `VeroCallTagged` and `VeroCancel`, so until the tag
     `scripts/build-cvero.sh` builds the archive locally, and `Package.swift`
-    uses it when it is there. `scripts/test-cancel.sh` checks Swift and C#
+    uses it when it is there. `scripts/test-bindings.sh` checks Swift and C#
     against a real worker; Go's and Python's own tests check the rest.
 15. **A worker on disk that differs from the app's.** Done on 12 October
     2026, asked for by treehouse. `VeroWorkerBundle(..., replace:
     .whenDifferent)` replaces the worker on disk whenever it differs from
     the bundled one, whatever their versions. With the default,
     `.whenNewer`, a worker kept although it differs is logged plainly.
-16. **Web views for mail, and HTML to PDF.** Asked for by treehouse; to do
-    before the tag. The web view helpers gain a policy that the app sets, a
-    callback for the app's own link schemes, and a Mac `VeroHtmlView`. Each
-    library gains HTML to a PDF file, offscreen, for exporting thousands of
-    messages: `createPDF` on the Mac, `PrintToPdfAsync` on Windows and
-    WebKitGTK's print operation on Linux.
+16. **Web views for mail, and HTML to PDF.** Done on 12 October 2026,
+    asked for by treehouse. The web view helpers take a policy that the app
+    sets and hand links in the app's own schemes to a callback (`on_link`,
+    `LinkClicked`, `onLink`), and the Swift package gains `VeroHtmlView`.
+    Each library writes HTML to PDF files offscreen, one after another
+    through one hidden web view: `PdfWriter` with WebKitGTK's print
+    operation, `VeroPdfWriter` with `PrintToPdfAsync`, and `VeroPDFWriter`
+    with `createPDF`, whose PDF is one page as long as the message. The GTK
+    and WPF library tests and `scripts/test-bindings.sh` check them.
 17. **IPS publishers for illumos' dependencies.** Done on 12 October 2026.
     OpenIndiana's ffmpeg is `video/ffmpeg` in its second publisher,
     `hipster-encumbered`, which the site's install commands add before
