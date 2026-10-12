@@ -40,14 +40,24 @@ app up to date.
 
 | Piece | Needed by | Where it goes |
 |---|---|---|
-| The app's shell, with WPF's Fluent theme, and with libadwaita where the system has it, following the system's light or dark mode | Every app | vero's libraries |
-| A single copy, which brings the running copy forward | Every app | vero's libraries (the Mac already has `VeroSingleCopy`) |
-| An app that lives in the tray, with a small window from its icon, as the Mac's menu bar apps do | calmtasks, calmdocs | vero's libraries, when `menubar = true` |
-| Running with the window closed, and starting at sign-in | treehouse, calmtasks, calmdocs | vero's libraries and `kit/autostart` |
-| A web page, with the system's browser in its place where there is no web view | audiobooks, treehouse | vero's libraries |
-| A toast with an Undo button | treehouse, calmtasks (its worker has undo) | vero's libraries |
-| Notifications with buttons | treehouse | vero's libraries and `kit/notify` |
-| How each app looks: rows, avatars, empty states, settings pages | Each app | Each app, with the library's widgets on Linux, the BSDs and illumos, which are libadwaita's where it is installed |
+| The app's shell: a window with a header bar, banners for problems and updates, and the system's light or dark mode, which the app can also read (treehouse darkens messages with it) | Every app | vero's libraries |
+| A single copy, which brings the running copy forward and passes it what the second copy was asked to open: a link, such as `mailto:` or `calmtasks://task/1`, or files | Every app | vero's libraries (the Mac already has `VeroSingleCopy`) |
+| A tray icon whose picture and tooltip follow the state, with the app's own menu items, Open and Quit | treehouse (a window app that keeps running), calmtasks and calmdocs (tray apps) | vero's libraries, with `tray = true` for a window app and `menubar = true` for an app that is only in the tray |
+| A small window from the tray icon, of the size the app asks for (calmdocs' is 650 by 500), with no taskbar button unless the main window is open | calmtasks, calmdocs | vero's libraries, when `menubar = true` |
+| Running with the window closed, and starting at sign-in, hidden | treehouse, calmtasks, calmdocs | vero's libraries and `kit/autostart` |
+| Dialogs: open files, save a file, choose a folder, a question with buttons, and asking for some text or a password | Every app | vero's libraries |
+| Opening a link, a file or a folder, and showing a file in its folder | Every app (calmdocs' worker does this today, on the Mac only) | vero's libraries |
+| A sign-in page that stops at an address, with the system's browser and a pasted address where there is no web view | audiobooks | vero's libraries |
+| Showing HTML with scripts off, and a web view whose scripts and the app talk both ways, with printing to PDF. Where there is no web view, the library says so, and the app shows text or hides the feature. Private content never goes to the browser. | treehouse (mail, the editor, add-ins) | vero's libraries |
+| A toast with an Undo button, and an undo and redo stack of the worker's action ids, on Ctrl+Z and Ctrl+Shift+Z | treehouse, calmtasks | vero's libraries |
+| Notifications with buttons, whose buttons reach the app | treehouse | vero's libraries. `kit/notify` stays for workers with no app. |
+| The network coming back, so that the worker syncs at once | calmtasks, treehouse, calmdocs | vero's libraries, which tell the app, which asks the worker |
+| A password for sign-ins on a system with no keyring | treehouse, calmtasks, calmdocs | `kit/keychain` (a file encrypted with a key from the password, as treehouse's vault is) and a library dialog |
+| The update check, and putting off an update while the app is busy | Every app | `kit/update` with a standard request, and the Swift package's Sparkle setup |
+| Keeping the computer awake while syncing, and hearing of sleep and wake | calmdocs | New `kit/awake` |
+| One worker at a time, when the worker runs with no app | calmdocs | vero's Go package, which takes the same lock as the supervisor |
+| Registering link schemes and file types: `mailto:` and `.eml`, `.ics` and `.vcf` for treehouse, `calmtasks://` and opening files for calmtasks | treehouse, calmtasks | `vero-app.toml` (`schemes` and `opens`), which vero-repo writes into the `.desktop` file and the Windows installer |
+| How each app looks: rows, avatars, empty states, settings pages, a search provider, maps | Each app | Each app, with the library's widgets on Linux, the BSDs and illumos, which are libadwaita's where it is installed |
 
 Every app runs on every system and processor on which audiobooks runs
 today, as its README lists them. No app drops one of them by moving to
@@ -56,10 +66,54 @@ today, as its README lists them. No app drops one of them by moving to
 A piece goes into vero when it is plumbing that every app would otherwise
 write, or when two apps need it. How an app looks stays in the app.
 
-GNOME shows no tray icons unless an extension is installed. Ubuntu
-installs one, but Fedora and Debian do not. Where there is no tray, the
-library keeps a menu bar app running through the background portal, and
-opening the app from the menu shows its small window.
+## Each piece on each system
+
+The libraries cannot assume any of four things: libadwaita, a web view, a
+D-Bus session bus, or a keyring. Each is missing somewhere that audiobooks
+runs. Debian 12 has libadwaita 1.2 and GTK 4.8. SmartOS's pkgsrc, from
+which illumos gets GTK today, has no web view and no keyring. A BSD or
+illumos desktop may start without a session bus. Every piece therefore has
+a stated form for each case, and vero's tests run each case.
+
+| Piece | Windows | GTK with libadwaita | GTK without libadwaita | Without a session bus | Without a web view | Without a keyring |
+|---|---|---|---|---|---|---|
+| Window and banners | Fluent theme, `ThemeMode="System"` | `Adw.ToolbarView`, `Adw.Banner` | A header bar and a revealer | The same | The same | The same |
+| Light or dark | The system's | `Adw.StyleManager` | The portal's colour scheme, or GTK's dark setting | GTK's dark setting, and the app's own switch | The same | The same |
+| Single copy and passing on links and files | A mutex and a named pipe | `Gio.Application` with command-line and open handling | The same | A lock file and a socket in the runtime folder, which the library uses in place of D-Bus | The same | The same |
+| Tray | `NotifyIcon` from Windows Forms, which works on x64, arm64 and x86 | StatusNotifierItem and its menu over D-Bus, written in the library without libappindicator. Where no tray is shown, as on GNOME without its extension, the background portal keeps the app running. | The same | No tray. A tray app opens as an ordinary window, and a window app that runs in the background asks before closing, since nothing could reopen it | The same | The same |
+| Notifications | A toast with buttons, through Windows' notification API and the app's id, which the installer registers. A button press reaches the app through the single copy. | `Gio.Notification` with buttons | The same | A banner in the window | The same | The same |
+| Dialogs | WPF's and Windows' own | `Gtk.FileDialog` and `Gtk.AlertDialog` on GTK 4.10 or later, `Gtk.FileChooserNative` and a message dialog before | The same | The same, with GTK's own file chooser | The same | The same |
+| Showing a file in its folder | `explorer /select` | The file manager's `ShowItems` over D-Bus | The same | Opening the folder | The same | The same |
+| Web content | WebView2, which the installer adds | WebKitGTK 6 | The same | The same | Sign-in pages in the browser with a pasted address. HTML as text. Script bridges report that they are missing. | The same |
+| Sign-ins kept | Credential Manager | The Secret Service | The same | The password dialog | The same | The password dialog |
+| Autostart | The Run key | An autostart `.desktop` file, or the background portal in a Flatpak | The same | The autostart file | The same | The same |
+
+The libraries need GTK 4.8, Python 3.11 and PyGObject 3.42 at least,
+which is what Debian 12 has. The package indexes show no older floor on
+any system that audiobooks supports.
+
+## Workers on every system
+
+The front ends are only half of it. Each worker must build and run on
+every system and processor too, and vero builds workers without cgo.
+Checked on 12 October 2026:
+
+| Worker | Result | What it needs |
+|---|---|---|
+| audiobooks | Builds for every target | Nothing |
+| treehouse | Builds for every target | Nothing |
+| calmtasks (`core/`) | Fails on DragonFly, illumos, NetBSD arm64 and OpenBSD riscv64, because `modernc.org/sqlite` has no port there | Move to `ncruces/go-sqlite3`, as treehouse uses |
+| calmdocs (syncclient) | Fails on every target tried | Replace the Mac-only sleep notifier with `kit/awake`. Fix `ulimit` on 32-bit systems and Windows. Watch folders by polling on illumos, where FEN needs cgo. Let `osdetails` accept any system. Replace `mattn/go-sqlite3`, which needs cgo, with `ncruces/go-sqlite3`. |
+
+`ncruces/go-sqlite3` builds for every target, and a test program that
+writes and reads a database in WAL mode ran under emulation on Linux on
+amd64, 386, arm, arm64, riscv64, loong64, mipsle, mips64le, s390x, ppc64
+and ppc64le. It still has to be run on each BSD and on illumos, in vero's
+virtual machines, because file locking differs there.
+
+So that a new app finds this at once and not at release, `vero ship`
+and `vero-repo plan` build the worker for every target first, and name
+each target that fails and the package that stops it.
 
 ## Phase 1. vero 0.18, untagged
 
@@ -95,9 +149,9 @@ opening the app from the menu shows its small window.
    do.
 6. **Every system and processor that audiobooks runs on.** audiobooks
    ships for many processors, such as i386, armhf, riscv64 and loong64, and
-   on systems whose GTK is older than elsewhere, such as FreeBSD on 32-bit
-   ARM, whose packages have not been updated since 2025. Every app must
-   run on all of them.
+   on systems with no libadwaita or one too old, such as Debian 12, the
+   only Debian left for mips64el and mipsel, and OpenBSD on 32-bit ARM.
+   Every app must run on all of them.
 
    So `vero_gtk.py` uses libadwaita 1.5 or later where it is installed, and
    plain GTK 4 where it is not. Each piece in the table works both ways:
@@ -114,23 +168,40 @@ opening the app from the menu shows its small window.
    `VERO_GTK_PLAIN=1` making the library use plain GTK 4 where libadwaita
    is installed.
 
-   The package indexes, checked on 11 October 2026, give these versions:
+   The package indexes, checked for each processor on 12 October 2026,
+   give these versions. "Web view" is WebKitGTK's GTK 4 build (WebKit 6.0).
 
-   | System | libadwaita |
-   |---|---|
-   | Debian 12 | 1.2.2, too old, so the library uses plain GTK 4 |
-   | Debian 13 | 1.7.6, on amd64, arm64, armel, armhf, i386, ppc64el, riscv64 and s390x. The other processors that audiobooks ships for are Debian's ports, which follow unstable (1.10). |
-   | Ubuntu 24.04 | 1.5.0 |
-   | Fedora | 1.9.4 |
-   | openSUSE Tumbleweed | 1.9.4. Leap 15.6 has 1.4.2, on which the library uses plain GTK 4. |
-   | Alpine | 1.9.2 |
-   | Void | 1.9.1 |
-   | Chimera | 1.10.0 |
-   | FreeBSD | 1.8.5 |
-   | DragonFly | 1.7.2 |
-   | NetBSD 10 and 11 | 1.9.1 on x86_64 and i386, 1.8.0 on aarch64 |
-   | OpenBSD | 1.9.4 |
-   | illumos | None in SmartOS's pkgsrc, from which vero installs GTK on OpenIndiana today. OpenIndiana's own repository has 1.6.10. |
+   | System and processors | libadwaita | Web view |
+   |---|---|---|
+   | Debian 13: amd64, arm64, armhf, armel, i386, ppc64el, riscv64, s390x | 1.7.6 | Yes |
+   | Debian unstable and ports: loong64, ppc64 | 1.10.0 | Yes |
+   | Debian 12, all processors, and mips64el and mipsel, which Debian 13 and the ports dropped | 1.2.2, so plain GTK 4 (4.8.3, PyGObject 3.42.2) | Yes, except on mipsel |
+   | Ubuntu 24.04: amd64, arm64, armhf, ppc64el, riscv64, s390x | 1.5.0 | Yes |
+   | Fedora 44: x86_64, aarch64, ppc64le, s390x | 1.9.0 | Yes |
+   | openSUSE Tumbleweed: x86_64, i586, aarch64, ppc64le, riscv64, armv7hl, armv6hl, s390x. Fedora has no i686, armv7hl or armv6hl, and only an unofficial riscv64, so the rpm on these processors is for openSUSE. | 1.9.4 | Yes |
+   | Arch Linux and its ports: x86_64, aarch64, armv7h, powerpc64le, powerpc64, loong64, riscv64 | 1.9.0 to 1.10.0 | Yes |
+   | Arch Linux 32: pentium4 | 1.5.2 | No |
+   | Alpine 3.24 and edge: all nine processors | 1.9.2 and 1.10.0 | Yes |
+   | Void: x86_64, aarch64, armv7l, armv6l, i686 | 1.9.1 | Yes |
+   | Chimera: x86_64, aarch64, ppc64le, ppc64, riscv64, loongarch64 | 1.9.2 to 1.10.0 | Yes |
+   | FreeBSD 14: amd64, aarch64, i386 | 1.8.5 | Yes |
+   | FreeBSD 14: armv7 | 1.7.6 | Yes |
+   | DragonFly 6.6 | 1.7.2 | Yes |
+   | NetBSD 10: x86_64, i386 and aarch64 | 1.9.1, and 1.8.0 on aarch64 | No |
+   | OpenBSD: amd64, aarch64 | 1.9.4 | Yes |
+   | OpenBSD: i386 | 1.9.4 | No |
+   | OpenBSD 7.9: riscv64 | 1.9.0 | Yes |
+   | OpenBSD 7.9: arm | None, so plain GTK 4 (4.22.3) | No |
+   | illumos: SmartOS's pkgsrc, used today | None, so plain GTK 4 | No |
+   | illumos: OpenIndiana's own repository | 1.6.10 | Yes (2.54.1) |
+
+   So plain GTK 4 is needed on Debian 12, which is the only Debian for
+   mips64el and mipsel, on OpenBSD's 32-bit ARM, and on illumos until it
+   moves. The web view is missing on NetBSD, on OpenBSD i386 and arm, on
+   Arch Linux 32 and on SmartOS's pkgsrc, where pages are shown as the
+   library's table says. OpenBSD 8.0 has published packages only for
+   amd64, aarch64 and i386 so far, and its arm and riscv64 packages are
+   checked when they appear.
 
    vero's tests use Debian 12 by default today, and move to Debian 13, with
    Debian 12 kept as the test of the plain GTK 4 path.
@@ -171,8 +242,31 @@ opening the app from the menu shows its small window.
    the published version from the app's `latest.json`, and the Mac's
    prebuild uses the same number for Xcode's own builds.
 
+10. **Workers checked on every target.** `vero ship` and `vero-repo plan`
+    build the worker for every system and processor first, and name each
+    one that fails and why. vero's documentation names `ncruces/go-sqlite3`
+    as the SQLite for workers.
+11. **Kit additions.** These are the Go side of the pieces in the table:
+    - `kit/keychain` keeps sign-ins in a file encrypted with a key from a
+      password where there is no keyring, and tells the front end that it
+      needs the password;
+    - `kit/update` registers a standard update request, which every
+      front end's library asks;
+    - a new `kit/awake` keeps the computer awake while the worker asks, and
+      reports sleep and wake;
+    - vero's Go package lets a worker with no app take the same lock as
+      the supervisor.
+12. **Link schemes and file types.** `vero-app.toml` gains `schemes` and
+    `opens`, which vero-repo writes into the `.desktop` file and the
+    Windows installer. The installer also registers the app's id, which
+    Windows needs for notifications with buttons.
+
 vero's own tests check both starter shapes on every system that vero
 tests, and `vero ship counter.go` is run again as a new app would be.
+On Linux they run each library piece in four cases: with libadwaita,
+without it (`VERO_GTK_PLAIN=1`), without a session bus, and without a web
+view. The BSD and illumos virtual machines run the same, and run a worker
+that uses SQLite.
 
 ## Phase 2. audiobooks, a window app
 
@@ -203,20 +297,33 @@ in treehouse has the detail.
    the background, and a first run in vero's Windows virtual machine.
 3. Move every front end, the Mac's included, to the generated requests.
    treehouse's 86 requests are the largest test of `vero gen`.
-4. Run `vero ship --no-release` on every system.
+   Its 43 handlers that reply with untyped JSON reply with Go types first.
+4. Register `mailto:` and `.eml`, `.ics` and `.vcf` through `schemes` and
+   `opens`, with the worker's requests to open them, and offer to make
+   treehouse the default mail app.
+5. Move the vault's password into `kit/keychain`'s password form, which
+   the library asks for at start-up where there is no keyring.
+6. Run `vero ship --no-release` on every system.
 
 ## Phase 4. calmtasks, a sandboxed menu bar app
 
 1. Move the worker from `core/` to `cmd/worker` in a module at the top of
    the repository, drop `libcalmtaskscore.a` and `build-core.sh`, and bundle
    the worker as a program, signed for the sandbox.
-2. Run `vero upgrade` from 0.14, and move the Mac app onto vero's Swift
+2. Move from `modernc.org/sqlite` to `ncruces/go-sqlite3`, so that the
+   worker builds for every system.
+3. Move the export's download from Swift into the worker, which saves the
+   file where the person chooses.
+4. Run `vero upgrade` from 0.14, and move the Mac app onto vero's Swift
    package as the other apps use it.
-3. Move the Mac app to the generated requests.
-4. Add a demo mode and a `[test]` with `VERO_PROFILE`.
-5. Run `vero add desktop` with `menubar = true`, which gives calmtasks its
-   first Windows and Linux apps, as tray apps.
-6. Run `vero ship --no-release` on every system. Direct releases move to
+5. Move the Mac app to the generated requests.
+6. Add a demo mode and a `[test]` with `VERO_PROFILE`.
+7. Run `vero add desktop` with `menubar = true`, which gives calmtasks its
+   first Windows and Linux apps, as tray apps. The tray window holds what
+   the Mac's menu bar window holds: quick add, the flagged tasks, the sync
+   status, Settings and Quit. `calmtasks://` and opening files are
+   registered, and Ctrl+Z undoes through the library's undo stack.
+8. Run `vero ship --no-release` on every system. Direct releases move to
    vero. The App Store build stays with fastlane, without Sparkle.
 
 ## Phase 5. calmdocs, a menu bar app whose worker also runs alone
@@ -224,11 +331,22 @@ in treehouse has the detail.
 1. Move the worker from ~/src/syncclient into sync-macos as `cmd/worker`,
    drop its own updates and the separate publishing of the worker to the
    server, and replace them with vero's updates.
-2. Run `vero upgrade` from 0.13, and move the Mac app to the generated
-   requests.
-3. Add a demo mode and a `[test]` with `VERO_PROFILE`.
-4. Run `vero add desktop` with `menubar = true`, as for calmtasks.
-5. Run `vero ship --no-release` on every system. Releases move to vero, and
+2. Make the worker build and run on every system: `kit/awake` in place of
+   the Mac's sleep notifier and `caffeinate`, `ulimit` fixed for 32-bit
+   systems and Windows, polling in place of FEN on illumos, `osdetails`
+   accepting any system, and `ncruces/go-sqlite3` in place of
+   `mattn/go-sqlite3`.
+3. Keep the sign-in in `kit/keychain` rather than in `conf.yaml`, and the
+   settings in `kit/profile`'s folder. Opening folders and pages moves from
+   the worker to the front ends. The worker takes the single-worker lock
+   when it runs with no app.
+4. Run `vero upgrade` from 0.13, and move the Mac app to the generated
+   requests. Sparkle's rule of installing only while nothing syncs moves
+   into the Swift package's update setup.
+5. Add a demo mode and a `[test]` with `VERO_PROFILE`.
+6. Run `vero add desktop` with `menubar = true`, as for calmtasks, with a
+   650 by 500 tray window, and a tray icon that shows syncing and idle.
+7. Run `vero ship --no-release` on every system. Releases move to vero, and
    `scripts/release.sh` is retired.
 
 The daemon that runs with no app is packaged later, as `calmdocs-headless`,
@@ -262,6 +380,28 @@ These were decided on 11 October 2026.
    Windows and Linux apps too. They keep their names for now.
 4. **Every system that audiobooks runs on.** Every app runs on every
    system and processor on which audiobooks runs today. libadwaita is used
-   where it is installed and is not required, so Debian 12 and FreeBSD on
-   32-bit ARM stay. This replaces the earlier decision to require
+   where it is installed and is not required, so Debian 12 (with mips64el
+   and mipsel) and OpenBSD on 32-bit ARM stay. This replaces the earlier decision to require
    libadwaita 1.5 and drop Debian 12, and was decided on 12 October 2026.
+
+## Proposed, waiting for approval
+
+These come from checking the plan against all four apps and a new app on
+12 October 2026.
+
+5. **Left out of the first Windows and Linux versions of calmtasks:** the
+   map and the current location (a task's place is shown as text, with a
+   link to a map in the browser), a quick-add shortcut that works from any
+   app, and stand-ins for Spotlight, Services and Shortcuts. Each can come
+   later in the app alone.
+6. **Notifications with buttons on Windows** use Windows' own notification
+   API, which adds Microsoft's Windows SDK library to the app. Its size
+   is measured before this is settled. Only an app whose `[wpf] uses` names notifications gets it, which
+   is treehouse today. Others show notifications without buttons from the
+   tray icon.
+7. **The tray on Windows** keeps Windows Forms' `NotifyIcon`, which
+   treehouse uses today and which works on every Windows processor.
+8. **Without a session bus**, there is no tray on Linux, the BSDs or
+   illumos. A tray app then opens as an ordinary window, and a window app
+   that runs in the background says, before its window closes, that
+   closing it stops the app.
