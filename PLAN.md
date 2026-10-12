@@ -186,7 +186,13 @@ want of ffmpeg, and its README says why.
    player. Beside them, `vero_gtk.py` and `VeroWpf.cs` hold the pieces in
    the table. They are still copied into each app, not installed from pip
    or NuGet, so that every package builds without a network.
-2. **Starters in two shapes.** `vero new` and `vero add` write either a
+2. **Starters in two shapes.** Done on 12 October 2026 (63067fc), with
+   `vero add --menubar` and `menubar = true` in `vero-app.toml` for the
+   tray shape, and checked by `scripts/test-starters.sh`: both shapes
+   build on the Mac and for Windows, run in the Windows VM, and run on
+   Debian 13 and Debian 12. `vero add` runs `vero gen`, and the Mac starter
+   uses its request types.
+   `vero new` and `vero add` write either a
    window app or, with `menubar = true`, a menu bar app on the Mac and a
    tray app on Windows and Linux. The WPF starter targets .NET 10, turns on
    the Fluent theme with `ThemeMode="System"`, keeps its layout in XAML,
