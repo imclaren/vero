@@ -11,6 +11,8 @@
 extern char* VeroStart(char* workerPath, char* argsJSON);
 extern char* VeroRequest(char* requestJSON);
 extern char* VeroCall(char* name, char* requestJSON);
+extern char* VeroCallTagged(unsigned long long tag, char* name, char* requestJSON);
+extern void VeroCancel(unsigned long long tag);
 extern char* VeroLatest(void);
 extern char* VeroWaitForEvent(void);
 extern char* VeroState(void);

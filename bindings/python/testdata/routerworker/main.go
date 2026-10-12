@@ -5,6 +5,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
+	"time"
 
 	"github.com/imclaren/vero"
 )
@@ -25,6 +27,20 @@ func main() {
 		}
 		return map[string]int{"restarted": req.ID}, nil
 	})
+
+	// slow waits until its request is cancelled, and stopped counts the
+	// slow requests that saw it.
+	var stopped atomic.Int64
+	vero.Handle(w, "slow", func(ctx context.Context, _ struct{}) (map[string]string, error) {
+		select {
+		case <-ctx.Done():
+			stopped.Add(1)
+			return nil, ctx.Err()
+		case <-time.After(20 * time.Second):
+			return map[string]string{"slow": "finished"}, nil
+		}
+	})
+	vero.Handle(w, "stopped", func(context.Context, struct{}) (int64, error) { return stopped.Load(), nil })
 
 	w.Serve()
 }

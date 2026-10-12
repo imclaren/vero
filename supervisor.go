@@ -273,7 +273,15 @@ func (s *Supervisor) Call(ctx context.Context, name string, request any) (json.R
 		return reply.Payload, nil
 	case <-ctx.Done():
 		s.forget(id)
-		return nil, ctx.Err()
+		// Tell the worker, so that the handler stops rather than doing
+		// work whose reply nobody will read.
+		s.mu.Lock()
+		if s.state == Running && s.enc != nil {
+			_ = s.enc.Encode(Envelope{Kind: kindCancel, ID: id})
+		}
+		s.mu.Unlock()
+		// Both, so that errors.Is finds either.
+		return nil, fmt.Errorf("%w: %w", ErrCancelled, ctx.Err())
 	case <-s.stop:
 		s.forget(id)
 		return nil, ErrWorkerNotRunning

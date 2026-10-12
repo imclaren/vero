@@ -45,11 +45,25 @@ type Envelope struct {
 const (
 	kindEvent = "event"
 	kindReply = "reply"
+	// kindCancel, on the way in, says that nobody waits any longer for the
+	// request with its ID: the worker cancels that request's context, and
+	// the supervisor sends it when a caller's context ends. A cancel for a
+	// request that has finished, or that the worker never had, is ignored.
+	// An older worker reads it as a request without a name and answers it
+	// with an error, which the supervisor drops, since nobody waits for it.
+	kindCancel = "cancel"
 )
+
+// ErrCancelled is what a request comes back with when its caller cancelled
+// it. Bindings do not show it as a failure: nobody is waiting to see it.
+var ErrCancelled = errors.New("vero: the request was cancelled")
 
 // Handler answers one request.
 //
-// ctx is cancelled when the frontend goes away, so a handler that waits -
+// ctx is cancelled when the frontend goes away, and when the frontend stops
+// waiting for this request's reply, as a window does when what asked has
+// scrolled out of sight. A handler that does slow work stops early by
+// watching ctx.Done(), and one that waits -
 // a long poll, most obviously - must select on ctx.Done() as well. Without
 // that the worker cannot exit when its parent does: it has stopped reading
 // requests, but it is still waiting for the answer to one nobody will read.  Returning an error sends the message to the

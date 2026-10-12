@@ -107,6 +107,12 @@ func main() {
 }
 ```
 
+A handler's context ends when the front end stops waiting for its reply,
+as a window does when what asked has scrolled out of sight, and when the
+front end goes away. A handler that does slow work watches `ctx.Done()` and
+stops early. Swift cancels a request with its task, C# with a
+`CancellationToken`, and Python and Kotlin with a `Cancel`.
+
 ### Ship it
 
 ```bash

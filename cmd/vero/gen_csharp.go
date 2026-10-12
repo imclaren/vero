@@ -14,7 +14,7 @@ import (
 func csharpAPI(api *API, namespace string) string {
 	var b strings.Builder
 	b.WriteString(docLines(genHeader, "// "))
-	b.WriteString("\n#nullable enable\nusing System.Collections.Generic;\nusing System.Text.Json;\nusing System.Text.Json.Serialization;\nusing System.Threading.Tasks;\nusing Vero;\n\n")
+	b.WriteString("\n#nullable enable\nusing System.Collections.Generic;\nusing System.Text.Json;\nusing System.Text.Json.Serialization;\nusing System.Threading;\nusing System.Threading.Tasks;\nusing Vero;\n\n")
 	fmt.Fprintf(&b, "namespace %s;\n", namespace)
 	aliases := map[string]*TypeRef{}
 	for _, t := range api.Types {
@@ -66,16 +66,26 @@ func csharpAPI(api *API, namespace string) string {
 		case len(r.Fields) > 0:
 			params, arg = ", "+pascal(r.Name)+"Request request", "request"
 		}
-		call := fmt.Sprintf("vero.CallAsync(%q, %s)", r.Name, arg)
-		switch rep := resolve(r.Reply, aliases); rep.Kind {
-		case "empty":
-			fmt.Fprintf(&b, "    public static async Task %s(this VeroClient vero%s) => await %s.ConfigureAwait(false);\n\n", method, params, call)
-		case "json":
-			fmt.Fprintf(&b, "    public static async Task<JsonElement> %s(this VeroClient vero%s) => await %s.ConfigureAwait(false) ?? default;\n\n", method, params, call)
-		default:
-			fmt.Fprintf(&b, "    public static async Task<%s> %s(this VeroClient vero%s) => Read<%s>(await %s.ConfigureAwait(false))%s;\n\n",
-				cs(r.Reply), method, params, cs(r.Reply), call, csharpReadDefault(r.Reply, aliases))
+		// Each twice: as it is, which a method group such as
+		// App.Ask(App.Vero.SyncAsync) takes, and with a CancellationToken,
+		// which cancels the request and tells the worker.
+		for _, cancel := range []bool{false, true} {
+			ps, call := params, fmt.Sprintf("vero.CallAsync(%q, %s)", r.Name, arg)
+			if cancel {
+				ps += ", CancellationToken cancel"
+				call = fmt.Sprintf("vero.CallAsync(%q, %s, cancel)", r.Name, arg)
+			}
+			switch rep := resolve(r.Reply, aliases); rep.Kind {
+			case "empty":
+				fmt.Fprintf(&b, "    public static async Task %s(this VeroClient vero%s) => await %s.ConfigureAwait(false);\n", method, ps, call)
+			case "json":
+				fmt.Fprintf(&b, "    public static async Task<JsonElement> %s(this VeroClient vero%s) => await %s.ConfigureAwait(false) ?? default;\n", method, ps, call)
+			default:
+				fmt.Fprintf(&b, "    public static async Task<%s> %s(this VeroClient vero%s) => Read<%s>(await %s.ConfigureAwait(false))%s;\n",
+					cs(r.Reply), method, ps, cs(r.Reply), call, csharpReadDefault(r.Reply, aliases))
+			}
 		}
+		b.WriteString("\n")
 	}
 	b.WriteString(`    static T? Read<T>(JsonElement? reply) =>
         reply is null || reply.Value.ValueKind == JsonValueKind.Null ? default : reply.Value.Deserialize<T>();

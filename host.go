@@ -96,6 +96,10 @@ func host() {
 	sc.Buffer(make([]byte, 0, 64<<10), MaxLineSize)
 
 	var wg sync.WaitGroup
+	// Each request in flight's cancel, by the frontend's ID, for a cancel
+	// from it, which the supervisor passes on to the worker.
+	var runningMu sync.Mutex
+	running := map[uint64]context.CancelFunc{}
 	for sc.Scan() {
 		line := make([]byte, len(sc.Bytes()))
 		copy(line, sc.Bytes())
@@ -104,11 +108,28 @@ func host() {
 		if err := json.Unmarshal(line, &req); err != nil {
 			continue
 		}
+		if req.Kind == kindCancel {
+			runningMu.Lock()
+			if stop, ok := running[req.ID]; ok {
+				stop()
+			}
+			runningMu.Unlock()
+			continue
+		}
 
+		ctx, stop := context.WithCancel(context.Background())
+		runningMu.Lock()
+		running[req.ID] = stop
+		runningMu.Unlock()
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			write(answer(sup, req))
+			reply := answer(ctx, sup, req)
+			runningMu.Lock()
+			delete(running, req.ID)
+			runningMu.Unlock()
+			stop()
+			write(reply)
 		}()
 	}
 
@@ -120,7 +141,7 @@ func host() {
 }
 
 // answer handles one request, either here or on the other side of the worker.
-func answer(sup *Supervisor, req Envelope) Envelope {
+func answer(ctx context.Context, sup *Supervisor, req Envelope) Envelope {
 	if req.Kind == kindControl {
 		return control(sup, req)
 	}
@@ -128,9 +149,9 @@ func answer(sup *Supervisor, req Envelope) Envelope {
 	var reply json.RawMessage
 	var err error
 	if req.Name != "" {
-		reply, err = sup.Call(context.Background(), req.Name, req.Payload)
+		reply, err = sup.Call(ctx, req.Name, req.Payload)
 	} else {
-		reply, err = sup.Request(context.Background(), req.Payload)
+		reply, err = sup.Request(ctx, req.Payload)
 	}
 	if err != nil {
 		return failed(req.ID, err)
@@ -183,6 +204,8 @@ func failed(id uint64, err error) Envelope {
 		e.Code = "already_running"
 	case errors.Is(err, ErrWorkerNotRunning):
 		e.Code = "not_running"
+	case errors.Is(err, ErrCancelled):
+		e.Code = "cancelled"
 	}
 	return e
 }

@@ -212,6 +212,7 @@ public sealed class VeroClient : IDisposable
                 "already_running" => new AlreadyRunningException(message),
                 "not_running" => new NotRunningException(message),
                 "refused" => new RefusedException(message),
+                "cancelled" => new OperationCanceledException(message),
                 _ => new VeroException(message),
             });
             return;
@@ -219,13 +220,16 @@ public sealed class VeroClient : IDisposable
         waiting.TrySetResult(root.TryGetProperty("p", out JsonElement payload) ? payload : null);
     }
 
-    /// <summary>Writes one request and waits for its reply.</summary>
-    private Task<JsonElement?> Ask(string kind, string name, object? payload)
+    /// <summary>Writes one request and waits for its reply. Cancelling
+    /// cancel ends the wait at once with OperationCanceledException, and
+    /// tells the worker, so that its handler can stop.</summary>
+    private Task<JsonElement?> Ask(string kind, string name, object? payload, CancellationToken cancel = default)
     {
         if (stopped)
         {
             throw new NotRunningException("the worker host has stopped");
         }
+        cancel.ThrowIfCancellationRequested();
 
         long id = Interlocked.Increment(ref nextId);
         var waiting = new TaskCompletionSource<JsonElement?>(
@@ -251,6 +255,24 @@ public sealed class VeroClient : IDisposable
             throw new NotRunningException("the worker host has stopped");
         }
 
+        if (cancel.CanBeCanceled)
+        {
+            var registration = cancel.Register(() =>
+            {
+                if (!pending.TryRemove(id, out _)) return;  // answered already
+                try
+                {
+                    lock (writeLock)
+                    {
+                        requests.WriteLine(JsonSerializer.Serialize(new Dictionary<string, object> { ["t"] = "cancel", ["id"] = id }));
+                        requests.Flush();
+                    }
+                }
+                catch (Exception broken) when (broken is IOException or ObjectDisposedException) { }
+                waiting.TrySetCanceled(cancel);
+            });
+            waiting.Task.ContinueWith(_ => registration.Dispose(), TaskScheduler.Default);
+        }
         return waiting.Task;
     }
 
@@ -260,19 +282,19 @@ public sealed class VeroClient : IDisposable
     /// work takes. Awaiting it does not block the thread drawing your
     /// frontend.
     /// </remarks>
-    public Task<JsonElement?> SendAsync<T>(T request) => Ask("", "", request);
+    public Task<JsonElement?> SendAsync<T>(T request, CancellationToken cancel = default) => Ask("", "", request, cancel);
 
     /// <summary>Sends a request to one named handler, matching vero.Handle.</summary>
     /// <remarks>
     /// The worker routes on the name rather than on something inside the
     /// request, so neither side has to agree on a "type" field.
     /// </remarks>
-    public Task<JsonElement?> CallAsync<T>(string name, T request) => Ask("", name, request);
+    public Task<JsonElement?> CallAsync<T>(string name, T request, CancellationToken cancel = default) => Ask("", name, request, cancel);
 
     /// <summary>Calls a named handler and decodes the reply into your own type.</summary>
-    public async Task<TReply> CallAsync<T, TReply>(string name, T request)
+    public async Task<TReply> CallAsync<T, TReply>(string name, T request, CancellationToken cancel = default)
     {
-        JsonElement? reply = await CallAsync(name, request).ConfigureAwait(false);
+        JsonElement? reply = await CallAsync(name, request, cancel).ConfigureAwait(false);
         if (reply is null)
         {
             throw new VeroException("the worker answered nothing");
@@ -282,9 +304,9 @@ public sealed class VeroClient : IDisposable
     }
 
     /// <summary>Sends a request and decodes the reply into your own type.</summary>
-    public async Task<TReply> SendAsync<T, TReply>(T request)
+    public async Task<TReply> SendAsync<T, TReply>(T request, CancellationToken cancel = default)
     {
-        JsonElement? reply = await SendAsync(request).ConfigureAwait(false);
+        JsonElement? reply = await SendAsync(request, cancel).ConfigureAwait(false);
         if (reply is null)
         {
             throw new VeroException("the worker answered nothing");

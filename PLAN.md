@@ -348,6 +348,37 @@ want of ffmpeg, and its README says why.
     `opens`, which vero-repo writes into the `.desktop` file and the
     Windows installer. The installer also registers the app's id, which
     Windows needs for notifications with buttons.
+14. **Cancelling a request.** Done on 12 October 2026, asked for by
+    treehouse for its grid of thumbnails. Each handler's context also ends
+    when its request is cancelled. A front end cancels with
+    `{"t":"cancel","id":N}`, which the host passes on; a cancel for a
+    request that has finished, or that never was, is ignored. Swift cancels
+    with the calling task, through `withTaskCancellationHandler`, and frees
+    the waiting thread at once. C# takes a `CancellationToken`, and vero gen
+    writes each method with and without one. Python and Kotlin take a
+    `Cancel`. A cancelled call is not shown as a failure. An older worker
+    answers the cancel with an error that is dropped. The Swift side needs
+    the C archive's new `VeroCallTagged` and `VeroCancel`, so until the tag
+    `scripts/build-cvero.sh` builds the archive locally, and `Package.swift`
+    uses it when it is there. `scripts/test-cancel.sh` checks Swift and C#
+    against a real worker; Go's and Python's own tests check the rest.
+15. **A worker on disk that differs from the app's.** Done on 12 October
+    2026, asked for by treehouse. `VeroWorkerBundle(..., replace:
+    .whenDifferent)` replaces the worker on disk whenever it differs from
+    the bundled one, whatever their versions. With the default,
+    `.whenNewer`, a worker kept although it differs is logged plainly.
+16. **Web views for mail, and HTML to PDF.** Asked for by treehouse; to do
+    before the tag. The web view helpers gain a policy that the app sets, a
+    callback for the app's own link schemes, and a Mac `VeroHtmlView`. Each
+    library gains HTML to a PDF file, offscreen, for exporting thousands of
+    messages: `createPDF` on the Mac, `PrintToPdfAsync` on Windows and
+    WebKitGTK's print operation on Linux.
+17. **IPS publishers for illumos' dependencies.** Done on 12 October 2026.
+    OpenIndiana's ffmpeg is `video/ffmpeg` in its second publisher,
+    `hipster-encumbered`, which the site's install commands add before
+    installing an app that uses ffmpeg. OpenIndiana's `pkg` cannot send a
+    password, so an app with private downloads, as audiobooks has, takes
+    the token in the repository's path instead.
 
 vero's own tests check both starter shapes on every system that vero
 tests, and `vero ship counter.go` is run again as a new app would be.

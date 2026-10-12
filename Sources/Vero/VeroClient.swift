@@ -367,6 +367,8 @@ public final class VeroClient: ObservableObject {
         // "The worker is restarting" is not something to put in front of
         // somebody: it resolves itself, and state already says so.
         if case VeroError.notRunning = error { return }
+        // Nor is a request that whoever asked has stopped waiting for.
+        if error is CancellationError { return }
         lastError = error.localizedDescription
     }
 

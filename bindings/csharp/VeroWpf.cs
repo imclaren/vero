@@ -305,7 +305,8 @@ public class VeroApp : Application
 
     /// <summary>Asks the worker, such as with () => App.Vero.RenameAsync(...)
     /// from vero gen's WorkerApi. A refusal goes to failed, or to the
-    /// window's banner, and the result is then default.</summary>
+    /// window's banner, and the result is then default. A request cancelled
+    /// through its CancellationToken is default too, and shows nothing.</summary>
     public async Task<T?> Ask<T>(Func<Task<T>> request, Action<string>? failed = null)
     {
         try { return await request(); }
@@ -314,6 +315,9 @@ public class VeroApp : Application
             (failed ?? Problem)(e.Message);
             return default;
         }
+        // Nobody waits for a request that was cancelled, as for a picture
+        // that has scrolled out of sight.
+        catch (OperationCanceledException) { return default; }
     }
 
     /// <summary>Asks a handler by name.</summary>

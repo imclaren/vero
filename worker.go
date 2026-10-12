@@ -352,6 +352,10 @@ func (w *Worker) serveEnvelopes(dispatch func(context.Context, Envelope) (any, e
 	sc.Buffer(make([]byte, 0, 64<<10), MaxLineSize)
 
 	var wg sync.WaitGroup
+	// Each running request's cancel, by its ID, for a cancel from the
+	// frontend.
+	var runningMu sync.Mutex
+	running := map[uint64]context.CancelFunc{}
 	for sc.Scan() {
 		line := make([]byte, len(sc.Bytes()))
 		copy(line, sc.Bytes()) // the scanner reuses its buffer
@@ -361,8 +365,28 @@ func (w *Worker) serveEnvelopes(dispatch func(context.Context, Envelope) (any, e
 			w.Log("ignoring an unreadable request: %v", err)
 			continue
 		}
+		if req.Kind == kindCancel {
+			runningMu.Lock()
+			if stop, ok := running[req.ID]; ok {
+				stop()
+			}
+			runningMu.Unlock()
+			continue
+		}
 
+		reqCtx, stop := context.WithCancel(ctx)
+		if req.ID != 0 {
+			runningMu.Lock()
+			running[req.ID] = stop
+			runningMu.Unlock()
+		}
 		answer := func() {
+			defer func() {
+				runningMu.Lock()
+				delete(running, req.ID)
+				runningMu.Unlock()
+				stop()
+			}()
 			defer func() {
 				// A panic in a handler should cost that one request, not the
 				// worker.  Go's unrecoverable failures still take the process
@@ -372,7 +396,7 @@ func (w *Worker) serveEnvelopes(dispatch func(context.Context, Envelope) (any, e
 					w.write(Envelope{Kind: kindReply, ID: req.ID, Error: fmt.Sprintf("handler panicked: %v", r)})
 				}
 			}()
-			reply, err := dispatch(ctx, req)
+			reply, err := dispatch(reqCtx, req)
 			w.write(replyEnvelope(req.ID, reply, err))
 		}
 

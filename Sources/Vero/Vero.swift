@@ -179,20 +179,42 @@ public final class Vero {
     }
 
     /// Sends a request by name and returns the reply as raw JSON.
+    ///
+    /// Cancelling the calling task cancels the request: this throws
+    /// `CancellationError` at once, the thread that waited is freed, and the
+    /// worker is told, so that its handler can stop. A worker older than
+    /// cancelling ignores being told and finishes the work.
     public func call<T: Encodable>(_ name: String, _ request: T) async throws -> Data {
         let body = try JSONEncoder().encode(request)
-        return try await withCheckedThrowingContinuation { continuation in
-            Vero.queue.async {
-                let n = strdup(name)
-                let buf = strdup(String(data: body, encoding: .utf8) ?? "{}")
-                defer { free(n); free(buf) }
-                do {
-                    continuation.resume(returning: try Vero.unwrap(VeroCall(n, buf)))
-                } catch {
-                    continuation.resume(throwing: error)
+        try Task.checkCancellation()
+        let tag = Vero.nextTag()
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                Vero.queue.async {
+                    let n = strdup(name)
+                    let buf = strdup(String(data: body, encoding: .utf8) ?? "{}")
+                    defer { free(n); free(buf) }
+                    do {
+                        continuation.resume(returning: try Vero.unwrap(VeroCallTagged(tag, n, buf)))
+                    } catch {
+                        continuation.resume(throwing: error)
+                    }
                 }
             }
+        } onCancel: {
+            VeroCancel(tag)
         }
+    }
+
+    private static let tagLock = NSLock()
+    private static var lastTag: UInt64 = 0
+
+    /// A number for a request, which no other in flight shares.
+    private static func nextTag() -> UInt64 {
+        tagLock.lock()
+        defer { tagLock.unlock() }
+        lastTag += 1
+        return lastTag
     }
 
     /// Sends a request and returns the reply as raw JSON.
@@ -238,6 +260,7 @@ public final class Vero {
             case "already_running": throw VeroError.alreadyRunning(message)
             case "not_running": throw VeroError.notRunning
             case "refused": throw VeroError.refused(message)
+            case "cancelled": throw CancellationError()
             default: throw VeroError.failed(message)
             }
         }

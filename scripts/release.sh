@@ -136,7 +136,7 @@ path, url, checksum = sys.argv[1], sys.argv[2], sys.argv[3]
 s = open(path).read()
 s = re.sub(r'\.binaryTarget\(\s*name: "CVero".*?\)',
            '.binaryTarget(\n            name: "CVero",\n            url: "%s",\n            checksum: "%s"\n        )' % (url, checksum),
-           s, flags=re.S)
+           s, count=1, flags=re.S)
 if '.binaryTarget' not in s:
     s = s.replace('.target(name: "CVero"),',
                   '.binaryTarget(\n            name: "CVero",\n            url: "%s",\n            checksum: "%s"\n        ),' % (url, checksum))

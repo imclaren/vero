@@ -44,7 +44,7 @@ import gi
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gio, GLib, GObject, Gtk, Pango  # noqa: E402
 
-from vero import NotRunning, Refused, Vero, VeroError  # noqa: E402
+from vero import Cancel, Cancelled, NotRunning, Refused, Vero, VeroError  # noqa: E402
 
 Adw: Any = None
 if not os.environ.get("VERO_GTK_PLAIN"):
@@ -60,7 +60,7 @@ if not os.environ.get("VERO_GTK_PLAIN"):
 GTK_VERSION = (Gtk.get_major_version(), Gtk.get_minor_version())
 
 __all__ = [
-    "Adw", "App", "Window", "SmallWindow", "Settings", "UndoStack", "HtmlView", "SignInPage",
+    "Adw", "App", "Cancel", "Window", "SmallWindow", "Settings", "UndoStack", "HtmlView", "SignInPage",
     "has_adwaita", "has_session_bus", "has_webview", "webkit", "web_bridge",
     "choose_files", "save_file", "choose_folder", "question", "ask_text",
     "open_uri", "show_in_folder", "status_page", "avatar", "split_view", "label",
@@ -1288,18 +1288,27 @@ class App(_Base):  # type: ignore[misc, valid-type]
             watch(self.state)
 
     def ask(self, request: str | Callable[[], Any], payload: Any = None,
-            done: Callable[[Any], Any] | None = None, failed: Callable[[str], Any] | None = None) -> None:
+            done: Callable[[Any], Any] | None = None, failed: Callable[[str], Any] | None = None,
+            cancel: Cancel | None = None) -> None:
         """Asks the worker on a thread, and calls done with the reply on the
         main loop. request is a handler's name, with payload, or a function
         that asks, such as lambda: api.rename(id=3, title="new") with
         vero gen's Worker. A refusal goes to failed, or to the window's
-        banner."""
+        banner. cancel, a vero.Cancel, cancels the request when its cancel()
+        is called, as for a picture that has scrolled out of sight: then
+        neither done nor failed is called, and the worker stops the work."""
         assert self.vero is not None
         vero = self.vero
 
         def run() -> None:
             try:
-                reply = request() if callable(request) else vero.call(request, payload or {})
+                if cancel is not None:
+                    with cancel:
+                        reply = request() if callable(request) else vero.call(request, payload or {})
+                else:
+                    reply = request() if callable(request) else vero.call(request, payload or {})
+            except Cancelled:
+                return
             except (Refused, NotRunning, VeroError) as e:
                 words = str(e)
                 GLib.idle_add(lambda: (failed or self.problem)(words) and False)

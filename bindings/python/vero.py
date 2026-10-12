@@ -65,11 +65,71 @@ class NotRunning(VeroError):
     """
 
 
+class Cancelled(VeroError):
+    """The request was cancelled, through a Cancel, before its reply came.
+
+    Nobody is waiting for it any longer, so do not show it as a failure.
+    """
+
+
 _ERRORS = {
     "refused": Refused,
     "already_running": AlreadyRunning,
     "not_running": NotRunning,
+    "cancelled": Cancelled,
 }
+
+_current = threading.local()
+
+
+class Cancel:
+    """Cancels the requests made inside it, on its thread, when cancel() is
+    called from anywhere. Each such request raises Cancelled at once, and the
+    worker is told, so that its handler can stop. A worker older than
+    cancelling finishes the work and its reply is dropped.
+
+        token = Cancel()
+        with token:
+            api.thumbnail(id=3)    # from another thread: token.cancel()
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._cancelled = False
+        self._hooks: list = []
+
+    @property
+    def cancelled(self) -> bool:
+        return self._cancelled
+
+    def cancel(self) -> None:
+        with self._lock:
+            self._cancelled = True
+            hooks, self._hooks = self._hooks, []
+        for hook in hooks:
+            hook()
+
+    def __enter__(self) -> "Cancel":
+        stack = getattr(_current, "stack", None)
+        if stack is None:
+            stack = _current.stack = []
+        stack.append(self)
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        _current.stack.pop()
+
+    def _watch(self, hook) -> bool:
+        with self._lock:
+            if self._cancelled:
+                return False
+            self._hooks.append(hook)
+            return True
+
+    def _unwatch(self, hook) -> None:
+        with self._lock:
+            if hook in self._hooks:
+                self._hooks.remove(hook)
 
 
 class Vero:
@@ -174,7 +234,28 @@ class Vero:
                 self._pending.pop(request_id, None)
                 raise NotRunning("the worker host has stopped") from broken
 
-        envelope = slot.get()
+        stack = getattr(_current, "stack", None)
+        token = stack[-1] if stack else None
+        hook = None
+        if token is not None:
+            def hook() -> None:
+                with self._lock:
+                    if self._pending.pop(request_id, None) is None:
+                        return  # answered already
+                    try:
+                        self._process.stdin.write((json.dumps({"t": "cancel", "id": request_id}) + "\n").encode())
+                        self._process.stdin.flush()
+                    except (BrokenPipeError, ValueError):
+                        pass
+                slot.put({"e": "the request was cancelled", "c": "cancelled"})
+
+            if not token._watch(hook):
+                hook()
+        try:
+            envelope = slot.get()
+        finally:
+            if token is not None:
+                token._unwatch(hook)
         message = envelope.get("e")
         if message is not None:
             raise _ERRORS.get(envelope.get("c"), VeroError)(message)

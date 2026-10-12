@@ -49,7 +49,46 @@ class AlreadyRunning(message: String) : VeroException(message)
  */
 class NotRunning(message: String) : VeroException(message)
 
+/**
+ * The request was cancelled, through a [Cancel], before its reply came.
+ * Nobody is waiting for it any longer, so do not show it as a failure.
+ */
+class Cancelled(message: String) : VeroException(message)
+
+/**
+ * Cancels the requests given it when [cancel] is called, from any thread:
+ * each raises [Cancelled] at once, and the worker is told, so that its
+ * handler can stop. A worker older than cancelling finishes the work, and
+ * its reply is dropped.
+ *
+ *     val token = Cancel()
+ *     thread { vero.call("thumbnail", request, token) }
+ *     token.cancel()
+ */
+class Cancel {
+    private val hooks = mutableListOf<() -> Unit>()
+
+    @Volatile
+    var cancelled = false
+        private set
+
+    fun cancel() {
+        val run = synchronized(this) {
+            cancelled = true
+            hooks.toList().also { hooks.clear() }
+        }
+        run.forEach { it() }
+    }
+
+    internal fun watch(hook: () -> Unit): Boolean = synchronized(this) {
+        if (cancelled) false else { hooks.add(hook); true }
+    }
+
+    internal fun unwatch(hook: () -> Unit) = synchronized(this) { hooks.remove(hook) }
+}
+
 private fun errorFor(code: String?, message: String): VeroException = when (code) {
+    "cancelled" -> Cancelled(message)
     "refused" -> Refused(message)
     "already_running" -> AlreadyRunning(message)
     "not_running" -> NotRunning(message)
@@ -118,7 +157,7 @@ class Vero(workerPath: String, arguments: List<String> = emptyList()) {
     }
 
     /** Writes one request and waits for its reply. */
-    private fun ask(kind: String, name: String, payload: Any?): JSONObject? {
+    private fun ask(kind: String, name: String, payload: Any?, cancel: Cancel? = null): JSONObject? {
         if (stopped) throw NotRunning("the worker host has stopped")
 
         val id = nextId.incrementAndGet()
@@ -140,7 +179,25 @@ class Vero(workerPath: String, arguments: List<String> = emptyList()) {
             throw NotRunning("the worker host has stopped")
         }
 
-        val envelope = slot.take()
+        val hook = {
+            if (pending.remove(id) != null) {
+                try {
+                    synchronized(process) {
+                        process.outputStream.write((JSONObject().put("t", "cancel").put("id", id).toString() + "\n").toByteArray())
+                        process.outputStream.flush()
+                    }
+                } catch (broken: IOException) {
+                    // It has gone, and the request with it.
+                }
+                slot.offer(JSONObject().put("e", "the request was cancelled").put("c", "cancelled"))
+            }
+        }
+        if (cancel != null && !cancel.watch(hook)) hook()
+        val envelope = try {
+            slot.take()
+        } finally {
+            cancel?.unwatch(hook)
+        }
         val message = envelope.optString("e")
         if (message.isNotEmpty()) {
             throw errorFor(envelope.optString("c").ifEmpty { null }, message)
@@ -153,12 +210,13 @@ class Vero(workerPath: String, arguments: List<String> = emptyList()) {
      * worker, and waits for the reply.
      *
      * There is no timeout: a worker may hold a request for as long as the work
-     * takes, so call this off whatever thread draws the frontend.
+     * takes, so call this off whatever thread draws the frontend. [cancel],
+     * when given, cancels it.
      */
-    fun call(name: String, request: Any? = null): JSONObject? = ask("", name, request)
+    fun call(name: String, request: Any? = null, cancel: Cancel? = null): JSONObject? = ask("", name, request, cancel)
 
     /** Sends a request the worker routes on its own contents. */
-    fun send(request: Any): JSONObject? = ask("", "", request)
+    fun send(request: Any, cancel: Cancel? = null): JSONObject? = ask("", "", request, cancel)
 
     /**
      * The most recent event, without waiting for the next one.  Use it to draw

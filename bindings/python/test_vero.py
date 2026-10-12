@@ -18,7 +18,7 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import json  # noqa: E402
 
-from vero import NotRunning, Refused, Vero, play  # noqa: E402
+from vero import Cancel, Cancelled, NotRunning, Refused, Vero, play  # noqa: E402
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 
@@ -166,6 +166,23 @@ class NamedRouteTests(unittest.TestCase):
     def test_an_unrouted_name_is_refused(self) -> None:
         with self.assertRaises(Refused):
             self.vero.call("nosuch", {})
+
+    def test_a_cancelled_call_stops_its_handler(self) -> None:
+        token = Cancel()
+        threading.Timer(0.2, token.cancel).start()
+        start = time.time()
+        with self.assertRaises(Cancelled), token:
+            self.vero.call("slow", {})
+        self.assertLess(time.time() - start, 2)
+        deadline = time.time() + 3
+        while self.vero.call("stopped", {}) != 1 and time.time() < deadline:
+            time.sleep(0.02)
+        self.assertEqual(self.vero.call("stopped", {}), 1)
+        # A token cancelled already cancels at once, and requests outside
+        # it are untouched.
+        with self.assertRaises(Cancelled), token:
+            self.vero.call("slow", {})
+        self.assertEqual(self.vero.call("restartJob", {"id": 2}), {"restarted": 2})
 
     def test_a_handler_error_is_a_refusal(self) -> None:
         with self.assertRaises(Refused):

@@ -156,7 +156,50 @@ func VeroRequest(requestJSON *C.char) *C.char {
 	return request("", C.GoString(requestJSON))
 }
 
+// VeroCallTagged is VeroCall with a tag, a number the frontend chooses and
+// no other request in flight shares, by which VeroCancel cancels it.
+//
+//export VeroCallTagged
+func VeroCallTagged(tag C.ulonglong, name *C.char, requestJSON *C.char) *C.char {
+	ctx, stop := context.WithCancel(context.Background())
+	t := uint64(tag)
+	tagsMu.Lock()
+	tags[t] = stop
+	tagsMu.Unlock()
+	defer func() {
+		tagsMu.Lock()
+		delete(tags, t)
+		tagsMu.Unlock()
+		stop()
+	}()
+	return requestCtx(ctx, C.GoString(name), C.GoString(requestJSON))
+}
+
+// VeroCancel says that nobody waits any longer for the request with tag:
+// VeroCallTagged returns at once with a cancelled error, and the worker is
+// told, so that its handler can stop. A tag that has finished, or that
+// never was, is ignored.
+//
+//export VeroCancel
+func VeroCancel(tag C.ulonglong) {
+	tagsMu.Lock()
+	stop, ok := tags[uint64(tag)]
+	tagsMu.Unlock()
+	if ok {
+		stop()
+	}
+}
+
+var (
+	tagsMu sync.Mutex
+	tags   = map[uint64]context.CancelFunc{}
+)
+
 func request(name, requestJSON string) *C.char {
+	return requestCtx(context.Background(), name, requestJSON)
+}
+
+func requestCtx(ctx context.Context, name, requestJSON string) *C.char {
 	mu.Lock()
 	s := sup
 	mu.Unlock()
@@ -171,7 +214,7 @@ func request(name, requestJSON string) *C.char {
 	if err := json.Unmarshal([]byte(requestJSON), &payload); err != nil {
 		return cstring(errEnvelope(err))
 	}
-	reply, err := s.Call(context.Background(), name, payload)
+	reply, err := s.Call(ctx, name, payload)
 	if err != nil {
 		return cstring(errEnvelope(err))
 	}
@@ -295,6 +338,8 @@ func errEnvelope(err error) string {
 		e["code"] = "already_running"
 	case errors.Is(err, vero.ErrWorkerNotRunning):
 		e["code"] = "not_running"
+	case errors.Is(err, vero.ErrCancelled):
+		e["code"] = "cancelled"
 	}
 	out, _ := json.Marshal(e)
 	return string(out)

@@ -44,6 +44,9 @@ type reply struct {
 	Message string `json:"message"`
 }
 
+// stopped counts the "stoppable" requests that saw their context end.
+var stopped atomic.Int64
+
 func testWorker() {
 	w := vero.NewWorker(vero.WorkerOptions{})
 
@@ -77,6 +80,17 @@ func testWorker() {
 			// or the worker cannot exit when the frontend does.
 			<-ctx.Done()
 			return nil, ctx.Err()
+		case "stoppable":
+			// Slow work that stops when its request is cancelled.
+			select {
+			case <-ctx.Done():
+				stopped.Add(1)
+				return nil, ctx.Err()
+			case <-time.After(20 * time.Second):
+				return reply{Message: "finished"}, nil
+			}
+		case "stopped":
+			return reply{Message: fmt.Sprint(stopped.Load())}, nil
 		case "refuse":
 			return nil, errors.New("i will not")
 		case "quiet":
