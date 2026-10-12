@@ -13,6 +13,15 @@
 // already have are left alone. It adds each to vero-app.toml, so that
 // vero's packaging builds them, and writes PORTING.md: what in your worker
 // needs attention on the new systems.
+//
+//	vero gen                       each front end's requests, from the worker
+//
+// vero gen reads the worker with Go's type checker and writes, beside each
+// front end's copy of vero's bindings, a type for every request, reply and
+// the state, and a call for each request: WorkerAPI.swift, WorkerApi.cs and
+// worker_api.py. A request changed in Go then fails to build in Swift and
+// C#, rather than failing when the app runs. [gen] in vero-app.toml can
+// name other paths, as swift, csharp and python.
 package main
 
 import (
@@ -42,11 +51,8 @@ var aliases = map[string]string{
 func main() {
 	if len(os.Args) >= 2 {
 		switch os.Args[1] {
-		case "ship", "setup":
-			do := ship
-			if os.Args[1] == "setup" {
-				do = setup
-			}
+		case "ship", "setup", "gen":
+			do := map[string]func([]string) error{"ship": ship, "setup": setup, "gen": gen}[os.Args[1]]
 			if err := do(os.Args[2:]); err != nil {
 				fmt.Fprintf(os.Stderr, "vero %s: %v\n", os.Args[1], err)
 				os.Exit(1)
@@ -90,6 +96,8 @@ func main() {
 			"       vero new NAME [front ends, as for add] [--module PATH] [add's flags]\n"+
 			"       vero add [desktop|mobile|all|macos|gtk|wpf|android|ios|web|wasi|plan9 ...] [--except LIST] [--dir DIR]\n"+
 			"                [--summary TEXT] [--description TEXT] [--publisher \"Name <email>\"] [--keep-worker] [--force]\n"+
+			"       vero gen [--check] [--out DIR] [--dir DIR]\n"+
+			"                writes each front end's requests from the worker's types, in Swift, C# and Python\n"+
 			"       vero release [--version 1.2.3] [--targets ...] [--notes \"...\"] [--upload user@host:/path]\n"+
 			"       vero credentials\n"+
 			"       vero publish --homebrew | --winget | --aur | --all\n"+

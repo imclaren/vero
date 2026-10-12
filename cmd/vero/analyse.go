@@ -42,7 +42,10 @@ type App struct {
 	// KeepWorker says not to move the worker's code for those front ends,
 	// and to leave them a placeholder instead.
 	KeepWorker bool
-	toml       *tomlFile
+	// stateOptional lets the analysis go on without a state, which vero gen
+	// can find where vero add cannot.
+	stateOptional bool
+	toml          *tomlFile
 }
 
 // Struct is a Go struct the front ends need the shape of.
@@ -79,13 +82,15 @@ type Note struct {
 
 // analyse reads the app's folder: its module, its worker, and the front
 // ends it has.
-func analyse(dir string) (*App, error) {
+func analyse(dir string) (*App, error) { return analyseWith(dir, false) }
+
+func analyseWith(dir string, stateOptional bool) (*App, error) {
 	dir, _ = filepath.Abs(dir)
 	mod, err := os.ReadFile(filepath.Join(dir, "go.mod"))
 	if err != nil {
 		return nil, fmt.Errorf("run this in your app's folder, the one with its go.mod: %v", err)
 	}
-	app := &App{Dir: dir, Types: map[string]*Struct{}, Existing: map[string]bool{}}
+	app := &App{Dir: dir, Types: map[string]*Struct{}, Existing: map[string]bool{}, stateOptional: stateOptional}
 	if m := regexp.MustCompile(`(?m)^module\s+(\S+)`).FindSubmatch(mod); m != nil {
 		app.Module = string(m[1])
 	}
@@ -271,6 +276,9 @@ func (a *App) findWorker() error {
 	}
 	if structs[stateName] == nil {
 		stateName = declared
+	}
+	if (stateName == "" || structs[stateName] == nil) && a.stateOptional {
+		return nil
 	}
 	if stateName == "" || structs[stateName] == nil {
 		return fmt.Errorf("no state found: a vero.NewState(w, YourStatus{...}), or a vero.State[YourStatus], in %s", a.Worker)

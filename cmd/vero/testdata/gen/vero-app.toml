@@ -1,0 +1,4 @@
+name = "genapp"
+
+[worker]
+package = "cmd/worker"

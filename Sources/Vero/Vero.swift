@@ -264,7 +264,7 @@ public protocol NamedRequest: Encodable {
 }
 
 /// The reply type for a request that answers nothing.
-public struct EmptyReply: Decodable {
+public struct EmptyReply: Decodable, Equatable, Sendable {
     public init() {}
     public init(from decoder: Decoder) throws {}
 }
@@ -289,11 +289,13 @@ private struct RawJSON: Decodable {
     }
 }
 
-enum JSONValue: Codable, Equatable {
+/// Any JSON value: what a worker's json.RawMessage, interface or type with
+/// its own MarshalJSON becomes in the requests that vero gen writes.
+public enum JSONValue: Codable, Equatable, Sendable {
     case null, bool(Bool), number(Double), string(String)
     case array([JSONValue]), object([String: JSONValue])
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let c = try decoder.singleValueContainer()
         if c.decodeNil() { self = .null }
         else if let v = try? c.decode(Bool.self) { self = .bool(v) }
@@ -304,7 +306,7 @@ enum JSONValue: Codable, Equatable {
         else { throw DecodingError.dataCorruptedError(in: c, debugDescription: "unrecognised JSON") }
     }
 
-    func encode(to encoder: Encoder) throws {
+    public func encode(to encoder: Encoder) throws {
         var c = encoder.singleValueContainer()
         switch self {
         case .null: try c.encodeNil()
