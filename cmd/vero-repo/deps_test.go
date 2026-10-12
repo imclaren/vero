@@ -95,6 +95,10 @@ func TestResolveDepsUnknown(t *testing.T) {
 	if err := g.resolveDeps(); err == nil || !strings.Contains(err.Error(), "own section") {
 		t.Errorf("extra imagemagick: %v", err)
 	}
+	g = &GTK{Uses: []string{}}
+	if err := g.resolveDeps(); err != nil || g.Deb.Depends != "python3 (>= 3.11), python3-gi, gir1.2-gtk-4.0" || g.Deb.Recommends != "" {
+		t.Errorf("uses = [] did not give the base alone: %+v, %v", g.Deb, err)
+	}
 	g = &GTK{Deb: Deb{Depends: "python3, gir1.2-gtk-4.0"}}
 	if err := g.resolveDeps(); err != nil || g.Deb.Depends != "python3, gir1.2-gtk-4.0" || g.Deb.Recommends != "" {
 		t.Errorf("an app without uses changed: %+v, %v", g.Deb, err)

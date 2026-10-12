@@ -142,7 +142,9 @@ var openbsdDeps = listDeps{
 // before what the section lists itself. An app that names neither keeps
 // its sections as they are.
 func (g *GTK) resolveDeps() error {
-	if g == nil || (len(g.Uses) == 0 && len(g.Extra) == 0) {
+	// uses = [] asks for the base alone; no uses and no extra at all keep
+	// the sections as they are.
+	if g == nil || (g.Uses == nil && g.Extra == nil) {
 		return nil
 	}
 	for _, u := range g.Uses {
