@@ -47,7 +47,7 @@
 set -e
 VERO=$(cd "$(dirname "$0")/.." && pwd)
 . "$VERO/scripts/lib/docker.sh"
-IMAGE=debian:bookworm PORT=8642 FLATPAK="" VMSYS="" MAC="" LAUNCH=yes LIMIT=600 APP=""
+IMAGE=debian:trixie PORT=8642 FLATPAK="" VMSYS="" MAC="" LAUNCH=yes LIMIT=600 APP=""
 while [ $# -gt 0 ]; do
     case $1 in
         --image) IMAGE=$2; shift ;; --port) PORT=$2; shift ;;

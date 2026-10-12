@@ -68,7 +68,7 @@ This runs the app on a virtual display and opens it in Screen Sharing:
 
 ```bash
 docker build -t vero-gtk - <<'EOF'
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
       python3 python3-gi gir1.2-gtk-4.0 libgtk-4-1 xvfb x11vnc xauth \
     && rm -rf /var/lib/apt/lists/*

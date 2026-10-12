@@ -10,7 +10,7 @@
 #       [--skip "illumos dragonfly"]       all but these
 #       [--no-vms]            only the containers and the Flatpak
 #
-# The systems: debian ubuntu fedora opensuse arch alpine chimera void
+# The systems: debian debian12 ubuntu fedora opensuse arch alpine chimera void
 # flatpak freebsd netbsd openbsd dragonfly illumos windows, and mac for
 # vero's example (an app of your own records the Mac with record-mac.sh).
 # A VM is made the first time it is needed, which takes from minutes to
@@ -35,7 +35,8 @@ while [ $# -gt 0 ]; do
 done
 
 # name, then test-repo.sh's arguments for it.
-all="debian --image debian:bookworm
+all="debian --image debian:trixie
+debian12 --image debian:bookworm
 ubuntu --image ubuntu:24.04
 fedora --image fedora:latest
 opensuse --image opensuse/tumbleweed
