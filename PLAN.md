@@ -152,12 +152,12 @@ supports, except where the table says otherwise.
 | freebsd/arm | GOARM=7 | pkg armv7 | In | FreeBSD's packages for it are older, with Python 3.11, but have libadwaita 1.7.6. |
 | dragonfly/amd64 | GOAMD64=v1 | pkg x86_64 | In | |
 | netbsd/amd64, netbsd/arm64 and netbsd/386 | Go's defaults, GO386=sse2 | pkgsrc x86_64, aarch64, i386 | In | NetBSD has no GTK 4 web view. |
-| netbsd/arm | | None | Out for now | pkgsrc's binary packages for 32-bit ARM are to be checked for GTK 4 before it is added. |
+| netbsd/arm | | None | Out | NetBSD's binary packages for 32-bit ARM (earmv7hf) have GTK 3 but no GTK 4, in 10.0, 10.1, 10.0_2026Q3 and 11.0, checked on 12 October 2026. |
 | openbsd/amd64 and openbsd/arm64 | Go's defaults | amd64, aarch64 | In | |
 | openbsd/386 | GO386=sse2 | i386 | In | No web view. |
 | openbsd/arm | GOARM=7 | arm | In | No libadwaita, so plain GTK 4, and no web view. |
 | openbsd/riscv64 | Go's default | riscv64 | In | |
-| openbsd/ppc64 | | None | Out for now | OpenBSD's packages for 64-bit POWER are to be checked for GTK 4 before it is added. |
+| openbsd/ppc64 | GOPPC64=power8 | powerpc64 | In, for apps that need nothing it lacks | OpenBSD 7.9 has GTK 4 (4.22.3) and PyGObject (3.56.2) for it, but no libadwaita, web view or ffmpeg. So apps get plain GTK 4 and no web view there, and audiobooks, which needs ffmpeg, leaves it out. vero-repo adds powerpc64 to OpenBSD's processors. |
 | illumos/amd64 | GOAMD64=v1 | pkgsrc x86_64 today; IPS packages from OpenIndiana's repository after the move | In | |
 | solaris/amd64 | | None | Out | Oracle's repository is to be checked for GTK 4. A command-line program could be offered without it. |
 | aix/ppc64 | | None | Out | AIX has no GTK 4. A command-line program could be offered. |
@@ -167,9 +167,11 @@ supports, except where the table says otherwise.
 | js/wasm | | None | Out | A worker in a browser cannot keep files or sign-ins. vero has a web starter for workers that need neither. |
 | wasip1/wasm | | None | Out | No windows. vero has a WASI starter for workers with a text front end. |
 
-That is 30 pairs in and 17 out. Of those out, netbsd/arm, openbsd/ppc64
-and solaris/amd64 wait only on a check for GTK 4, and the six mobile
-pairs wait for their own plan.
+That is 31 pairs in and 16 out. Of those out, solaris/amd64 waits only on
+a check for GTK 4, and the six mobile pairs wait for their own plan. A
+processor that an app cannot use is left out of that system's `arches`
+in its `vero-app.toml`, as audiobooks leaves out OpenBSD's powerpc64 for
+want of ffmpeg, and its README says why.
 
 ## Phase 1. vero 0.18, untagged
 
