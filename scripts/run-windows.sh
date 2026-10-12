@@ -15,6 +15,9 @@
 #
 #   ssh -i ~/.ssh/vero-windows -p 2222 vero@127.0.0.1
 #
+# The screen is 800 by 600 until scripts/setup-windows-display.sh, run once,
+# makes it 1024 by 768, which gives an app's recordings room.
+#
 # Needs: brew install qemu, and a Windows 11 ARM64 ISO from Microsoft:
 #   https://www.microsoft.com/en-us/software-download/windows11arm64
 # Run scripts/build-all.sh first - the disc is made from dist/.
