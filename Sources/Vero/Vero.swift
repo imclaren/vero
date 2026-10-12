@@ -291,7 +291,7 @@ private struct RawJSON: Decodable {
 
 /// Any JSON value: what a worker's json.RawMessage, interface or type with
 /// its own MarshalJSON becomes in the requests that vero gen writes.
-public enum JSONValue: Codable, Equatable, Sendable {
+public enum JSONValue: Codable, Hashable, Sendable {
     case null, bool(Bool), number(Double), string(String)
     case array([JSONValue]), object([String: JSONValue])
 

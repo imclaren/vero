@@ -151,8 +151,8 @@ def send(line, wait=2.0):
     return drain(wait)
 
 # Wait for the login prompt, which is the end of a two-minute first boot,
-# or a much longer one on a Mac busy with other VMs.
-deadline, seen, started = time.time() + 600, "", time.time()
+# or a much longer one on a Mac busy with other VMs: twenty minutes.
+deadline, seen, started = time.time() + 1200, "", time.time()
 while time.time() < deadline:
     seen += drain(5)
     if "login:" in seen:

@@ -24,7 +24,7 @@ func swiftAPI(api *API) string {
 			fmt.Fprintf(&b, "typealias %s = %s\n", t.Name, genSwiftType(t.Alias))
 			continue
 		}
-		fmt.Fprintf(&b, "struct %s: Codable, Equatable, Sendable {\n", t.Name)
+		fmt.Fprintf(&b, "struct %s: Codable, Hashable, Sendable {\n", t.Name)
 		swiftFields(&b, t.Fields)
 		b.WriteString("}\n")
 		fmt.Fprintf(&b, "\nextension %s {\n", t.Name)
