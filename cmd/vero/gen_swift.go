@@ -15,6 +15,10 @@ const genHeader = "Written by vero gen from the worker's own types. Do not edit 
 // a worker older than the app, which lacks a newer field, still works.
 func swiftAPI(api *API) string {
 	var b strings.Builder
+	iso := ""
+	if api.SwiftNonisolated {
+		iso = "nonisolated "
+	}
 	b.WriteString(docLines(genHeader, "// "))
 	b.WriteString("\nimport Foundation\nimport Vero\n")
 	for _, t := range api.Types {
@@ -24,10 +28,10 @@ func swiftAPI(api *API) string {
 			fmt.Fprintf(&b, "typealias %s = %s\n", t.Name, genSwiftType(t.Alias))
 			continue
 		}
-		fmt.Fprintf(&b, "struct %s: Codable, Hashable, Sendable {\n", t.Name)
+		fmt.Fprintf(&b, "%sstruct %s: Codable, Hashable, Sendable {\n", iso, t.Name)
 		swiftFields(&b, t.Fields)
 		b.WriteString("}\n")
-		fmt.Fprintf(&b, "\nextension %s {\n", t.Name)
+		fmt.Fprintf(&b, "\n%sextension %s {\n", iso, t.Name)
 		b.WriteString("    init(from decoder: Decoder) throws {\n")
 		if len(t.Fields) > 0 {
 			b.WriteString("        let c = try decoder.container(keyedBy: CodingKeys.self)\n")
@@ -54,7 +58,7 @@ func swiftAPI(api *API) string {
 	for _, r := range api.Requests {
 		b.WriteString("\n")
 		b.WriteString(docLines(r.Doc, "/// "))
-		fmt.Fprintf(&b, "struct %sRequest: NamedRequest {\n", pascal(r.Name))
+		fmt.Fprintf(&b, "%sstruct %sRequest: NamedRequest {\n", iso, pascal(r.Name))
 		fmt.Fprintf(&b, "    typealias Reply = %s\n", swiftReply(r.Reply))
 		fmt.Fprintf(&b, "    static let name = %q\n", r.Name)
 		switch {

@@ -35,6 +35,10 @@ type API struct {
 	Types []*APIType
 	// Notes are what vero gen tells you: the types it had to rename.
 	Notes []string
+	// SwiftNonisolated marks the Swift types nonisolated, for an app whose
+	// code is on the main actor unless it says, as Xcode 26's new projects
+	// are: without it, the types could be used on the main actor alone.
+	SwiftNonisolated bool
 }
 
 // APIRequest is one handler.
@@ -104,6 +108,7 @@ func gen(args []string) error {
 		var text string
 		switch out.lang {
 		case "swift":
+			api.SwiftNonisolated = mainActorByDefault(app)
 			text = swiftAPI(api)
 		case "csharp":
 			text = csharpAPI(api, out.namespace)
@@ -145,6 +150,21 @@ type genOutput struct {
 
 // genOutputs are the files for the front ends the app has: beside vero's
 // bindings in each, or where [gen] in vero-app.toml says.
+// mainActorByDefault says whether the Mac app's Swift is on the main actor
+// unless it says otherwise: SWIFT_DEFAULT_ACTOR_ISOLATION in its Xcode
+// project, or defaultIsolation in its Package.swift.
+func mainActorByDefault(app *App) bool {
+	folder := filepath.Join(app.Dir, app.toml.get("macos", "folder"))
+	projects, _ := filepath.Glob(filepath.Join(folder, "*.xcodeproj", "project.pbxproj"))
+	for _, p := range projects {
+		if data, err := os.ReadFile(p); err == nil && strings.Contains(string(data), "SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor") {
+			return true
+		}
+	}
+	data, _ := os.ReadFile(filepath.Join(folder, "Package.swift"))
+	return strings.Contains(string(data), "defaultIsolation(MainActor")
+}
+
 func genOutputs(app *App) []genOutput {
 	var outs []genOutput
 	at := func(key, def string) string {
