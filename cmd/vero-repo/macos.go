@@ -20,6 +20,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"filippo.io/edwards25519"
 )
@@ -270,6 +271,9 @@ func packageMac(a *App, root, worker, out, ldflags, tmp string) error {
 	}
 	if identity == "" {
 		fmt.Println("signed the Mac app ad hoc, since the keychain has no Developer ID Application certificate, or more than one: set VERO_MAC_IDENTITY to choose")
+	}
+	if a.installLocal {
+		return installMacApp(a, app)
 	}
 
 	// The disk image: the app, and a link to Applications to drag it to.
@@ -1128,4 +1132,33 @@ func isMachO(m [4]byte) bool {
 		return true
 	}
 	return false
+}
+
+// installMacApp puts a built app in /Applications in place of the copy
+// there, quitting that copy first, and opens it. VERO_INSTALL_DIR puts it
+// in another folder instead, without opening it, for vero's tests.
+func installMacApp(a *App, app string) error {
+	folder, open := "/Applications", true
+	if d := os.Getenv("VERO_INSTALL_DIR"); d != "" {
+		folder, open = d, false
+	}
+	dest := filepath.Join(folder, filepath.Base(app))
+	exec.Command("osascript", "-e", `quit app id "`+a.ID+`"`).Run()
+	for i := 0; i < 20; i++ {
+		if exec.Command("pgrep", "-f", filepath.Join(dest, "Contents", "MacOS")).Run() != nil {
+			break
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	if err := os.RemoveAll(dest); err != nil {
+		return err
+	}
+	if err := runIn("", "ditto", app, dest); err != nil {
+		return err
+	}
+	fmt.Printf("installed %s %s in %s\n", a.DisplayName, a.Version, dest)
+	if !open {
+		return nil
+	}
+	return runIn("", "open", dest)
 }

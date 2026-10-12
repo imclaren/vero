@@ -36,6 +36,9 @@ type App struct {
 	// tray elsewhere, with no Dock icon. [macos] menubar says the same for
 	// the Mac alone.
 	Menubar bool `toml:"menubar"`
+	// installLocal installs the Mac app on this Mac in place of making its
+	// disk image, for vero install.
+	installLocal bool
 	// Tray is a window app that also has an icon in the menu bar and the
 	// tray, and keeps running when its window is closed. It changes only
 	// the starters that vero add writes.

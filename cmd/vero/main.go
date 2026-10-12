@@ -61,8 +61,8 @@ var aliases = map[string]string{
 func main() {
 	if len(os.Args) >= 2 {
 		switch os.Args[1] {
-		case "ship", "setup", "gen", "upgrade":
-			do := map[string]func([]string) error{"ship": ship, "upgrade": upgrade, "setup": setup, "gen": gen}[os.Args[1]]
+		case "ship", "setup", "gen", "upgrade", "install", "local-version":
+			do := map[string]func([]string) error{"ship": ship, "upgrade": upgrade, "setup": setup, "gen": gen, "install": install, "local-version": localVersionCommand}[os.Args[1]]
 			if err := do(os.Args[2:]); err != nil {
 				fmt.Fprintf(os.Stderr, "vero %s: %v\n", os.Args[1], err)
 				os.Exit(1)
@@ -106,6 +106,10 @@ func main() {
 			"       vero new NAME [front ends, as for add] [--module PATH] [add's flags]\n"+
 			"       vero add [desktop|mobile|all|macos|gtk|wpf|android|ios|web|wasi|plan9 ...] [--except LIST] [--dir DIR]\n"+
 			"                [--menubar | --tray] [--summary TEXT] [--description TEXT] [--publisher \"Name <email>\"] [--keep-worker] [--force]\n"+
+			"       vero install [--published 1.2.3] [--dir DIR]\n"+
+			"                builds the Mac app from here and installs it, numbered just above the release that is out\n"+
+			"       vero local-version [--published 1.2.3] [--dir DIR]\n"+
+			"                prints that number, for a prebuild script that numbers Xcode's own builds the same way\n"+
 			"       vero upgrade [--version v0.18.0] [--force] [--dir DIR]\n"+
 			"                brings an app made with vero 0.13 or later up to this vero, and says what to change in its own code\n"+
 			"       vero gen [--check] [--out DIR] [--dir DIR]\n"+

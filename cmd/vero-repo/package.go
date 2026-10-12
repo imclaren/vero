@@ -26,6 +26,7 @@ func packageCommand(args []string) error {
 	vero := fset.String("vero", "", "vero's folder (default: found from this program's source)")
 	buildNum := fset.String("build", "", "a Mac app's CFBundleVersion, when it numbers its builds apart from its versions")
 	keyDir := fset.String("key", "", "the signing key's folder, which keeps the Android app's keystore")
+	install := fset.Bool("install", false, "the Mac app only: build and sign it, then put it in /Applications in place of the copy there and open it, as vero install does")
 	fset.Parse(args)
 	a, err := LoadApp(*appPath)
 	if err != nil {
@@ -38,6 +39,7 @@ func packageCommand(args []string) error {
 		return errors.New("which version? give --version, or version in vero-app.toml")
 	}
 	a.Build = *buildNum
+	a.installLocal = *install
 	root, err := a.ModuleRoot()
 	if err != nil {
 		return err
