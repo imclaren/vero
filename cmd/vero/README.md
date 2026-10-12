@@ -87,6 +87,19 @@ since is left alone, and `vero upgrade` names it: an app changes what vero's
 libraries do through their settings or by subclassing. `--force` replaces
 it all the same.
 
+## vero install
+
+`vero install` builds the Mac app from your checkout, signs it, and puts it
+in /Applications in place of the copy there, numbered just above the newest
+release, as `0.5.0.202610121530`: the release's number, then the date and
+time. A build numbered below the release would be replaced by it, since
+Sparkle installs any release with a higher number and vero keeps whichever
+worker is newer. This one is above the release that is out and below the
+next, which replaces it as usual. vero finds the release's number in a
+`latest.json` in the app's folder, on a `releases` branch or at its site;
+`--published 1.2.3` gives it. `vero local-version` prints the number, for
+a prebuild script that numbers Xcode's own builds the same way.
+
 ## PORTING.md
 
 `vero add` also writes `PORTING.md`: what in your worker needs attention

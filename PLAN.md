@@ -303,7 +303,7 @@ want of ffmpeg, and its README says why.
    and vero records its hash. `vero upgrade` stops and names any such file
    that has been edited. An app that needs something different changes it
    through the library's settings or subclasses.
-9. **Local builds numbered above the release.** A local build numbered
+9. **Local builds numbered above the release.** Done on 12 October 2026 (e3187f0): `vero install`, and `vero local-version` for a prebuild script. A local build numbered
    below the newest release is replaced by it, because Sparkle installs
    any release with a higher number and vero keeps whichever worker has
    the higher number. treehouse found this, and its
