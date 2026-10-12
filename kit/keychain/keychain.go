@@ -45,6 +45,9 @@ func (it Item) service() string { return profile.Service(it.Service) }
 
 // Load reads the secret. Nothing kept is not an error: it returns nil.
 func (it Item) Load() ([]byte, error) {
+	if !it.File && protected() {
+		return loadProtected(it.Path)
+	}
 	if it.File || !available {
 		return readFile(it.Path)
 	}
@@ -69,6 +72,9 @@ func (it Item) Load() ([]byte, error) {
 
 // Save keeps the secret, replacing what was there.
 func (it Item) Save(data []byte) error {
+	if !it.File && protected() {
+		return saveProtected(it.Path, data)
+	}
 	if it.File || !available {
 		return writeFile(it.Path, data)
 	}
