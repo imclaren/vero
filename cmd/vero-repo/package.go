@@ -260,6 +260,18 @@ func packageWindows(a *App, vero, root, worker, out, ldflags string) error {
 	if ldflags != "" {
 		args = append(args, "--ldflags", ldflags)
 	}
+	if len(a.Schemes) > 0 || len(a.Opens) > 0 {
+		f, err := os.CreateTemp("", "vero-assoc-*.nsh")
+		if err != nil {
+			return err
+		}
+		defer os.Remove(f.Name())
+		if _, err := f.WriteString(a.nsisAssoc(a.WPF.Exe)); err != nil {
+			return err
+		}
+		f.Close()
+		args = append(args, "--assoc", f.Name())
+	}
 	arches, err := a.WPF.arches()
 	if err != nil {
 		return err

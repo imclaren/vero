@@ -236,6 +236,13 @@ func desktopEntry(a *App, exec string) []byte {
 	if categories == "" {
 		categories = "Utility;"
 	}
+	// What the app opens: its links and files, passed to it as %U, which
+	// its single copy passes on to the copy that is running.
+	types := ""
+	if mimes := a.mimeTypes(); len(mimes) > 0 {
+		exec += " %U"
+		types = "MimeType=" + strings.Join(mimes, ";") + ";\n"
+	}
 	return []byte(fmt.Sprintf(`[Desktop Entry]
 Type=Application
 Name=%s
@@ -244,7 +251,7 @@ Exec=%s
 Icon=%s
 Categories=%s
 StartupNotify=true
-`, a.DisplayName, a.Summary, exec, a.ID, categories))
+`, a.DisplayName, a.Summary, exec, a.ID, categories) + types)
 }
 
 // iconSizes is the icon as a PNG at each size.

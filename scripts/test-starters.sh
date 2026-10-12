@@ -70,14 +70,44 @@ if [ $windows = yes ]; then
         (cd $app/windows && dotnet publish -nologo -v q -c Release -r win-arm64 --self-contained -o "$PAY/$app" >/dev/null)
         (cd $app && GOOS=windows GOARCH=arm64 CGO_ENABLED=0 go build -o "$PAY/$app/$app-worker.exe" ./cmd/worker)
     done
+    # An installer for the tray app, with a scheme of its own, mailto and
+    # .eml, to check what the installer registers.
+    python3 - trayapp/vero-app.toml <<'PY'
+import sys
+p = sys.argv[1]
+s = open(p).read()
+s = s.replace("\n[worker]", 'schemes = ["verotest", "mailto"]\nopens = ["eml"]\n\n[worker]', 1)
+open(p, "w").write(s)
+PY
+    (cd trayapp && "$work/vero-repo" package --app vero-app.toml --vero "$VERO" --targets windows --version 1.0.0 --out "$work/winpkg" >"$work/winpkg.log" 2>&1) ||
+        { echo "FAIL: packaging trayapp for Windows"; tail -20 "$work/winpkg.log"; fail=1; }
+    cp "$work"/winpkg/trayapp-1.0.0-arm64-setup.exe "$PAY/setup.exe" 2>/dev/null || true
     cp "$VERO/scripts/lib/starter-check.ps1" "$PAY/"
     windows_running && { echo "FAIL: the Windows VM is running already"; exit 1; }
+    # The VM is shut down however this ends.
+    trap 'windows_stop; rm -rf "$work"' EXIT
     "$VERO/scripts/run-windows.sh" --headless --payload "$PAY/empty" --ssh "$SSHPORT" >"$PAY/vm.log" 2>&1 &
     if windows_wait "$SSHPORT" 300; then
         windows_ssh "$SSHPORT" "New-Item -ItemType Directory -Force C:/vero-starters | Out-Null; Remove-Item -Recurse -Force C:/vero-starters/*"
         for app in $apps; do windows_scp "$SSHPORT" -r "$PAY/$app" vero@127.0.0.1:C:/vero-starters/; done
         windows_scp "$SSHPORT" "$work/steps.json" "$PAY/starter-check.ps1" vero@127.0.0.1:C:/vero-starters/
         windows_ssh "$SSHPORT" "powershell -NoProfile -ExecutionPolicy Bypass -File C:/vero-starters/starter-check.ps1 -Apps winapp,trayicon,trayapp" | tr -d '\r' >"$PAY/results.txt"
+        # The installer registers the app's link schemes and file types, and
+        # its uninstaller takes them away again.
+        [ -f "$PAY/setup.exe" ] && windows_scp "$SSHPORT" "$PAY/setup.exe" "$VERO/scripts/lib/assoc-check.ps1" vero@127.0.0.1:C:/vero-starters/
+        windows_ssh "$SSHPORT" "powershell -NoProfile -ExecutionPolicy Bypass -File C:/vero-starters/assoc-check.ps1 -Setup C:/vero-starters/setup.exe -Name trayapp -Id com.example.trayapp -Scheme verotest" | tr -d '\r' >"$PAY/assoc.txt"
+        installed=$(sed -n '/== installed/,/== uninstalled/p' "$PAY/assoc.txt")
+        removed=$(sed -n '/== uninstalled/,$p' "$PAY/assoc.txt")
+        if printf "%s\n" "$installed" | grep -qx 'own scheme: True' &&
+           printf "%s\n" "$installed" | grep -q '^own scheme command: "C:.*Trayapp.exe" "%1"$' &&
+           printf "%s\n" "$installed" | grep -qx 'mailto offered: com.example.trayapp.mailto' &&
+           printf "%s\n" "$installed" | grep -qx 'mailto taken over: False' &&
+           printf "%s\n" "$installed" | grep -qx 'eml open with: True' &&
+           printf "%s\n" "$installed" | grep -qx 'registered: Software\\com.example.trayapp\\Capabilities' &&
+           printf "%s\n" "$removed" | grep -qx 'own scheme: False' &&
+           printf "%s\n" "$removed" | grep -qx 'eml open with: False' &&
+           printf "%s\n" "$removed" | grep -Eqx 'registered: ?'; then echo "ok: the Windows installer registers the link scheme, mailto and .eml, and the uninstaller removes them"
+        else echo "FAIL: the Windows installer's link schemes and file types"; cat "$PAY/assoc.txt"; fail=1; fi
         for app in $apps; do
             if grep -qx "$app steps: True" "$PAY/results.txt" && grep -qx "$app running: True" "$PAY/results.txt"; then echo "ok: $app wpf runs on Windows"
             else echo "FAIL: $app wpf on Windows"; cat "$PAY/results.txt"; fail=1; fi

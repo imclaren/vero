@@ -40,6 +40,12 @@ VIAddVersionKey "LegalCopyright" "${PUBLISHER}"
 VIAddVersionKey "FileDescription" "${NAME} installer"
 VIAddVersionKey "FileVersion" "${VERSION}"
 
+; The app's link schemes and file types, when it has any: vero-repo
+; writes the registry entries as two macros.
+!ifdef ASSOC
+!include "${ASSOC}"
+!endif
+
 Function .onInit
 !if "${ARCH}" == "arm64"
   ${IfNot} ${IsNativeARM64}
@@ -70,6 +76,9 @@ Section "${NAME}" SecApp
   WriteRegStr HKCU "${UNINSTALL}" "URLInfoAbout" "${URL}"
   WriteRegStr HKCU "${UNINSTALL}" "DisplayIcon" "$INSTDIR\${EXE}"
   WriteRegStr HKCU "${UNINSTALL}" "UninstallString" '"$INSTDIR\uninstall.exe"'
+!ifdef ASSOC
+  !insertmacro VeroAssociate
+!endif
   WriteRegDWORD HKCU "${UNINSTALL}" "NoModify" 1
   WriteRegDWORD HKCU "${UNINSTALL}" "NoRepair" 1
 SectionEnd
@@ -116,4 +125,7 @@ Section "Uninstall"
   Delete "$SMSTARTUP\${NAME}.lnk"
   RMDir /r "$INSTDIR"
   DeleteRegKey HKCU "${UNINSTALL}"
+!ifdef ASSOC
+  !insertmacro VeroDissociate
+!endif
 SectionEnd

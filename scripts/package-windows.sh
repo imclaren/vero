@@ -16,6 +16,8 @@
 #   --arches LIST  the installers to make: x64 and arm64 unless it says;
 #                  x86 is for 32-bit Windows
 #   --startup TEXT offers, ticked, to open the app at sign-in, as TEXT
+#   --assoc FILE   the NSIS macros that register the app's link schemes and
+#                  file types, which vero-repo writes
 #   --webview2     for an app that shows web pages with Microsoft Edge
 #                  WebView2: the installer installs it where it's missing.
 #                  Windows 11 has it, and so does most of Windows 10; for
@@ -35,14 +37,14 @@ VERO=$(cd "$(dirname "$0")/.." && pwd)
 ROOT=$PWD
 [ -f "$ROOT/go.mod" ] || { echo "run this from beside your app's go.mod" >&2; exit 2; }
 
-ARCHES="x64 arm64" NAME="" VERSION="" APP="" EXE="" WORKER="" WORKER_NAME="" ICON="" PUBLISHER="" URL="" ID="" STARTUP="" WEBVIEW2=""
+ASSOC="" ARCHES="x64 arm64" NAME="" VERSION="" APP="" EXE="" WORKER="" WORKER_NAME="" ICON="" PUBLISHER="" URL="" ID="" STARTUP="" WEBVIEW2=""
 OUT="$ROOT/dist/packages"
 while [ $# -gt 0 ]; do
     case $1 in
         --name) NAME=$2 ;; --version) VERSION=$2 ;; --app) APP=$2 ;; --exe) EXE=$2 ;;
         --worker) WORKER=$2 ;; --worker-name) WORKER_NAME=$2 ;; --icon) ICON=$2 ;;
         --publisher) PUBLISHER=$2 ;; --url) URL=$2 ;; --id) ID=$2 ;; --startup) STARTUP=$2 ;; --out) OUT=$2 ;;
-        --ldflags) LDEXTRA=$2 ;; --arches) ARCHES=$2 ;;
+        --ldflags) LDEXTRA=$2 ;; --arches) ARCHES=$2 ;; --assoc) ASSOC=$2 ;;
         --webview2) WEBVIEW2=yes; shift; continue ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
@@ -81,14 +83,21 @@ fi
 for arch in $ARCHES; do
     goarch=$(goarch "$arch")
     echo "publishing for win-$arch"
-    "$DOTNET" publish "$APP" -c Release -r "win-$arch" --self-contained -p:EnableWindowsTargeting=true \
-        -p:Version="$VERSION" -o "$STAGE/$arch" -v quiet >/dev/null
+    # Quiet unless it fails, when what dotnet said is shown.
+    # Built in a folder of its own, so that nothing a local build left in
+    # the project's bin and obj can get into a release.
+    if ! "$DOTNET" publish "$APP" -c Release -r "win-$arch" --self-contained -p:EnableWindowsTargeting=true \
+        -p:Version="$VERSION" --artifacts-path "$STAGE/artifacts-$arch" -o "$STAGE/$arch" -v quiet >"$STAGE/publish-$arch.log" 2>&1; then
+        tail -30 "$STAGE/publish-$arch.log" >&2
+        exit 1
+    fi
     cp "$DIST/worker-windows-$goarch.exe" "$STAGE/$arch/$WORKER_NAME"
     set -- -V2 -DNAME="$NAME" -DVERSION="$VERSION" -DARCH="$arch" -DEXE="$EXE" -DWORKER="$WORKER_NAME" \
         -DPUBLISHER="$PUBLISHER" -DURL="$URL" -DID="$ID" -DICON="$STAGE/app.ico" -DSRC="$STAGE/$arch" \
         -DOUT="$OUT/$NAME-$VERSION-$arch-setup.exe"
     [ -n "$STARTUP" ] && set -- "$@" -DSTARTUP="$STARTUP"
     [ -n "$WEBVIEW2" ] && set -- "$@" -DWEBVIEW2="$STAGE/MicrosoftEdgeWebview2Setup.exe"
+    [ -n "$ASSOC" ] && set -- "$@" -DASSOC="$ASSOC"
     makensis "$@" "$VERO/scripts/lib/installer.nsi"
     # Signed with the publisher's certificate when there is one, from the
     # environment, as the Mac's identity is. Without, Windows SmartScreen

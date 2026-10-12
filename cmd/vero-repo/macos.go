@@ -722,6 +722,7 @@ func infoPlist(a *App) []byte {
 	if m.Menubar || a.Menubar {
 		b.WriteString("\t<key>LSUIElement</key>\n\t<true/>\n")
 	}
+	b.WriteString(a.plistAssoc())
 	b.WriteString("</dict>\n</plist>\n")
 	return b.Bytes()
 }

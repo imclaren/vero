@@ -43,6 +43,11 @@ type App struct {
 	// tray, and keeps running when its window is closed. It changes only
 	// the starters that vero add writes.
 	Tray bool `toml:"tray"`
+	// Schemes are link schemes the app opens, such as "calmtasks" or
+	// "mailto", and Opens the file types, by extension, such as "eml".
+	// assoc.go registers them on each system.
+	Schemes []string `toml:"schemes"`
+	Opens   []string `toml:"opens"`
 
 	Worker Worker `toml:"worker"`
 	GTK    *GTK   `toml:"gtk"`
@@ -344,6 +349,9 @@ func LoadApp(path string) (*App, error) {
 	}
 	a.dir = filepath.Dir(abs)
 	if err := a.GTK.resolveDeps(); err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
+	if err := a.checkAssoc(); err != nil {
 		return nil, fmt.Errorf("%s: %w", path, err)
 	}
 	if a.DisplayName == "" {
