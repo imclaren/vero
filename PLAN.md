@@ -109,9 +109,19 @@ opening the app from the menu shows its small window.
    | DragonFly | 1.7.2 |
    | NetBSD 10 and 11 | 1.9.1 on x86_64 and i386, 1.8.0 on aarch64 |
    | OpenBSD | 1.9.4 |
-   | illumos | None in SmartOS's pkgsrc, from which vero installs GTK on OpenIndiana. OpenIndiana's own repository has 1.6.10. |
+   | illumos | None in SmartOS's pkgsrc, from which vero installs GTK on OpenIndiana today. OpenIndiana's own repository has 1.6.10, and vero moves to it. |
 
    vero's tests use Debian 12 by default today, and move to Debian 13.
+
+   illumos moves from SmartOS's pkgsrc to OpenIndiana's own repository.
+   SmartOS is a server system, and its pkgsrc lacks libadwaita and a GTK 4
+   web view, and its GTK 4 has crashed loading an app's icon. vero-repo
+   makes IPS packages and an IPS repository for illumos, which depend on
+   OpenIndiana's GTK 4 (4.16), PyGObject (3.54), libadwaita (1.6.10),
+   libsecret and gnome-keyring, and the illumos test installs from it in
+   vero's OpenIndiana virtual machine. Whether OpenIndiana's WebKitGTK
+   2.52.5 includes the GTK 4 web view is checked there. Without it, illumos
+   shows pages in the browser, as any system without a web view does.
 7. **Typed requests generated from the worker.** The worker's handlers are
    typed in Go (`vero.Handle[Req, Rep]`), but the front ends call them by
    name with untyped JSON, and each Mac app keeps its own `Requests.swift`
