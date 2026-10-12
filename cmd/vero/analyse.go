@@ -45,6 +45,10 @@ type App struct {
 	// window: menubar = true in vero-app.toml, which vero add --menubar
 	// writes.
 	MenuBar bool
+	// Tray says a window app also has a tray icon, and the Mac app an icon
+	// in the menu bar, and keeps running when its window is closed: tray =
+	// true in vero-app.toml, which vero add --tray writes.
+	Tray bool
 	// SwiftPackage is the Mac starter's dependency on vero's Swift package:
 	// the checkout that go.mod replaces vero with, or the published
 	// version that it requires.
@@ -121,6 +125,7 @@ func analyseWith(dir string, stateOptional bool) (*App, error) {
 		app.Existing[p] = app.toml.has(sectionOf[p])
 	}
 	app.MenuBar = app.toml.getBool("", "menubar") || app.toml.getBool("macos", "menubar")
+	app.Tray = app.toml.getBool("", "tray") && !app.MenuBar
 	app.SwiftPackage = swiftPackage(dir)
 	if err := app.findWorker(); err != nil {
 		return nil, err

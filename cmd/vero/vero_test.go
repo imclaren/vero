@@ -388,14 +388,15 @@ func jobsApp(t *testing.T) *App {
 	return app
 }
 
-// TestShapes checks that each starter is a window app, or with menubar a
-// tray app, and that the Mac starter uses this checkout of vero, as go.mod
-// does.
+// TestShapes checks that each starter is a window app, a window app with
+// a tray icon, or a tray app with a small window and a main window, and
+// that the Mac starter uses this checkout of vero, as go.mod does.
 func TestShapes(t *testing.T) {
 	root, _ := filepath.Abs("../..")
-	for _, menubar := range []bool{false, true} {
+	for _, shape := range []string{"window", "tray", "menubar"} {
 		app := jobsApp(t)
-		app.MenuBar = menubar
+		app.MenuBar = shape == "menubar"
+		app.Tray = shape == "tray"
 		if _, err := add(app, []string{"gtk", "wpf", "macos"}, false); err != nil {
 			t.Fatal(err)
 		}
@@ -406,24 +407,29 @@ func TestShapes(t *testing.T) {
 			}
 			return string(data)
 		}
-		want := map[string][2]string{
-			"gtk/main.py":                  {"window=Main", "small_window=Main"},
-			"windows/App.xaml.cs":          {"CreateWindow()", "MenuBar = true"},
-			"macos/Sources/Jobs/App.swift": {"Window(\"jobs\"", "MenuBarExtra(\"jobs\""},
-			"vero-app.toml":                {"[worker]", "menubar = true"},
+		// What each file has, and has not, in each shape.
+		checks := []struct {
+			file, text string
+			in         map[string]bool
+		}{
+			{"gtk/main.py", "window=Main", map[string]bool{"window": true, "tray": true, "menubar": true}},
+			{"gtk/main.py", "small_window=lambda app: Main(app, small=True)", map[string]bool{"menubar": true}},
+			{"gtk/main.py", "tray=True", map[string]bool{"tray": true}},
+			{"windows/App.xaml.cs", "CreateWindow()", map[string]bool{"window": true, "tray": true, "menubar": true}},
+			{"windows/App.xaml.cs", "MenuBar = true", map[string]bool{"menubar": true}},
+			{"windows/App.xaml.cs", "CreateSmallWindow()", map[string]bool{"menubar": true}},
+			{"windows/App.xaml.cs", "Tray = true", map[string]bool{"tray": true}},
+			{"macos/Sources/Jobs/App.swift", `Window("jobs", id: "main")`, map[string]bool{"window": true, "tray": true, "menubar": true}},
+			{"macos/Sources/Jobs/App.swift", "MenuBarExtra(", map[string]bool{"tray": true, "menubar": true}},
+			{"macos/Sources/Jobs/App.swift", "VeroDock.follow()", map[string]bool{"menubar": true}},
+			{"macos/Sources/Jobs/App.swift", ".veroOpensWhenAsked()", map[string]bool{"menubar": true}},
+			{"vero-app.toml", "menubar = true", map[string]bool{"menubar": true}},
+			{"vero-app.toml", "tray = true", map[string]bool{"tray": true}},
 		}
-		for file, w := range want {
-			text := read(file)
-			shape := w[0]
-			if menubar {
-				shape = w[1]
+		for _, c := range checks {
+			if got := strings.Contains(read(c.file), c.text); got != c.in[shape] {
+				t.Errorf("%s: %s has %q: %v, want %v", shape, c.file, c.text, got, c.in[shape])
 			}
-			if !strings.Contains(text, shape) {
-				t.Errorf("menubar %v: %s has no %q", menubar, file, shape)
-			}
-		}
-		if strings.Contains(read("vero-app.toml"), "menubar = true") != menubar {
-			t.Errorf("menubar %v: vero-app.toml says otherwise", menubar)
 		}
 		if !strings.Contains(read("macos/Package.swift"), `.package(path: "`+root+`")`) {
 			t.Errorf("Package.swift does not use this checkout:\n%s", read("macos/Package.swift"))
@@ -431,7 +437,7 @@ func TestShapes(t *testing.T) {
 		// The libraries and what vero gen writes are beside each starter.
 		for _, f := range []string{"gtk/vero_gtk.py", "gtk/worker_api.py", "windows/VeroWpf.cs", "windows/WorkerApi.cs", "windows/Theme.xaml", "macos/Sources/Jobs/WorkerAPI.swift"} {
 			if _, err := os.Stat(filepath.Join(app.Dir, f)); err != nil {
-				t.Errorf("menubar %v: %v", menubar, err)
+				t.Errorf("%s: %v", shape, err)
 			}
 		}
 	}
@@ -447,7 +453,7 @@ func TestSetMenuBar(t *testing.T) {
 		t.Fatal("menubar before it was set")
 	}
 	for i := 0; i < 2; i++ {
-		if err := f.setMenuBar(); err != nil {
+		if err := f.setTrue("menubar"); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -60,17 +60,17 @@ func (t *tomlFile) getBool(section, key string) bool {
 	return false
 }
 
-// setMenuBar adds menubar = true to the top of a file that has none, after
-// its id, and writes it.
-func (t *tomlFile) setMenuBar() error {
-	if t.text == "" || t.getBool("", "menubar") {
+// setTrue adds key = true, such as menubar or tray, to the top of a file
+// that does not have it, after its id, and writes it.
+func (t *tomlFile) setTrue(key string) error {
+	if t.text == "" || t.getBool("", key) {
 		return nil
 	}
 	re := regexp.MustCompile(`(?m)^id\s*=.*$`)
 	if loc := re.FindStringIndex(t.text); loc != nil {
-		t.text = t.text[:loc[1]] + "\nmenubar = true" + t.text[loc[1]:]
+		t.text = t.text[:loc[1]] + "\n" + key + " = true" + t.text[loc[1]:]
 	} else {
-		t.text = "menubar = true\n" + t.text
+		t.text = key + " = true\n" + t.text
 	}
 	return os.WriteFile(t.path, []byte(t.text), 0o644)
 }
@@ -112,10 +112,14 @@ func (t *tomlFile) write(app *App, add string) error {
 }
 
 // menubarLine is the setting for an app that lives in the menu bar and
-// the tray, and nothing for a window app.
+// the tray, or for a window app with a tray icon, and nothing for a plain
+// window app.
 func menubarLine(app *App) string {
-	if !app.MenuBar {
-		return ""
+	switch {
+	case app.MenuBar:
+		return "# It lives in the menu bar on the Mac and in the tray elsewhere.\nmenubar = true\n"
+	case app.Tray:
+		return "# A window app with an icon in the menu bar and the tray, which keeps\n# running when its window is closed.\ntray = true\n"
 	}
-	return "# It lives in the menu bar on the Mac and in the tray elsewhere.\nmenubar = true\n"
+	return ""
 }

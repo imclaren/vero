@@ -8,7 +8,9 @@
 //     window   the window, banners, toasts, undo, dialogs, notifications,
 //              opening at sign-in, and HTML
 //     single   a single copy, to which a second passes its arguments on
-//     tray     a menu bar app's tray and small window
+//     tray        a menu bar app's tray, its small window and its main window
+//     windowtray  a window app with a tray icon, which keeps running when
+//                 its window is closed
 
 #nullable enable
 using System;
@@ -47,6 +49,7 @@ public sealed class CheckApp : VeroApp
         Name = $"vero check {scenario}",
         Worker = worker,
         MenuBar = scenario == "tray",
+        Tray = scenario == "windowtray",
     })
     {
         this.output = output;
@@ -64,6 +67,7 @@ public sealed class CheckApp : VeroApp
                 case "window": Later(3, WindowChecks); break;
                 case "single": Later(40, () => { Expect(false, "nothing was passed on"); Finish(); }); break;
                 case "tray": Later(3, TrayChecks); break;
+                case "windowtray": Later(3, WindowTrayChecks); break;
             }
         };
     }
@@ -169,7 +173,33 @@ public sealed class CheckApp : VeroApp
         Later(0.5, () =>
         {
             Expect(SmallView is { IsVisible: false }, "closing the small window hides it");
-            Finish();
+            // The main window, as the small window's button opens it.
+            var main = ShowMainWindow();
+            Expect(main is { IsVisible: true, ShowInTaskbar: true }, "the main window opens, with a taskbar button");
+            main?.Close();
+            Later(0.5, () =>
+            {
+                Expect(main is { IsVisible: false }, "closing the main window hides it, and the app keeps running");
+                Finish();
+            });
+        });
+    }
+
+    void WindowTrayChecks()
+    {
+        var items = TrayItems();
+        Expect(items.Contains("Open vero check windowtray") && items.Contains("Quit vero check windowtray"), "the tray has Open and Quit: " + string.Join(" | ", items));
+        Expect(MainView is { IsVisible: true }, "the window opens at start");
+        MainView?.Close();
+        Later(0.5, () =>
+        {
+            Expect(MainView is { IsVisible: false }, "closing the window hides it, and the app keeps running");
+            Activate();
+            Later(0.5, () =>
+            {
+                Expect(MainView is { IsVisible: true }, "the tray brings the window back");
+                Finish();
+            });
         });
     }
 }

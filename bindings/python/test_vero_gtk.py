@@ -96,12 +96,14 @@ class GtkLibraryTests(unittest.TestCase):
         self.assertEqual(first.returncode, 0, out)
         self.assertIn('opened ["calmtasks://task/1"]', out)
 
-    @unittest.skipUnless(bus(), "no session bus")
-    def test_tray_menu_activate_and_quit(self) -> None:
-        watcher = subprocess.Popen([sys.executable, os.path.abspath(__file__), "--watcher"],
+    def with_watcher(self, scenario: str, name: str, *args: str) -> str:
+        """Runs a scenario with a stand-in for the desktop's tray, which
+        presses the icon named name and then chooses Quit, and returns what
+        the app printed."""
+        watcher = subprocess.Popen([sys.executable, os.path.abspath(__file__), "--watcher", name],
                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
         time.sleep(1)
-        app = run("tray", self.worker, "--background", wait=False)
+        app = run(scenario, self.worker, *args, wait=False)
         try:
             w_out, _ = watcher.communicate(timeout=60)
             a_out, _ = app.communicate(timeout=30)
@@ -112,8 +114,23 @@ class GtkLibraryTests(unittest.TestCase):
         self.assertEqual(watcher.returncode, 0, w_out)
         self.assertIn("WATCHER OK", w_out)
         self.assertEqual(app.returncode, 0, a_out)
-        self.assertIn("no window at start", a_out)
-        self.assertIn("small window shown", a_out)
+        return a_out
+
+    @unittest.skipUnless(bus(), "no session bus")
+    def test_tray_menu_activate_and_quit(self) -> None:
+        """A tray app: no window at sign-in, the small window from its icon,
+        the main window from the small one, and Quit from its menu."""
+        out = self.with_watcher("tray", "vero tray", "--background")
+        for line in ("no window at start", "small window shown", "main window shown", "main window hidden, still running"):
+            self.assertIn(line, out)
+
+    @unittest.skipUnless(bus(), "no session bus")
+    def test_window_app_with_a_tray_icon(self) -> None:
+        """A window app with a tray icon: closing its window leaves it in the
+        tray, and the icon brings the window back."""
+        out = self.with_watcher("windowtray", "vero windowtray")
+        for line in ("window at start", "window hidden, still running", "window back from the tray"):
+            self.assertIn(line, out)
 
     def test_tray_app_without_a_tray_is_a_window(self) -> None:
         out = self.check(run("tray-alone", self.worker, env={"DBUS_SESSION_BUS_ADDRESS": NO_BUS}))
@@ -245,11 +262,49 @@ def scenario(name: str, worker: str, args: list[str]) -> int:
             if visible and app.small in visible and state["shown"] is None:
                 print("small window shown", flush=True)
                 state["shown"] = True
+                later(0.3, open_main)
             return True
 
+        def open_main() -> None:
+            app.show_window()
+            later(0.3, close_main)
+
+        def close_main() -> None:
+            if app.window is not None and app.window.get_visible():
+                print("main window shown", flush=True)
+                app.window.close()
+                later(0.3, lambda: app.window.get_visible() or print("main window hidden, still running", flush=True))
+
         app = vg.App("com.calmdocs.vero.test.tray", "vero tray", worker,
-                     small_window=lambda a: vg.SmallWindow(a, "vero tray"))
+                     small_window=lambda a: vg.SmallWindow(a, "vero tray"),
+                     window=lambda a: vg.Window(a, "vero tray main"))
         later(1.5, look)
+        GLib.timeout_add(250, look)
+        return app.run(["vero-test", *args])
+
+    if name == "windowtray":
+        state = {"hidden": False}
+
+        def first() -> None:
+            if app.window is not None and app.window.get_visible():
+                print("window at start", flush=True)
+                app.window.close()
+                later(0.3, hidden)
+
+        def hidden() -> None:
+            if not app.window.get_visible():
+                print("window hidden, still running", flush=True)
+                state["hidden"] = True
+
+        def look() -> bool:
+            if state["hidden"] and app.window.get_visible():
+                print("window back from the tray", flush=True)
+                state["hidden"] = False
+            return True
+
+        app = vg.App("com.calmdocs.vero.test.windowtray", "vero windowtray", worker,
+                     window=lambda a: vg.Window(a, "vero windowtray"), tray=True)
+        later(1, first)
         GLib.timeout_add(250, look)
         return app.run(["vero-test", *args])
 
@@ -280,7 +335,7 @@ def scenario(name: str, worker: str, args: list[str]) -> int:
     raise SystemExit(f"no scenario {name}")
 
 
-def watcher() -> int:
+def watcher(name: str) -> int:
     """A stand-in for the desktop's tray: it takes the watcher's name,
     waits for the app's icon, reads its menu, presses the icon, then
     chooses Quit."""
@@ -303,16 +358,16 @@ def watcher() -> int:
                                    GLib.Variant("(iias)", (0, -1, [])), None, Gio.DBusCallFlags.NONE, 3000, None).unpack()
             items = {child[1].get("label", ""): child[0] for child in layout[1][2]}
             print(f"menu: {list(items)}", flush=True)
-            assert "Open vero tray" in items and "Quit vero tray" in items, items
+            assert f"Open {name}" in items and f"Quit {name}" in items, items
             title = bus.call_sync(service, "/StatusNotifierItem", "org.freedesktop.DBus.Properties", "Get",
                                   GLib.Variant("(ss)", ("org.kde.StatusNotifierItem", "Title")), None,
                                   Gio.DBusCallFlags.NONE, 3000, None).unpack()[0]
-            assert title == "vero tray", title
+            assert title == name, title
             bus.call_sync(service, "/StatusNotifierItem", "org.kde.StatusNotifierItem", "Activate",
                           GLib.Variant("(ii)", (0, 0)), None, Gio.DBusCallFlags.NONE, 3000, None)
             time.sleep(2)
             bus.call_sync(service, "/MenuBar", "com.canonical.dbusmenu", "Event",
-                          GLib.Variant("(isvu)", (items["Quit vero tray"], "clicked", GLib.Variant("s", ""), 0)),
+                          GLib.Variant("(isvu)", (items[f"Quit {name}"], "clicked", GLib.Variant("s", ""), 0)),
                           None, Gio.DBusCallFlags.NONE, 3000, None)
             result["ok"] = True
         except Exception as e:  # noqa: BLE001
@@ -342,6 +397,6 @@ def watcher() -> int:
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--scenario":
         sys.exit(scenario(sys.argv[2], sys.argv[3], sys.argv[4:]))
-    if len(sys.argv) > 1 and sys.argv[1] == "--watcher":
-        sys.exit(watcher())
+    if len(sys.argv) > 2 and sys.argv[1] == "--watcher":
+        sys.exit(watcher(sys.argv[2]))
     unittest.main()

@@ -1,5 +1,6 @@
 #!/bin/sh
-# Makes a window app and a tray app with vero new, as a new app would be
+# Makes a window app, a window app with a tray icon (--tray) and a tray
+# app with a main window (--menubar) with vero new, as a new app would be
 # made, from this checkout of vero, and checks each front end of each:
 #
 #   macos  swift build (on a Mac)
@@ -28,10 +29,13 @@ fail=0
 (cd "$VERO/cmd/vero" && go build -o "$work/vero" .)
 cd "$work"
 ./vero new winapp --vero "$VERO" >/dev/null
+./vero new trayicon --vero "$VERO" --tray >/dev/null
 ./vero new trayapp --vero "$VERO" --menubar >/dev/null
+grep -q '^tray = true' trayicon/vero-app.toml || { echo "FAIL: trayicon's vero-app.toml has no tray = true"; fail=1; }
 grep -q '^menubar = true' trayapp/vero-app.toml || { echo "FAIL: trayapp's vero-app.toml has no menubar = true"; fail=1; }
 
-for app in winapp trayapp; do
+apps="winapp trayicon trayapp"
+for app in $apps; do
     if command -v swift >/dev/null 2>&1 && [ "$(uname)" = Darwin ]; then
         if (cd $app/macos && swift build >"$work/$app-swift.log" 2>&1); then echo "ok: $app macos builds"
         else echo "FAIL: $app macos"; tail -20 "$work/$app-swift.log"; fail=1; fi
@@ -55,7 +59,7 @@ if [ $windows = yes ]; then
     SSHPORT=2229
     PAY="$work/windows"
     mkdir -p "$PAY/empty"
-    for app in winapp trayapp; do
+    for app in $apps; do
         (cd $app/windows && dotnet publish -nologo -v q -c Release -r win-arm64 --self-contained -o "$PAY/$app" >/dev/null)
         (cd $app && GOOS=windows GOARCH=arm64 CGO_ENABLED=0 go build -o "$PAY/$app/$app-worker.exe" ./cmd/worker)
     done
@@ -64,10 +68,10 @@ if [ $windows = yes ]; then
     "$VERO/scripts/run-windows.sh" --headless --payload "$PAY/empty" --ssh "$SSHPORT" >"$PAY/vm.log" 2>&1 &
     if windows_wait "$SSHPORT" 300; then
         windows_ssh "$SSHPORT" "New-Item -ItemType Directory -Force C:/vero-starters | Out-Null; Remove-Item -Recurse -Force C:/vero-starters/*"
-        for app in winapp trayapp; do windows_scp "$SSHPORT" -r "$PAY/$app" vero@127.0.0.1:C:/vero-starters/; done
+        for app in $apps; do windows_scp "$SSHPORT" -r "$PAY/$app" vero@127.0.0.1:C:/vero-starters/; done
         windows_scp "$SSHPORT" "$work/steps.json" "$PAY/starter-check.ps1" vero@127.0.0.1:C:/vero-starters/
-        windows_ssh "$SSHPORT" "powershell -NoProfile -ExecutionPolicy Bypass -File C:/vero-starters/starter-check.ps1 -Apps winapp,trayapp" | tr -d '\r' >"$PAY/results.txt"
-        for app in winapp trayapp; do
+        windows_ssh "$SSHPORT" "powershell -NoProfile -ExecutionPolicy Bypass -File C:/vero-starters/starter-check.ps1 -Apps winapp,trayicon,trayapp" | tr -d '\r' >"$PAY/results.txt"
+        for app in $apps; do
             if grep -qx "$app steps: True" "$PAY/results.txt" && grep -qx "$app running: True" "$PAY/results.txt"; then echo "ok: $app wpf runs on Windows"
             else echo "FAIL: $app wpf on Windows"; cat "$PAY/results.txt"; fail=1; fi
         done
@@ -78,19 +82,19 @@ if [ $windows = yes ]; then
 fi
 
 [ "${VERO_NO_GTK:-}" ] && exit $fail
-if ! command -v docker >/dev/null 2>if ! command -v docker >/dev/null 2>&1; then1; then
+if ! command -v docker >/dev/null 2>&1; then
     echo "skipped: gtk (no docker)"
     exit $fail
 fi
 arch=$(docker info --format '{{.Architecture}}' 2>/dev/null || echo x86_64)
 case $arch in aarch64|arm64) goarch=arm64 ;; *) goarch=amd64 ;; esac
-for app in winapp trayapp; do
+for app in $apps; do
     (cd $app && GOOS=linux GOARCH=$goarch CGO_ENABLED=0 go build -o gtk/$app-worker ./cmd/worker)
 done
 for image in debian:trixie debian:bookworm; do
     packages="python3-gi gir1.2-gtk-4.0 xvfb xauth dbus fonts-dejavu-core"
     case $image in *trixie*) packages="$packages gir1.2-adw-1" ;; esac
-    for app in winapp trayapp; do
+    for app in $apps; do
         out=$(tar -cf - $app/gtk steps.json | docker run --rm -i "$image" sh -c "
             apt-get update -qq >/dev/null
             DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends $packages >/dev/null 2>&1

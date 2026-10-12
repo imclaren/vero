@@ -38,20 +38,25 @@ one Kotlin, the browser, WASI and Plan 9 ones Go. The shapes of your state
 and requests are written out in each language, for the window you build
 next.
 
-## Two shapes
+## Window apps and tray apps
 
-An app is either a window app or a tray app, which lives in the menu bar on
-the Mac and in the tray elsewhere, with a small window from its icon.
+An app is a window app, a window app with a tray icon, or a tray app.
 
 ```bash
 vero add                 # a window app
-vero add --menubar       # a tray app; vero new NAME --menubar does the same
+vero add --tray          # a window app with an icon in the menu bar and the tray,
+                         # which keeps running when its window is closed
+vero add --menubar       # a tray app: it lives in the menu bar and the tray, and its
+                         # icon opens a small window, from which its main window opens
 ```
 
-`--menubar` writes `menubar = true` at the top of `vero-app.toml`, so that
-front ends added later take the same shape, and the Mac app has no Dock
-icon. Where a desktop shows no tray icons, such as GNOME without its
-extension, a tray app opens as an ordinary window.
+`vero new NAME` takes the same flags. Each writes its setting, `tray = true`
+or `menubar = true`, at the top of `vero-app.toml`, so that front ends added
+later take the same shape. A tray app's Mac app has no Dock icon, except
+while its main window is open, which `VeroDock` in vero's Swift package
+arranges. Where a desktop shows no tray icons, such as GNOME without its
+extension, a tray app opens as an ordinary window, and a window app that
+would keep running says so before its window closes.
 
 The Windows and GTK starters are built on vero's libraries, `VeroWpf.cs`
 and `vero_gtk.py`, copied beside them. These do the plumbing: the worker, a
@@ -90,7 +95,7 @@ For a front end of your own, the same ideas in each toolkit:
 
 | SwiftUI | GTK 4 (Python) | WPF (C#) |
 |---|---|---|
-| `WindowGroup`, `MenuBarExtra` | `vero_gtk.Window`; `App(..., small_window=...)` for a tray app | `VeroWindow`; `MenuBar = true` in `VeroAppOptions` for a tray app |
+| `WindowGroup`, `MenuBarExtra` | `vero_gtk.Window`; `App(..., tray=True)` for a tray icon, `small_window=...` for a tray app | `VeroWindow`; `Tray = true` or `MenuBar = true` in `VeroAppOptions` |
 | an alert or a toast | `vero_gtk.question`, `Window.toast` | `VeroDialogs.Question`, `VeroWindow.Toast` |
 | settings | `vero_gtk.Settings`, libadwaita's preferences dialog where it is installed | a window of the app's own, in XAML |
 | `List`, `ForEach` | `Gtk.ListBox` with a row per item, or `Gtk.ListView` for many | `ListBox` or `ItemsControl` with an `ItemTemplate` |

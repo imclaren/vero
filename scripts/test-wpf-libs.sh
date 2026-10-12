@@ -8,7 +8,8 @@
 #   x64           most PCs, which Windows on ARM runs through its emulation
 #   x86           32-bit Windows, the same
 #
-# Each runs the window, tray and single-copy scenarios on the VM's desktop.
+# Each runs the window, tray, window-with-tray and single-copy scenarios
+# on the VM's desktop.
 # It needs the VM (scripts/run-windows.sh --install), SSH into it
 # (scripts/setup-windows-ssh.sh), the .NET SDK and Go. The VM must not be
 # running already.
@@ -53,7 +54,7 @@ windows_scp "$SSHPORT" "$PAY/wpf-check.ps1" vero@127.0.0.1:C:/vero-wpf/
 windows_ssh "$SSHPORT" "powershell -NoProfile -ExecutionPolicy Bypass -File C:/vero-wpf/wpf-check.ps1 -Builds $(echo $builds | tr ' ' ',')" \
     | tr -d '\r' | tee "$PAY/results.txt"
 python3 "$VERO/scripts/lib/qmp.py" /tmp/vero-qmp.sock shot "$PAY/desktop.ppm" >/dev/null 2>&1 && sips -s format png "$PAY/desktop.ppm" --out "$PAY/desktop.png" >/dev/null 2>&1 || true
-want=$(( $(echo $builds | wc -w) * 3 ))
+want=$(( $(echo $builds | wc -w) * 4 ))
 got=$(grep -c '^SCENARIO OK' "$PAY/results.txt" || true)
 if [ "$got" -ne "$want" ]; then
     echo "FAIL: $got of $want scenarios passed (results in $PAY/results.txt)" >&2

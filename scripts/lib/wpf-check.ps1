@@ -28,7 +28,7 @@ foreach ($build in $Builds) {
     $exe = "$dir\WpfCheck.exe"
     $worker = "$dir\worker.exe"
     "== $build"
-    foreach ($scenario in "window", "tray") {
+    foreach ($scenario in "window", "tray", "windowtray") {
         $out = "$dir\$scenario.txt"
         Remove-Item $out -ErrorAction SilentlyContinue
         onDesktop "`$env:VERO_CHECK='$scenario'; `$env:VERO_CHECK_WORKER='$worker'; `$env:VERO_CHECK_OUT='$out'; Start-Process -Wait -FilePath '$exe'"

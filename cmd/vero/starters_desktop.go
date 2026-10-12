@@ -138,7 +138,7 @@ echo "built: $PYTHON main.py runs it"
 `
 
 const gtkMain = `#!/usr/bin/env python3
-"""{{.Display}}: the {{if .MenuBar}}tray app{{else}}window{{end}} for Linux, the BSDs and illumos, on the worker in
+"""{{.Display}}: the {{if .MenuBar}}tray app{{else if .Tray}}window app, with a tray icon,{{else}}window app{{end}} for Linux, the BSDs and illumos, on the worker in
 ../{{.Worker}}.
 
 Written by vero add. It shows the worker's state, every field of
@@ -168,18 +168,25 @@ REQUESTS = [
 
 
 class Main(vg.Window):
-    def __init__(self, app: vg.App) -> None:
-        super().__init__(app, "{{.Display}}", {{if .MenuBar}}360, 480{{else}}480, 560{{end}})
+    """The main window, or, small, the window that the tray icon opens,
+    which shows the state and opens the main window."""
+
+    def __init__(self, app: vg.App, small: bool = False) -> None:
+        super().__init__(app, "{{.Display}}", *((360, 480) if small else (480, 560)))
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12,
                       margin_top=16, margin_bottom=16, margin_start=16, margin_end=16)
 
         # The state, as a tree of its fields.
         self.tree = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         box.append(self.tree)
+        if small:
+            button = Gtk.Button(label="Open {{.Display}}", halign=Gtk.Align.START)
+            button.connect("clicked", lambda _b: app.show_window())
+            box.append(button)
 
         # One row per request: entries for what it takes, and a button.
         self.entries: dict[str, list[tuple[str, str, Gtk.Entry]]] = {}
-        for name, fields in REQUESTS:
+        for name, fields in ([] if small else REQUESTS):
             row = Gtk.Box(spacing=6)
             button = Gtk.Button(label=name)
             button.connect("clicked", lambda _b, n=name: self.send(n))
@@ -241,7 +248,8 @@ class Main(vg.Window):
 
 
 if __name__ == "__main__":
-    vg.main(vg.App("{{.ID}}", "{{.Display}}", "{{.WorkerName}}", {{if .MenuBar}}small_window{{else}}window{{end}}=Main))
+    vg.main(vg.App("{{.ID}}", "{{.Display}}", "{{.WorkerName}}", window=Main{{if .MenuBar}},
+                   small_window=lambda app: Main(app, small=True){{end}}{{if .Tray}}, tray=True{{end}}))
 `
 
 const wpfToml = `# The Windows front end, which vero add wrote.
@@ -315,8 +323,8 @@ using Vero;
 namespace {{pascal .Name}};
 
 /// <summary>The app, which VeroApp runs: the worker, a single copy, {{if .MenuBar}}the
-/// tray icon and its small window, {{end}}and Windows' Fluent look, light or dark as
-/// Windows is. Written by vero add.</summary>
+/// tray icon and its small window, {{else if .Tray}}the tray icon, {{end}}and Windows' Fluent look, light or
+/// dark as Windows is. Written by vero add.</summary>
 public partial class App : VeroApp
 {
     public App() : base(new VeroAppOptions
@@ -324,11 +332,15 @@ public partial class App : VeroApp
         Id = "{{.ID}}",
         Name = "{{.Display}}",
         Worker = "{{.WorkerName}}.exe",{{if .MenuBar}}
-        MenuBar = true,{{end}}
+        MenuBar = true,{{end}}{{if .Tray}}
+        Tray = true,{{end}}
     })
     { }
 
-    protected override Window {{if .MenuBar}}CreateSmallWindow{{else}}CreateWindow{{end}}() => new MainWindow();
+    protected override Window CreateWindow() => new MainWindow();{{if .MenuBar}}
+
+    /// <summary>The small window that the tray icon opens.</summary>
+    protected override Window CreateSmallWindow() => new MainWindow(small: true);{{end}}
 }
 `
 
@@ -336,13 +348,15 @@ const wpfWindowXaml = `<vero:VeroWindow x:Class="{{pascal .Name}}.MainWindow"
                  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:vero="clr-namespace:Vero"
-                 Title="{{.Display}}" Width="{{if .MenuBar}}360{{else}}480{{end}}" Height="{{if .MenuBar}}480{{else}}560{{end}}">
+                 Title="{{.Display}}" Width="480" Height="560">
     <!-- Written by vero add: the worker's state as rows, and a control for
          each request. Make it your own. VeroWindow puts its banners and
          toasts around this. -->
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="{StaticResource PagePadding}">
             <StackPanel x:Name="Tree"/>
+            <Button x:Name="OpenMain" Content="Open {{.Display}}" HorizontalAlignment="Left"
+                    Margin="{StaticResource SectionGap}" Visibility="Collapsed"/>
             <StackPanel x:Name="Requests" Margin="{StaticResource SectionGap}"/>
         </StackPanel>
     </ScrollViewer>
@@ -372,10 +386,21 @@ public partial class MainWindow : VeroWindow
     };
     readonly Dictionary<string, List<(string key, string kind, TextBox box)>> entries = new();
 
-    public MainWindow()
+    public MainWindow() : this(false) { }
+
+    /// <summary>The main window, or, small, the window that the tray icon
+    /// opens, which shows the state and opens the main window.</summary>
+    public MainWindow(bool small)
     {
         InitializeComponent();
-        foreach (var (name, fields) in requests)
+        if (small)
+        {
+            Width = 360;
+            Height = 480;
+            OpenMain.Visibility = Visibility.Visible;
+            OpenMain.Click += (_, _) => App.ShowMainWindow();
+        }
+        foreach (var (name, fields) in small ? System.Array.Empty<(string, (string, string)[])>() : requests)
         {
             var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = (Thickness)FindResource("RowGap") };
             var button = new Button { Content = name };
@@ -502,7 +527,7 @@ echo "run it with:  ./.build/debug/{{pascal .Name}}"
 const macApp = `import SwiftUI
 import Vero
 
-// {{.Display}} for macOS, {{if .MenuBar}}in the menu bar{{else}}in a window{{end}}, on the worker in ../{{.Worker}}.
+// {{.Display}} for macOS, {{if .MenuBar}}in the menu bar, with a main window{{else if .Tray}}in a window, with an icon in the menu bar{{else}}in a window{{end}}, on the worker in ../{{.Worker}}.
 // Written by vero add: it shows the worker's state, every field of
 // {{.State.Name}}, and a control for each request. Make it your own.
 // WorkerAPI.swift, beside it, is what vero gen writes from the worker: a
@@ -517,7 +542,11 @@ let requests: [(name: String, fields: [(key: String, kind: String)])] = [
 
 @main
 struct {{pascal .Name}}App: App {
-    init() { VeroSingleCopy.yieldToRunningCopy() }
+    init() {
+        VeroSingleCopy.yieldToRunningCopy(){{if .MenuBar}}
+        // No Dock icon, except while the main window is open.
+        VeroDock.follow(){{end}}
+    }
 
     // The worker, started from beside this app (or from the bundle's
     // Resources, in an app bundle), and the last state it pushed.
@@ -527,28 +556,48 @@ struct {{pascal .Name}}App: App {
 {{- if .MenuBar}}
         // In the menu bar, with no Dock icon once vero ship makes it an app.
         MenuBarExtra("{{.Display}}", systemImage: "circle.grid.2x2") {
-            StarterView().environmentObject(vero)
+            StarterView(small: true).environmentObject(vero)
         }
         .menuBarExtraStyle(.window)
+        // The main window, opened from the menu bar's window.
+        Window("{{.Display}}", id: "main") {
+            StarterView().environmentObject(vero).veroOpensWhenAsked()
+        }
+        .windowResizability(.contentSize)
 {{- else}}
         Window("{{.Display}}", id: "main") {
             StarterView().environmentObject(vero)
         }
         .windowResizability(.contentSize)
+{{- if .Tray}}
+        // An icon in the menu bar as well, from which the window opens again.
+        MenuBarExtra("{{.Display}}", systemImage: "circle.grid.2x2") {
+            StarterView(small: true).environmentObject(vero)
+        }
+        .menuBarExtraStyle(.window)
+{{- end}}
 {{- end}}
     }
 }
 
-/// The state as rows, and a control for each request.
+/// The state as rows, and a control for each request; or, small, the
+/// state and a button that opens the main window, for the menu bar.
 struct StarterView: View {
+    var small = false
     @EnvironmentObject var vero: VeroModel<JSONValue>
+    @Environment(\.openWindow) private var openWindow
     @State private var entries: [String: [String: String]] = [:]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if let s = vero.state { rows(s, depth: 0) }
             if let p = vero.problem { Text(p).foregroundStyle(.red) }
-            ForEach(requests, id: \.name) { r in
+            if small {
+                Divider()
+                Button("Open {{.Display}}") { VeroDock.open("main", with: openWindow) }
+                Button("Quit {{.Display}}") { NSApplication.shared.terminate(nil) }
+            }
+            ForEach(small ? [] : requests, id: \.name) { r in
                 HStack {
                     Button(r.name) { send(r.name) }
                     ForEach(r.fields, id: \.key) { f in
@@ -558,13 +607,9 @@ struct StarterView: View {
                     }
                 }
             }
-{{- if .MenuBar}}
-            Divider()
-            Button("Quit {{.Display}}") { NSApplication.shared.terminate(nil) }
-{{- end}}
         }
         .padding(16)
-        .frame(width: {{if .MenuBar}}340{{else}}460{{end}})
+        .frame(width: small ? 340 : 460)
     }
 
     @ViewBuilder private func rows(_ v: JSONValue, depth: Int) -> some View {

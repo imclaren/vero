@@ -47,6 +47,8 @@ for image in $images; do
 			status=1
 		fi
 		grep -q '^FAILED\|^Error\|Traceback' "$work/out.txt" && status=1
+		# A container that did not start prints nothing, which is a failure too.
+		[ "$(grep -c '^OK' "$work/out.txt")" -eq 2 ] || { echo "FAIL: $label did not run both ways"; status=1; }
 	done
 done
 exit $status

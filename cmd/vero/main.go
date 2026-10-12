@@ -95,7 +95,7 @@ func main() {
 			"                 makes an app from a worker file, or takes the one here, tests and records it everywhere, and releases it\n"+
 			"       vero new NAME [front ends, as for add] [--module PATH] [add's flags]\n"+
 			"       vero add [desktop|mobile|all|macos|gtk|wpf|android|ios|web|wasi|plan9 ...] [--except LIST] [--dir DIR]\n"+
-			"                [--menubar] [--summary TEXT] [--description TEXT] [--publisher \"Name <email>\"] [--keep-worker] [--force]\n"+
+			"                [--menubar | --tray] [--summary TEXT] [--description TEXT] [--publisher \"Name <email>\"] [--keep-worker] [--force]\n"+
 			"       vero gen [--check] [--out DIR] [--dir DIR]\n"+
 			"                writes each front end's requests from the worker's types, in Swift, C# and Python\n"+
 			"       vero release [--version 1.2.3] [--targets ...] [--notes \"...\"] [--upload user@host:/path]\n"+
@@ -112,6 +112,7 @@ func main() {
 	description := fs.String("description", "", "a sentence or two about the app, for vero-app.toml")
 	publisher := fs.String("publisher", "", "who publishes it, as \"Name <email>\", for vero-app.toml")
 	menubar := fs.Bool("menubar", false, "an app that lives in the menu bar on the Mac and in the tray elsewhere, with a small window from its icon, rather than in a window")
+	tray := fs.Bool("tray", false, "a window app that also has an icon in the menu bar and the tray, and keeps running when its window is closed")
 	keepWorker := fs.Bool("keep-worker", false, "for iOS and the browser, leave the worker's code where it is and give them a placeholder, rather than moving it into a package they can run")
 	// Flags may come after the names.
 	var names, rest []string
@@ -140,9 +141,20 @@ func main() {
 		app.Description, guessed = describe(app.Description, app.Display, gitConfig)
 	}
 	app.KeepWorker = *keepWorker
-	if *menubar {
-		app.MenuBar = true
-		if err := app.toml.setMenuBar(); err != nil {
+	if *menubar && *tray {
+		fmt.Fprintln(os.Stderr, "vero add: --menubar or --tray, not both: a menu bar app already has its icon, and --tray is for a window app")
+		os.Exit(2)
+	}
+	for _, s := range []struct {
+		on  bool
+		key string
+		set *bool
+	}{{*menubar, "menubar", &app.MenuBar}, {*tray, "tray", &app.Tray}} {
+		if !s.on {
+			continue
+		}
+		*s.set = true
+		if err := app.toml.setTrue(s.key); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
