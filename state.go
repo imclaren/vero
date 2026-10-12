@@ -52,6 +52,20 @@ func (s *State[T]) JSON() (json.RawMessage, error) {
 // encode is how the worker reads the state.
 func (s *State[T]) encode() ([]byte, error) { return s.JSON() }
 
+// Snapshot is a copy of the state as it is now, which nothing else
+// changes, made from its JSON under the state's lock: for a handler that
+// replies with the state after work of its own, so that vero gen types its
+// reply as the state.
+func (s *State[T]) Snapshot() (T, error) {
+	var v T
+	data, err := s.JSON()
+	if err != nil {
+		return v, err
+	}
+	err = json.Unmarshal(data, &v)
+	return v, err
+}
+
 // state is what a Worker keeps: a State[T] with its type parameter forgotten.
 type state interface {
 	encode() ([]byte, error)
