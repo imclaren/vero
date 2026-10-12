@@ -175,7 +175,14 @@ want of ffmpeg, and its README says why.
 
 ## Phase 1. vero 0.18, untagged
 
-1. **Libraries.** `vero.py` and `Vero.cs` stay the bindings and the step
+1. **Libraries.** Done on 12 October 2026: `vero_gtk.py` (dbb66ed),
+   tested by `scripts/test-gtk-libs.sh` on Debian 13 and Ubuntu 24.04, each
+   with libadwaita and plain, and on Debian 12, each with and without a
+   session bus; and `VeroWpf.cs` with `VeroWebView.cs` (a9d37b3), tested by
+   `scripts/test-wpf-libs.sh` in the Windows VM on arm64, x64 and x86, and
+   with Windows' own notifications. `kit/update` answers their standard
+   `vero.update` request (fb96814).
+   `vero.py` and `Vero.cs` stay the bindings and the step
    player. Beside them, `vero_gtk.py` and `VeroWpf.cs` hold the pieces in
    the table. They are still copied into each app, not installed from pip
    or NuGet, so that every package builds without a network.
@@ -462,8 +469,9 @@ and were approved on 12 October 2026.
    app, and stand-ins for Spotlight, Services and Shortcuts. Each can come
    later in the app alone.
 6. **Notifications with buttons on Windows** use Windows' own notification
-   API, which adds Microsoft's Windows SDK library to the app. Its size
-   is measured before this is settled. Only an app whose `[wpf] uses` names notifications gets it, which
+   API, which adds Microsoft's Windows SDK library to the app: 24 MB,
+   measured on 12 October 2026, which takes a self-contained arm64 build
+   from 192 MB to 216 MB. Only an app whose `[wpf] uses` names notifications gets it, which
    is treehouse today. Others show notifications without buttons from the
    tray icon.
 7. **The tray on Windows** keeps Windows Forms' `NotifyIcon`, which
