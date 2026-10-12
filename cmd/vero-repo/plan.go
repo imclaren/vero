@@ -19,6 +19,9 @@ type Plan struct {
 	Profile string     `json:"profile,omitempty"`
 	Build   []PlanStep `json:"build"`
 	Test    []PlanStep `json:"test"`
+	// Worker is the worker built for each system and processor the app is
+	// packaged for, which vero ship needs to have passed before it starts.
+	Worker []PlanStep `json:"worker,omitempty"`
 }
 
 // PlanStep is one installer or one system's test. Why is what is missing
@@ -111,6 +114,7 @@ func planCommand(args []string) error {
 		return err
 	}
 	p := planFor(a)
+	p.Worker = workerChecks(a)
 	if *asJSON {
 		return json.NewEncoder(os.Stdout).Encode(p)
 	}
@@ -133,6 +137,7 @@ func (p Plan) Text() string {
 		}
 	}
 	fmt.Fprintf(&b, "%s on this Mac:\n", p.Name)
+	b.WriteString(workerText(p.Worker))
 	list("builds", p.Build, true)
 	list("tests and records", p.Test, true)
 	for _, s := range p.Build {

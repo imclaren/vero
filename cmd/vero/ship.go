@@ -22,6 +22,11 @@ type shipPlan struct {
 		Name string `json:"name"`
 		OK   bool   `json:"ok"`
 	} `json:"test"`
+	Worker []struct {
+		Name string `json:"name"`
+		OK   bool   `json:"ok"`
+		Why  string `json:"why"`
+	} `json:"worker"`
 }
 
 // ship makes an app from a worker file if it is given one, then tests and
@@ -91,6 +96,18 @@ func ship(args []string) error {
 	}
 	if *planOnly {
 		return nil
+	}
+	// A worker that does not build for one of the app's systems stops
+	// everything: the release would fail there, after the rest.
+	var broken []string
+	for _, w := range plan.Worker {
+		if !w.OK {
+			broken = append(broken, w.Name)
+		}
+	}
+	if len(broken) > 0 {
+		return fmt.Errorf("the worker does not build for %s, as the plan above says. Each line there names what stops it; a package that needs cgo, or that has no port for that system, is the usual cause, and vero's PACKAGING.md says what to use instead",
+			strings.Join(broken, ", "))
 	}
 
 	var systems []string

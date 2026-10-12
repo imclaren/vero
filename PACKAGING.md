@@ -147,6 +147,27 @@ has how.
 instructions are in the same site, and the page shows each system's
 recording that passed.
 
+## A worker for every system
+
+vero builds the worker without cgo, for every system and processor the app
+is packaged for, so that one Mac can build them all. `vero ship` and
+`vero-repo plan` build it for each before anything else, and name each that
+fails and the error that stops it. Three causes are usual:
+
+- **SQLite.** `mattn/go-sqlite3` needs cgo, and fails as soon as it opens a
+  database without it. `modernc.org/sqlite` has no port for DragonFly,
+  illumos, NetBSD on arm64 or OpenBSD on riscv64. `ncruces/go-sqlite3`
+  builds everywhere, and runs on every Linux processor that vero packages
+  for, which vero tested under emulation.
+- **A package for one system**, such as a notifier for the Mac's sleep and
+  wake that needs cgo. vero's `kit` has packages that work on every system,
+  for the keychain, notifications, starting at sign-in and updates; give
+  the rest a build tag, so that other systems get a version that does
+  nothing or does it another way.
+- **A system call that differs**, such as `syscall.Rlimit`, which Windows
+  lacks and 32-bit systems type differently. `golang.org/x/sys` has each
+  system's own.
+
 ## Creating app installers
 
 vero builds your app's installers, and the website your users install
