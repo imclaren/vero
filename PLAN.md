@@ -29,7 +29,7 @@ app up to date.
 |---|---|---|---|---|
 | vero today | 0.17 | 0.17 | 0.14 | 0.13 |
 | The Mac app | A window | A window | In the menu bar | In the menu bar |
-| Lowest macOS | 13 | 13 | 15 | 12, with its workers built by Go 1.26 until Go 1.28 is released |
+| Lowest macOS | 13 | 13 | 15 | 12, with a second Mac worker built by Go 1.26 for it |
 | Sandboxed | No | No | Yes | No |
 | Mac releases | vero, with Sparkle | vero, with Sparkle | The App Store with fastlane, and direct with Sparkle | Its own release.sh, with Sparkle |
 | The worker | `cmd/worker` | `cmd/worker` | `core/`, linked into the app as a C archive | In ~/src/syncclient, and it replaces itself |
@@ -129,7 +129,7 @@ supports, except where the table says otherwise.
 
 | Go's pair | Build settings | Packages, with each system's name for the processor | In or out | Why |
 |---|---|---|---|---|
-| darwin/amd64 and darwin/arm64 | Both in one universal app | The Mac app, from vero's Swift package, with Sparkle | In | macOS 13 or later with Go 1.27, which builds for macOS 13. calmdocs keeps macOS 12, so vero builds its workers with Go 1.26, the last Go to build for macOS 12, until Go 1.28 is released and Go 1.26 stops receiving security fixes. calmdocs then moves to macOS 13. |
+| darwin/amd64 and darwin/arm64 | Both in one universal app | The Mac app, from vero's Swift package, with Sparkle | In | macOS 13 or later with Go 1.27, which builds for macOS 13. calmdocs keeps macOS 12, so its app carries a second worker built with Go 1.26, the last Go to build for macOS 12, which it runs only on macOS 12. |
 | windows/amd64 | GOAMD64=v1 | Installer, x64 | In | |
 | windows/arm64 | GOARM64=v8.0 | Installer, arm64 | In | |
 | windows/386 | GO386=sse2 | Installer, x86 | In | .NET 10 runs on 32-bit Windows 10. |
@@ -314,9 +314,15 @@ want of ffmpeg, and its README says why.
       reports sleep and wake;
     - vero's Go package lets a worker with no app take the same lock as
       the supervisor.
-12. **The Go version from the lowest macOS.** An app whose `[macos]`
-    minimum is 12 has every worker built with Go 1.26, and vero says so.
-    vero's kit stays buildable with Go 1.26 for as long as an app needs it.
+12. **macOS older than Go supports.** An app whose `[macos]` minimum is
+    older than the current Go builds for, as calmdocs' macOS 12 is, gets
+    two workers in its Mac app: one built with the current Go, and one
+    built with the last Go that builds for that macOS (Go 1.26 for macOS
+    12). The Swift package runs the older one only on the older macOS, so
+    that everyone else runs a Go that still receives security fixes. Every
+    other system's worker is built with the current Go. vero says so, and
+    vero's kit and the app's worker must stay buildable with Go 1.26 for
+    as long as the app supports macOS 12.
 13. **Link schemes and file types.** `vero-app.toml` gains `schemes` and
     `opens`, which vero-repo writes into the `.desktop` file and the
     Windows installer. The installer also registers the app's id, which
@@ -466,6 +472,8 @@ and were approved on 12 October 2026.
    illumos. A tray app then opens as an ordinary window, and a window app
    that runs in the background says, before its window closes, that
    closing it stops the app.
-9. **calmdocs on macOS 12.** calmdocs keeps macOS 12, with its workers
-   built by Go 1.26, until Go 1.28 is released, and then moves to macOS
-   13. Decided on 12 October 2026.
+9. **calmdocs on macOS 12.** calmdocs keeps macOS 12, probably even after
+   Go 1.28 is released, when Go 1.26 stops receiving security fixes. Only
+   the people on macOS 12 then run a worker built with an unsupported Go,
+   through the second Mac worker in Phase 1 item 12. Decided on 12 October
+   2026.
