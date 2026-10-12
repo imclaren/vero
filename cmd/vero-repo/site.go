@@ -327,13 +327,21 @@ func unixInstructions(p page, sys unixSystem, yes string) unixSection {
 		// OpenIndiana's own pkg, with the app's repository as a publisher
 		// of its own, added once.
 		pub := p.App.ID
-		s.Commands = []string{
+		// First any publisher a dependency comes from, such as
+		// OpenIndiana's hipster-encumbered for ffmpeg.
+		if g := p.App.GTK; g != nil && g.Illumos != nil {
+			for _, np := range g.Illumos.Publishers {
+				name, url, _ := strings.Cut(np, " ")
+				s.Commands = append(s.Commands, fmt.Sprintf("pkg publisher %s >/dev/null 2>&1 || pkg set-publisher -g %s %s", name, url, name))
+			}
+		}
+		s.Commands = append(s.Commands,
 			fmt.Sprintf("pkg publisher %s >/dev/null 2>&1 || pkg set-publisher -g %s/%s/ %s", pub, u, sys.name, pub),
 			// 4: installed already, which a second run finds.
-			"pkg install application/" + n + " || [ $? -eq 4 ]",
-		}
+			"pkg install application/"+n+" || [ $? -eq 4 ]",
+		)
 		s.Update = "pkg update application/" + n
-		s.Note = "These use OpenIndiana's own pkg, as root or with pfexec. They install GTK 4, libadwaita and PyGObject from OpenIndiana's repository."
+		s.Note = "These use OpenIndiana's own pkg, as root or with pfexec. They install GTK 4, libadwaita, PyGObject and what else the app needs from OpenIndiana's repositories."
 	case "openbsd":
 		path := fmt.Sprintf("PKG_PATH=%s/%s/%%a/:installpath", u, sys.name)
 		y := ""

@@ -26,8 +26,7 @@ import (
 // recommended, since the library works without them. libadwaita is needed
 // on each system and processor whose packages have 1.5 or later, which the
 // library uses, and left out where they do not, as on OpenBSD's arm and
-// powerpc64 and in SmartOS's pkgsrc for illumos; the library uses plain
-// GTK 4 there. Debian 12's libadwaita is too old for the library, which
+// powerpc64; the library uses plain GTK 4 there. Debian 12's libadwaita is too old for the library, which
 // then uses plain GTK 4, but recommending it does no harm.
 //
 // The names were checked against each system's package index on 12 October
@@ -36,6 +35,10 @@ import (
 var knownUses = []string{"adwaita", "webview", "keyring"}
 
 var knownExtra = []string{"ffmpeg"}
+
+// encumbered is OpenIndiana's second publisher, for what patents or
+// licences keep out of its first, such as ffmpeg.
+const encumbered = "hipster-encumbered https://pkg.openindiana.org/hipster-encumbered/"
 
 // sysDeps is one system's packages for the base and for each use and extra:
 // what is needed, and what is only recommended.
@@ -109,13 +112,15 @@ var dragonflyDeps = bsdDeps{
 }
 
 // listDeps are pkgsrc's and OpenBSD's, as patterns; only, when set, names
-// the processors on which a use's packages exist.
+// the processors on which a use's packages exist, and publishers the IPS
+// publishers from which a use's packages come.
 type listDeps struct {
-	base      []string
-	need      map[string][]string
-	recommend map[string][]string
-	only      map[string][]string
-	python    string
+	base       []string
+	need       map[string][]string
+	recommend  map[string][]string
+	only       map[string][]string
+	publishers map[string][]string
+	python     string
 }
 
 var netbsdDeps = listDeps{
@@ -126,12 +131,14 @@ var netbsdDeps = listDeps{
 
 // OpenIndiana's own packages, for IPS, whose PyGObject is for Python 3.9.
 // recommend are group dependencies, which pkg installs and lets the person
-// remove. OpenIndiana has no ffmpeg of its own.
+// remove. Its ffmpeg is in its second publisher, hipster-encumbered, which
+// the site's install commands add.
 var illumosDeps = listDeps{
-	base:      []string{"runtime/python-39", "library/python/pygobject-39", "library/desktop/gtk4", "system/font/truetype/dejavu"},
-	need:      map[string][]string{"adwaita": {"library/desktop/libadwaita"}},
-	recommend: map[string][]string{"webview": {"library/desktop/webkitgtk2-60"}, "keyring": {"gnome/gnome-keyring", "library/libsecret"}},
-	python:    "/usr/bin/python3.9",
+	base:       []string{"runtime/python-39", "library/python/pygobject-39", "library/desktop/gtk4", "system/font/truetype/dejavu"},
+	need:       map[string][]string{"adwaita": {"library/desktop/libadwaita"}, "ffmpeg": {"video/ffmpeg"}},
+	recommend:  map[string][]string{"webview": {"library/desktop/webkitgtk2-60"}, "keyring": {"gnome/gnome-keyring", "library/libsecret"}},
+	publishers: map[string][]string{"ffmpeg": {encumbered}},
+	python:     "/usr/bin/python3.9",
 }
 
 // OpenBSD's are port:pattern:package. Its packages for arm and powerpc64
@@ -217,11 +224,13 @@ func (g *GTK) resolveDeps() error {
 			continue
 		}
 		s.pkg.Depends = mergeList(listMerge(s.deps, wanted), s.pkg.Depends)
-		var rec []string
+		var rec, pubs []string
 		for _, w := range wanted {
 			rec = append(rec, s.deps.recommend[w]...)
+			pubs = append(pubs, s.deps.publishers[w]...)
 		}
 		s.pkg.Recommends = mergeList(rec, s.pkg.Recommends)
+		s.pkg.Publishers = mergeList(pubs, s.pkg.Publishers)
 		if s.pkg.Python == "" {
 			s.pkg.Python = s.deps.python
 		}

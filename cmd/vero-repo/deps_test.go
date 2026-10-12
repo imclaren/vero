@@ -69,8 +69,16 @@ depends = "python3-gi, libfoo1"
 	if !slices.Contains(g.NetBSD.Depends, "libadwaita-[0-9]*") || g.NetBSD.Python != "python3.12" {
 		t.Errorf("netbsd %+v", g.NetBSD)
 	}
-	if slices.ContainsFunc(g.Illumos.Depends, func(d string) bool { return strings.HasPrefix(d, "libadwaita") }) {
-		t.Errorf("illumos needs libadwaita, which SmartOS's pkgsrc lacks: %v", g.Illumos.Depends)
+	// OpenIndiana's ffmpeg is in hipster-encumbered, which the site's
+	// install commands add first.
+	if !slices.Contains(g.Illumos.Depends, "library/desktop/libadwaita") || !slices.Contains(g.Illumos.Depends, "video/ffmpeg") ||
+		!slices.Equal(g.Illumos.Publishers, []string{encumbered}) {
+		t.Errorf("illumos depends %v, publishers %v", g.Illumos.Depends, g.Illumos.Publishers)
+	}
+	cmds := unixInstructions(page{App: &a, URL: "https://example.com"}, unixSystem{name: "illumos", label: "illumos", format: "ips"}, "").Commands
+	if len(cmds) != 3 || !strings.Contains(cmds[0], "pkg set-publisher -g https://pkg.openindiana.org/hipster-encumbered/ hipster-encumbered") ||
+		!strings.Contains(cmds[1], "dev.vero.example") {
+		t.Errorf("illumos commands %q", cmds)
 	}
 	has := func(arch, pkg string) bool {
 		return slices.ContainsFunc(g.OpenBSD.dependsOn(arch), func(d string) bool { return strings.HasPrefix(d, pkg) })

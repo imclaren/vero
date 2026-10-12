@@ -188,6 +188,11 @@ type Pkgsrc struct {
 	// Recommends are packages installed with the app that can be
 	// removed, as IPS's group dependencies are: illumos only.
 	Recommends []string `toml:"recommends"`
+	// Publishers are IPS publishers, as "name url", that the site's
+	// install commands add before installing the app, because a
+	// dependency comes from one that OpenIndiana does not have at first:
+	// illumos only.
+	Publishers []string `toml:"publishers"`
 	Python     string   `toml:"python"`
 	// Arches are the architectures packaged: x86-64 and ARM64, where the
 	// system has them, when it's empty. Naming some narrows them, such as
