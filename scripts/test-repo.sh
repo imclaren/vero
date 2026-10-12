@@ -163,6 +163,16 @@ elif [ -n "$VMSYS" ]; then
         *) echo "unknown VM: $VMSYS (freebsd, dragonfly, netbsd, openbsd or illumos)" >&2; exit 2 ;;
     esac
     : "${SETUP:=true}"
+    # A VM keeps what earlier tests added: the repositories of their sites,
+    # long gone, which make the system's updates fail. Each is removed
+    # first, and this test's site adds its own again.
+    case $VMSYS in
+        freebsd|dragonfly) FORGET="for f in /usr/local/etc/pkg/repos/*.conf; do grep -qs 10.0.2.2 \$f && rm -f \$f; done; true" ;;
+        netbsd) FORGET="[ -f /usr/pkg/etc/pkgin/repositories.conf ] && sed -i.vero '/10.0.2.2/d' /usr/pkg/etc/pkgin/repositories.conf; true" ;;
+        illumos) FORGET="for p in \$(pkg publisher -H | awk '\$NF ~ /10.0.2.2/ {print \$1}'); do pkg unset-publisher \$p; done; true" ;;
+        *) FORGET=true ;;
+    esac
+    SETUP="$FORGET; $SETUP"
     WORKER="$PREFIX/lib/$APP_NAME/$APP_WORKER -version"
     APPCMD="$PREFIX/bin/$APP_NAME"
     CHECK="PATH=$PREFIX/bin:\$PATH; command -v $APP_NAME && ls $PREFIX/share/applications/$APP_ID.desktop $PREFIX/lib/$APP_NAME/vero.py && $PY -c \"$GTK\""
@@ -261,7 +271,9 @@ if [ -n "$MAC" ] || [ "$VMSYS" = windows ]; then
     in_container() { sh -c "$1"; }
 elif [ -n "$VMSYS" ]; then
     SSH="ssh -i $VMDIR/key -p $SSH_PORT -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o IdentitiesOnly=yes root@127.0.0.1"
-    in_container() { $SSH "$1"; }
+    # Through sh, on its standard input, whatever root's shell is:
+    # DragonFly's is csh, which reads sh's syntax differently.
+    in_container() { printf '%s\n' "$1" | $SSH sh; }
     # cd, not tar -C, which illumos's tar has not got.
     put_dir() { tar -C "$1" -cf - . | $SSH "rm -rf $2 && mkdir -p $2 && cd $2 && tar xf -"; }
     get_dir() { $SSH "cd $1 && tar cf - ." | tar -C "$2" -xf -; }

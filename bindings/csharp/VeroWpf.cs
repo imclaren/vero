@@ -94,9 +94,6 @@ public class VeroApp : Application
     {
         Options = options;
         Undo = new VeroUndo(this);
-#pragma warning disable WPF0001 // Fluent, following the system's light or dark mode.
-        ThemeMode = ThemeMode.System;
-#pragma warning restore WPF0001
         ShutdownMode = KeepsRunning ? ShutdownMode.OnExplicitShutdown : ShutdownMode.OnMainWindowClose;
     }
 
@@ -110,6 +107,12 @@ public class VeroApp : Application
     /// Startup, so that an app's Startup handler finds them ready.</summary>
     protected override void OnStartup(StartupEventArgs e)
     {
+        // Fluent, following the system's light or dark mode. Here, not in
+        // the constructor: App.xaml's resources, loaded after it, would
+        // replace the ones Fluent adds.
+#pragma warning disable WPF0001
+        ThemeMode = ThemeMode.System;
+#pragma warning restore WPF0001
         var args = e.Args.ToList();
         // A single copy: a second one passes on what it was asked to open
         // and stops.
@@ -318,6 +321,24 @@ public class VeroApp : Application
         // Nobody waits for a request that was cancelled, as for a picture
         // that has scrolled out of sight.
         catch (OperationCanceledException) { return default; }
+    }
+
+    /// <summary>Asks the worker for something that answers nothing, such
+    /// as () => App.Vero.SyncNowAsync(), and returns whether it was done. A
+    /// refusal goes to failed, or to the window's banner.</summary>
+    public async Task<bool> Ask(Func<Task> request, Action<string>? failed = null)
+    {
+        try
+        {
+            await request();
+            return true;
+        }
+        catch (VeroException e)
+        {
+            (failed ?? Problem)(e.Message);
+            return false;
+        }
+        catch (OperationCanceledException) { return false; }
     }
 
     /// <summary>Asks a handler by name.</summary>

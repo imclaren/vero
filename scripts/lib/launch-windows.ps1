@@ -17,6 +17,21 @@ public static class VeroWindow {
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hwnd);
     [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hwnd, int command);
+    public delegate bool EnumProc(IntPtr hwnd, IntPtr data);
+    [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc proc, IntPtr data);
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
+    [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr hwnd);
+    // A visible window of the process: a tray app's small window is a tool
+    // window, which Windows does not give as the process's main window.
+    public static IntPtr VisibleOf(int pid) {
+        IntPtr found = IntPtr.Zero;
+        EnumWindows((h, d) => {
+            uint p; GetWindowThreadProcessId(h, out p);
+            if (p == (uint)pid && IsWindowVisible(h)) { found = h; return false; }
+            return true;
+        }, IntPtr.Zero);
+        return found;
+    }
 }
 "@
 [VeroWindow]::SetProcessDPIAware() | Out-Null
@@ -40,6 +55,7 @@ for ($i = 0; $i -lt 120 -and $hwnd -eq [IntPtr]::Zero -and -not $app.HasExited; 
     Start-Sleep -Milliseconds 250
     $app.Refresh()
     $hwnd = $app.MainWindowHandle
+    if ($hwnd -eq [IntPtr]::Zero -and $i -gt 8) { $hwnd = [VeroWindow]::VisibleOf($app.Id) }
 }
 if ($hwnd -ne [IntPtr]::Zero) {
     [VeroWindow]::SetForegroundWindow($hwnd) | Out-Null
