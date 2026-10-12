@@ -29,7 +29,7 @@ app up to date.
 |---|---|---|---|---|
 | vero today | 0.17 | 0.17 | 0.14 | 0.13 |
 | The Mac app | A window | A window | In the menu bar | In the menu bar |
-| Lowest macOS | 13 | 13 | 15 | 12 |
+| Lowest macOS | 13 | 13 | 15 | 12, which becomes 13, since Go 1.27 builds for macOS 13 |
 | Sandboxed | No | No | Yes | No |
 | Mac releases | vero, with Sparkle | vero, with Sparkle | The App Store with fastlane, and direct with Sparkle | Its own release.sh, with Sparkle |
 | The worker | `cmd/worker` | `cmd/worker` | `core/`, linked into the app as a C archive | In ~/src/syncclient, and it replaces itself |
@@ -114,6 +114,62 @@ virtual machines, because file locking differs there.
 So that a new app finds this at once and not at release, `vero ship`
 and `vero-repo plan` build the worker for every target first, and name
 each target that fails and the package that stops it.
+
+## Every system and processor that Go supports
+
+`go tool dist list` (Go 1.27.1) names 47 pairs of system and processor.
+This is what vero builds for each, and why. "In" means every vero app
+ships it, as audiobooks does today. vero builds every worker without cgo.
+The Mac's worker is the one exception, and only when the app asks.
+
+Go's build settings for a processor are `GOAMD64`, `GO386`, `GOARM`,
+`GOARM64`, `GOMIPS`, `GOMIPS64`, `GOPPC64`, `GORISCV64` and `GOWASM`.
+vero leaves each at Go's default, which is the oldest processor Go
+supports, except where the table says otherwise.
+
+| Go's pair | Build settings | Packages, with each system's name for the processor | In or out | Why |
+|---|---|---|---|---|
+| darwin/amd64 and darwin/arm64 | Both in one universal app | The Mac app, from vero's Swift package, with Sparkle | In | macOS 13 or later, since Go 1.27 builds for macOS 13. calmdocs, which supports macOS 12 today, moves to 13. |
+| windows/amd64 | GOAMD64=v1 | Installer, x64 | In | |
+| windows/arm64 | GOARM64=v8.0 | Installer, arm64 | In | |
+| windows/386 | GO386=sse2 | Installer, x86 | In | .NET 10 runs on 32-bit Windows 10. |
+| linux/amd64 | GOAMD64=v1 | deb amd64, rpm x86_64, Arch x86_64, Alpine x86_64, Void x86_64, Chimera x86_64, Flatpak x86_64 | In | |
+| linux/arm64 | GOARM64=v8.0 | deb arm64, rpm aarch64, Arch aarch64, Alpine aarch64, Void aarch64, Chimera aarch64, Flatpak aarch64 | In | |
+| linux/386 | GO386=sse2 | deb i386, rpm i686 (openSUSE), Arch Linux 32 pentium4, Alpine x86, Void i686 | In | vero builds with SSE2, so a processor older than the Pentium 4 cannot run it. Debian 13's i386 can be added to a 64-bit system but no longer installed alone. |
+| linux/arm | GOARM=7 | rpm armv7hl (openSUSE), Arch armv7h, Alpine armv7, Void armv7l | In | ARMv7 with hardware floating point. |
+| linux/arm | GOARM=6 | deb armhf, rpm armv6hl (openSUSE), Alpine armhf, Void armv6l | In | ARMv6 runs on the first Raspberry Pis, whose Raspberry Pi OS calls it armhf, and on every ARMv7. |
+| linux/arm | GOARM=5 | deb armel | In | ARMv5, without hardware floating point. |
+| linux/riscv64 | GORISCV64=rva20u64 | deb, rpm (openSUSE), Arch, Alpine, Chimera | In | |
+| linux/ppc64le | GOPPC64=power8 | deb ppc64el, rpm ppc64le, Arch POWER powerpc64le, Alpine ppc64le, Chimera ppc64le | In | |
+| linux/ppc64 | GOPPC64=power8 | deb ppc64 (Debian's ports), Arch POWER powerpc64, Chimera ppc64 | In | POWER8 is the oldest that Go builds for, so these do not run on older big-endian machines, such as the Power Mac G5, which these systems also support. |
+| linux/s390x | Go's default | deb s390x, rpm s390x, Alpine s390x | In | |
+| linux/loong64 | Go's default | deb loong64 (Debian unstable), Arch loong64, Alpine loongarch64, Chimera loongarch64 | In | |
+| linux/mips64le | GOMIPS64=hardfloat | deb mips64el | In | Debian 12 is the last Debian for it, so it gets plain GTK 4. |
+| linux/mipsle | GOMIPS=hardfloat | deb mipsel | In | The same, and Debian 12 has no web view for it. |
+| linux/mips and linux/mips64 | | None | Out | Big-endian MIPS has no desktop system. Debian dropped it after Debian 10. |
+| freebsd/amd64 and freebsd/arm64 | Go's defaults | pkg amd64, aarch64 | In | |
+| freebsd/386 | GO386=sse2 | pkg i386 | In | |
+| freebsd/arm | GOARM=7 | pkg armv7 | In | FreeBSD's packages for it are older, with Python 3.11, but have libadwaita 1.7.6. |
+| dragonfly/amd64 | GOAMD64=v1 | pkg x86_64 | In | |
+| netbsd/amd64, netbsd/arm64 and netbsd/386 | Go's defaults, GO386=sse2 | pkgsrc x86_64, aarch64, i386 | In | NetBSD has no GTK 4 web view. |
+| netbsd/arm | | None | Out for now | pkgsrc's binary packages for 32-bit ARM are to be checked for GTK 4 before it is added. |
+| openbsd/amd64 and openbsd/arm64 | Go's defaults | amd64, aarch64 | In | |
+| openbsd/386 | GO386=sse2 | i386 | In | No web view. |
+| openbsd/arm | GOARM=7 | arm | In | No libadwaita, so plain GTK 4, and no web view. |
+| openbsd/riscv64 | Go's default | riscv64 | In | |
+| openbsd/ppc64 | | None | Out for now | OpenBSD's packages for 64-bit POWER are to be checked for GTK 4 before it is added. |
+| illumos/amd64 | GOAMD64=v1 | pkgsrc x86_64 today; IPS packages from OpenIndiana's repository after the move | In | |
+| solaris/amd64 | | None | Out | Oracle's repository is to be checked for GTK 4. A command-line program could be offered without it. |
+| aix/ppc64 | | None | Out | AIX has no GTK 4. A command-line program could be offered. |
+| plan9/386, plan9/amd64 and plan9/arm | | None | Out | Plan 9 has no GTK. vero's Plan 9 starter is for workers with a text front end. |
+| android/386, android/amd64, android/arm and android/arm64 | | None | Out | iPhone, iPad and Android come after the desktop, as decided on 11 October. vero has an Android starter. |
+| ios/amd64 and ios/arm64 | | None | Out | The same. ios/amd64 is the simulator. |
+| js/wasm | | None | Out | A worker in a browser cannot keep files or sign-ins. vero has a web starter for workers that need neither. |
+| wasip1/wasm | | None | Out | No windows. vero has a WASI starter for workers with a text front end. |
+
+That is 30 pairs in and 17 out. Of those out, netbsd/arm, openbsd/ppc64
+and solaris/amd64 wait only on a check for GTK 4, and the six mobile
+pairs wait for their own plan.
 
 ## Phase 1. vero 0.18, untagged
 
@@ -384,10 +440,10 @@ These were decided on 11 October 2026.
    and mipsel) and OpenBSD on 32-bit ARM stay. This replaces the earlier decision to require
    libadwaita 1.5 and drop Debian 12, and was decided on 12 October 2026.
 
-## Proposed, waiting for approval
+## Decisions from the check
 
-These come from checking the plan against all four apps and a new app on
-12 October 2026.
+These come from checking the plan against all four apps and a new app,
+and were approved on 12 October 2026.
 
 5. **Left out of the first Windows and Linux versions of calmtasks:** the
    map and the current location (a task's place is shown as text, with a
