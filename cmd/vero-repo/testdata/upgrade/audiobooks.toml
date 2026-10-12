@@ -1,0 +1,234 @@
+# vero-app.toml describes audiobooks to vero's packaging: see vero's
+# PACKAGING.md, "Creating app installers". Paths are relative to this file.
+#
+# It packages the app for the Mac, Linux, the BSDs, illumos and Windows,
+# which scripts/release-desktop.sh releases.
+
+name = "audiobooks"
+display_name = "audiobooks"
+id = "com.calmapps.audiobooks"
+summary = "Your Audible library, kept as .m4b files on your computer"
+description = """
+audiobooks keeps a copy of your Audible library on your computer: every
+book downloaded and converted to an .m4b file with its chapters and cover,
+its companion PDF, and web pages to browse and play the library in. New
+books are found and fetched by themselves.
+"""
+# Who publishes it comes from the release's environment, not this file.
+publisher = "Calm Apps <you@example.com>"
+homepage = "https://audiobooks.calmapps.com"
+licence = "Proprietary"
+icon = "macos/audiobooks/Assets.xcassets/AppIcon.appiconset/1024.png"
+
+[worker]
+package = "cmd/worker"
+name = "audiobooks-worker"
+# The Mac's keeps the sign-ins in the keychain through Apple's own library.
+cgo = true
+
+# The Mac: the Xcode project, with ffmpeg and ffprobe built for it first and
+# bundled beside the worker. The worker is built there too, for Xcode's own
+# builds, and vero puts the release's in its place. Sparkle updates it from
+# the appcast in desktop/macos, which release-desktop.sh also copies to
+# releases/appcast.xml, where copies from before 0.5 look.
+[macos]
+folder = "macos"
+project = "audiobooks.xcodeproj"
+scheme = "audiobooks"
+prebuild = "scripts/build-ffmpeg.sh && scripts/build-worker.sh"
+entitlements = "audiobooks/audiobooks.entitlements"
+category = "public.app-category.entertainment"
+pkg = true
+
+# Linux, the BSDs and illumos. The system's own ffmpeg converts the books,
+# so each package depends on it, and the keyring keeps the sign-ins.
+# WebKitGTK 6 shows Amazon's sign-in page in the app, and is recommended
+# rather than needed: without it, the app opens the page in the web browser
+# and asks for the address Amazon lands on. pkg, pkgsrc and OpenBSD's
+# packages have no "recommends", so there it's left out, and the install
+# script from the site adds it where the system has it.
+[gtk]
+folder = "gtk"
+entry = "main.py"
+categories = "AudioVideo;Audio;"
+
+[gtk.deb]
+# armhf is built for ARMv6, as Raspberry Pi OS's is, which Debian's ARMv7
+# runs too; armel is Debian's for older ARM, as the first Raspberry Pis.
+arches = ["amd64", "arm64", "riscv64", "ppc64el", "armhf", "armel", "i386", "loong64", "ppc64", "s390x", "mips64el", "mipsel"]
+depends = "python3 (>= 3.10), python3-gi, gir1.2-gtk-4.0, ffmpeg"
+recommends = "gir1.2-webkit-6.0, gnome-keyring"
+section = "sound"
+
+# 32-bit ARM is openSUSE's, ARMv7 and ARMv6; Fedora has none.
+[gtk.rpm]
+arches = ["x86_64", "aarch64", "ppc64le", "riscv64", "i686", "s390x", "armv7hl", "armv6hl"]
+# Fedora's own ffmpeg is ffmpeg-free; RPM Fusion's and openSUSE's are ffmpeg.
+requires = "python3 >= 3.10, python3-gobject, (ffmpeg or ffmpeg-free), (typelib(Gtk) = 4.0 if openSUSE-release else (gtk4 and gobject-introspection))"
+recommends = "(typelib(WebKit) = 6.0 if openSUSE-release else webkitgtk6.0), gnome-keyring"
+
+# LoongArch is Loong Arch Linux's, POWER Arch POWER's, and pentium4 Arch
+# Linux 32's, for a processor with SSE2, which the worker needs. Arch Linux 32 has no
+# WebKitGTK 6, so it's optional, and the install script adds it where
+# there is one.
+[gtk.arch]
+arches = ["x86_64", "aarch64", "riscv64", "armv7h", "loong64", "pentium4", "powerpc64le", "powerpc64"]
+depends = "python, python-gobject, gtk4, ffmpeg"
+optdepends = "webkitgtk-6.0: signing in to Amazon inside the app"
+
+# Alpine and Void, whose packages have no "recommends" either: the install
+# script adds WebKitGTK and the keyring. A font too, on both: their GTK
+# brings none, and on a system without one the app can't open its window.
+[gtk.alpine]
+# armhf is Alpine's ARMv6, for the first Raspberry Pis.
+arches = ["x86_64", "aarch64", "riscv64", "ppc64le", "armv7", "armhf", "x86", "loongarch64", "s390x"]
+depends = "python3, py3-gobject3, gtk4.0, ffmpeg, font-dejavu"
+
+[gtk.void]
+arches = ["x86_64", "aarch64", "armv7l", "armv6l", "i686"]
+# ffmpeg6, not ffmpeg, which is 4.4 on Void; ffmpeg6 installs the same
+# ffmpeg and ffprobe programs, at the version Ubuntu 24.04 has.
+depends = "python3, python3-gobject, gtk4, ffmpeg6, dejavu-fonts-ttf"
+
+# Chimera, whose apk reads Alpine's kind of package. The install script
+# adds WebKitGTK (webkitgtk4 there) and the keyring.
+[gtk.chimera]
+arches = ["x86_64", "aarch64", "ppc64le", "ppc64", "riscv64", "loongarch64"]
+depends = "python, python-gobject, gtk4, ffmpeg"
+
+# A Flatpak, for any Linux. GNOME's runtime has GTK, WebKitGTK, Python and
+# PyGObject but no ffmpeg program, so the Flatpak carries its own, built
+# for each architecture by scripts/build-ffmpeg-linux.sh. It needs Docker,
+# so it's made only when asked for: scripts/release-desktop.sh asks.
+[gtk.flatpak]
+build = false
+prepare = "scripts/build-ffmpeg-linux.sh"
+resources = ["flatpak-tools/{arch}/ffmpeg", "flatpak-tools/{arch}/ffprobe", "flatpak-tools/{arch}/ffmpeg-LICENSE.txt"]
+
+# A font, too: GTK on the BSDs brings none, and on a system without one
+# the app can't start. OpenBSD installs DejaVu with X, so it needs nothing.
+# 32-bit Intel too, which FreeBSD 14 has, and 32-bit ARM, whose packages
+# FreeBSD last built in September 2025, with Python 3.11.
+[gtk.freebsd]
+arches = ["amd64", "aarch64", "i386", "armv7"]
+deps = { python3 = "lang/python3", gtk4 = "x11-toolkits/gtk40", py312-pygobject = "devel/py-pygobject@py312", ffmpeg = "multimedia/ffmpeg", dejavu = "x11-fonts/dejavu" }
+
+[gtk.freebsd.by_arch.armv7]
+deps = { python3 = "lang/python3", gtk4 = "x11-toolkits/gtk40", py311-pygobject = "devel/py-pygobject@py311", ffmpeg = "multimedia/ffmpeg", dejavu = "x11-fonts/dejavu" }
+python = "python3.11"
+
+[gtk.dragonfly]
+deps = { gtk4 = "x11-toolkits/gtk40", py311-pygobject = "devel/py-pygobject@py311", ffmpeg = "multimedia/ffmpeg", dejavu = "x11-fonts/dejavu" }
+python = "python3.11"
+
+# NetBSD: pkgsrc's ffmpeg8 installs ffmpeg8 and ffprobe8, which the worker
+# finds. Its packages for ARM and 32-bit Intel have no WebKitGTK 6 yet, so
+# there the app signs in through the browser. It has no GTK 4 for 32-bit
+# ARM.
+[gtk.netbsd]
+arches = ["x86_64", "aarch64", "i386"]
+depends = ["gtk4-[0-9]*", "py312-gobject3-[0-9]*", "ffmpeg8-[0-9]*", "dejavu-ttf-[0-9]*"]
+python = "python3.12"
+
+# OpenBSD has no ffmpeg for POWER.
+[gtk.openbsd]
+arches = ["amd64", "aarch64", "i386", "arm", "riscv64"]
+depends = ["x11/gtk+4:gtk+4-*:gtk+4-4.0", "devel/py-gobject3:py3-gobject3-*:py3-gobject3-3.0", "graphics/ffmpeg:ffmpeg-*:ffmpeg-6.1"]
+
+# illumos, from SmartOS's pkgsrc in /opt/local, which SmartOS has and
+# OmniOS and OpenIndiana can add. pkgsrc there has no WebKitGTK 6, so the
+# app signs in through the browser, and no keyring, so the sign-in is kept
+# in a file only its owner can read.
+[gtk.illumos]
+depends = ["gtk4-[0-9]*", "py312-gobject3-[0-9]*", "ffmpeg8-[0-9]*", "dejavu-ttf-[0-9]*"]
+python = "python3.12"
+
+# Windows: ffmpeg.exe and ffprobe.exe go with the app, built by
+# scripts/build-ffmpeg-windows.sh into windows/tools/, and for 32-bit
+# Windows into windows/tools-x86/; WebView2 shows Amazon's sign-in page.
+[wpf]
+folder = "windows"
+exe = "Audiobooks.exe"
+arches = ["x64", "arm64", "x86"]
+
+[needs]
+network = true
+files = true
+keyring = true
+notifications = false
+autostart = true
+webview = true
+
+# What vero's tests do with the app once it's installed and its window is
+# open, recorded as a GIF for each system (vero's scripts/test-repo.sh
+# --app): an empty library, the demo books (scripts/make-demo-library.py)
+# dropped into its imports/ folder, and the wait while they're converted.
+# AUDIOBOOKS_DEVELOP lets the app work without signing in to the site, and
+# VERO_PROFILE keeps its settings and sign-ins apart from those of a
+# copy in use on the same computer, as on a Mac.
+[test]
+files = [
+    "testdata/demo/Pride and Prejudice.mp3",
+    "testdata/demo/Moby-Dick.mp3",
+    "testdata/demo/A Tale of Two Cities.mp3",
+    "testdata/demo/Alices Adventures in Wonderland.mp3",
+    "testdata/demo/The Adventures of Sherlock Holmes.mp3",
+    "testdata/demo/Frankenstein.mp3",
+    "testdata/demo/The Wonderful Wizard of Oz.mp3",
+    "testdata/demo/Treasure Island.mp3",
+]
+env = { AUDIOBOOKS_DEVELOP = "1", VERO_PROFILE = "demo" }
+
+# ffmpeg and ffprobe found, as the package's dependencies bring them.
+[[test.step]]
+wait = { path = "tools", is = "" }
+timeout = 30
+
+# Nothing under way, such as the look round a library the app does as it
+# opens: the library can't change while a job runs.
+[[test.step]]
+wait = { path = "running", is = false }
+timeout = 120
+
+[[test.step]]
+call = "setClearImports"
+with = { on = false }
+
+[[test.step]]
+call = "setLibrary"
+with = { path = "{tmp}" }
+
+[[test.step]]
+pause = 2
+
+[[test.step]]
+copy = { from = "Pride and Prejudice.mp3", to = "{tmp}/imports/" }
+
+[[test.step]]
+copy = { from = "Moby-Dick.mp3", to = "{tmp}/imports/" }
+
+[[test.step]]
+copy = { from = "A Tale of Two Cities.mp3", to = "{tmp}/imports/" }
+
+[[test.step]]
+copy = { from = "Alices Adventures in Wonderland.mp3", to = "{tmp}/imports/" }
+
+[[test.step]]
+copy = { from = "The Adventures of Sherlock Holmes.mp3", to = "{tmp}/imports/" }
+
+[[test.step]]
+copy = { from = "Frankenstein.mp3", to = "{tmp}/imports/" }
+
+[[test.step]]
+copy = { from = "The Wonderful Wizard of Oz.mp3", to = "{tmp}/imports/" }
+
+[[test.step]]
+copy = { from = "Treasure Island.mp3", to = "{tmp}/imports/" }
+
+# Each one a book, with its audio converted to .m4b.
+[[test.step]]
+wait = { path = "stats.m4b", at_least = 8 }
+timeout = 600
+
+[[test.step]]
+pause = 4

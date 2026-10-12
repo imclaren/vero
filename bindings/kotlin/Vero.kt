@@ -1,3 +1,6 @@
+// Written by vero. Do not edit it: vero upgrade replaces it with each version
+// of vero, and stops if it has been changed.
+//
 // Drive a Go worker from a Kotlin frontend - Android, or anything else on the
 // JVM.
 //

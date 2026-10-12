@@ -1,3 +1,5 @@
+# Written by vero. Do not edit it: vero upgrade replaces it with each version
+# of vero, and stops if it has been changed.
 """Drive a Go worker from a Python frontend - GTK, Qt, or anything else.
 
 The worker supervises itself.  Run with VERO_HOST set it becomes a host: it

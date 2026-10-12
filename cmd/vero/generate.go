@@ -203,5 +203,14 @@ func copyBinding(app *App, rel, dir string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(dir, filepath.Base(rel)), data, 0o644)
+	path := filepath.Join(dir, filepath.Base(rel))
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		return err
+	}
+	// Recorded, so that vero upgrade can tell an edit of the app's own
+	// from vero's copy.
+	key, _ := filepath.Rel(app.Dir, path)
+	rec := readRecord(app.Dir)
+	rec[filepath.ToSlash(key)] = hashOf(data)
+	return writeRecord(app.Dir, rec)
 }

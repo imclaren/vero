@@ -55,6 +55,10 @@ func main() {
 		err = showCommand(os.Args[2:])
 	case "plan":
 		err = planCommand(os.Args[2:])
+	case "upgrade-toml":
+		// What vero upgrade asks of it: vero-app.toml's dependencies in the
+		// form that works them out.
+		err = upgradeTomlCommand(os.Args[2:])
 	case "deb":
 		// What scripts/package-linux.sh builds its .deb with: a folder laid
 		// out for dpkg-deb, made into a .deb in Go.

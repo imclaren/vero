@@ -22,6 +22,16 @@
 // worker_api.py. A request changed in Go then fails to build in Swift and
 // C#, rather than failing when the app runs. [gen] in vero-app.toml can
 // name other paths, as swift, csharp and python.
+//
+//	vero upgrade                   an app made with an older vero, brought up to this one
+//
+// vero upgrade moves go.mod and the kit to this vero, the Mac app's pin on
+// vero's Swift package to Up to Next Major, and the Windows app to .NET 10.
+// It copies vero's files into each front end afresh, unless one has been
+// changed since vero wrote it, writes vero-app.toml's dependencies in the
+// form that works them out, and runs vero gen. It then says what it
+// changed, and what to change in the app's own code, such as a type that
+// vero now defines.
 package main
 
 import (
@@ -51,8 +61,8 @@ var aliases = map[string]string{
 func main() {
 	if len(os.Args) >= 2 {
 		switch os.Args[1] {
-		case "ship", "setup", "gen":
-			do := map[string]func([]string) error{"ship": ship, "setup": setup, "gen": gen}[os.Args[1]]
+		case "ship", "setup", "gen", "upgrade":
+			do := map[string]func([]string) error{"ship": ship, "upgrade": upgrade, "setup": setup, "gen": gen}[os.Args[1]]
 			if err := do(os.Args[2:]); err != nil {
 				fmt.Fprintf(os.Stderr, "vero %s: %v\n", os.Args[1], err)
 				os.Exit(1)
@@ -96,6 +106,8 @@ func main() {
 			"       vero new NAME [front ends, as for add] [--module PATH] [add's flags]\n"+
 			"       vero add [desktop|mobile|all|macos|gtk|wpf|android|ios|web|wasi|plan9 ...] [--except LIST] [--dir DIR]\n"+
 			"                [--menubar | --tray] [--summary TEXT] [--description TEXT] [--publisher \"Name <email>\"] [--keep-worker] [--force]\n"+
+			"       vero upgrade [--version v0.18.0] [--force] [--dir DIR]\n"+
+			"                brings an app made with vero 0.13 or later up to this vero, and says what to change in its own code\n"+
 			"       vero gen [--check] [--out DIR] [--dir DIR]\n"+
 			"                writes each front end's requests from the worker's types, in Swift, C# and Python\n"+
 			"       vero release [--version 1.2.3] [--targets ...] [--notes \"...\"] [--upload user@host:/path]\n"+
