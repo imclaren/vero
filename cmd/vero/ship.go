@@ -74,6 +74,12 @@ func ship(args []string) error {
 	if _, err := os.Stat(toml); err != nil {
 		return fmt.Errorf("no vero-app.toml here: run vero ship in an app's folder, or give it a worker, as in vero ship counter.go")
 	}
+	// The front ends' request types, from the worker as it is now, so that
+	// a request changed in Go fails to build in Swift and C# before
+	// anything is released.
+	if err := gen([]string{"--dir", dir}); err != nil {
+		return fmt.Errorf("vero gen: %w", err)
+	}
 
 	src, err := veroSource(*local)
 	if err != nil {

@@ -213,7 +213,7 @@ want of ffmpeg, and its README says why.
    the toml's dependency lists in the new form, and reports each change.
    Where an app's code must change, such as a renamed Swift call between
    0.13 and 0.18, it says where.
-5. **Sandboxed Mac apps.** vero-repo signs the worker inside a sandboxed
+5. **Sandboxed Mac apps.** Done on 12 October 2026 (d5efdd9): each program in a sandboxed app is signed with the sandbox and inherit entitlements. calmtasks proves it in Phase 4. vero-repo signs the worker inside a sandboxed
    app with the sandbox and inherit entitlements, which lets a sandboxed
    app run it as a program of its own. calmtasks no longer needs its C
    archive, and its App Store build can bundle the worker as the others
@@ -290,7 +290,7 @@ want of ffmpeg, and its README says why.
    gnome-keyring. The move is not needed for the libraries, which run on
    SmartOS's plain GTK 4 as audiobooks does today, so it can come last in
    Phase 1.
-7. **Typed requests generated from the worker.** The worker's handlers are
+7. **Typed requests generated from the worker.** Done on 11 and 12 October 2026 (9766078): `vero add`, `vero upgrade` and `vero ship` run it. The worker's handlers are
    typed in Go (`vero.Handle[Req, Rep]`), but the front ends call them by
    name with untyped JSON, and each Mac app keeps its own `Requests.swift`
    by hand. `vero gen` reads the worker's handlers and writes the matching
@@ -317,7 +317,7 @@ want of ffmpeg, and its README says why.
     build the worker for every system and processor first, and name each
     one that fails and why. vero's documentation names `ncruces/go-sqlite3`
     as the SQLite for workers.
-11. **Kit additions.** These are the Go side of the pieces in the table:
+11. **Kit additions.** Done on 12 October 2026: `kit/update`'s `vero.update` (fb96814), `kit/keychain`'s password for files and its `vero.keychain`, `vero.unlock` and `vero.setPassword` requests, `kit/awake` (0feeecf), and `WorkerOptions.Lock` (4d7f4e5). The libraries ask for the password with `unlock_sign_ins` and `UnlockSignIns`. These are the Go side of the pieces in the table:
     - `kit/keychain` keeps sign-ins in a file encrypted with a key from a
       password where there is no keyring, and tells the front end that it
       needs the password;
@@ -327,7 +327,7 @@ want of ffmpeg, and its README says why.
       reports sleep and wake;
     - vero's Go package lets a worker with no app take the same lock as
       the supervisor.
-12. **macOS older than Go supports.** An app whose `[macos]` minimum is
+12. **macOS older than Go supports.** Done on 12 October 2026 (d5efdd9), and tried on an app for macOS 12, whose two workers report 12.0 and 13.0 as their minimums. An app whose `[macos]` minimum is
     older than the current Go builds for, as calmdocs' macOS 12 is, gets
     two workers in its Mac app: one built with the current Go, and one
     built with the last Go that builds for that macOS (Go 1.26 for macOS
