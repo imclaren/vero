@@ -71,16 +71,32 @@ public struct VeroWorkerBundle {
     /// flag somebody has to remember.
     public var useBundleInDebugBuilds: Bool
 
+    /// When the bundled worker replaces the one on disk.
+    public enum Replace: Sendable {
+        /// When the bundled one is newer, so that a downgrade never drags a
+        /// client backwards.
+        case whenNewer
+        /// Whenever the two differ, whatever their versions, for an app
+        /// whose worker always ships with it: a worker that is not the
+        /// bundled one is then never the right one to run, even when an
+        /// unstamped local build reports an older version.
+        case whenDifferent
+    }
+
+    public var replace: Replace
+
     public init(
         bundledName: String,
         directoryName: String,
         supersededNames: [String] = [],
-        useBundleInDebugBuilds: Bool = true
+        useBundleInDebugBuilds: Bool = true,
+        replace: Replace = .whenNewer
     ) {
         self.bundledName = bundledName
         self.directoryName = VeroWorkerBundle.forProfile(directoryName)
         self.supersededNames = supersededNames
         self.useBundleInDebugBuilds = useBundleInDebugBuilds
+        self.replace = replace
     }
 
     // MARK: - Preparing
@@ -195,6 +211,12 @@ public struct VeroWorkerBundle {
             log("the worker on disk is unusable, replacing it")
             return true
         }
+        let differs = sha256(bundled) != sha256(writable)
+        if !differs { return false }
+        if replace == .whenDifferent {
+            log("the worker on disk differs from the bundled one, replacing it")
+            return true
+        }
 
         let onDisk = VeroWorkerBundle.version(of: writable)
         let inBundle = VeroWorkerBundle.version(of: bundled)
@@ -226,6 +248,9 @@ public struct VeroWorkerBundle {
                 log("bundled worker \(bundle) is newer than \(disk) on disk")
                 return true
             }
+            // Kept, although it is not the bundled one: said plainly, since
+            // an app beside an older worker lacks whatever is newer.
+            log("keeping the worker on disk (\(disk)), which differs from the bundled one (\(bundle)); replace: .whenDifferent would replace it")
             return false
         }
     }
