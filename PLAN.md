@@ -374,8 +374,12 @@ want of ffmpeg, and its README says why.
     Each library writes HTML to PDF files offscreen, one after another
     through one hidden web view: `PdfWriter` with WebKitGTK's print
     operation, `VeroPdfWriter` with `PrintToPdfAsync`, and `VeroPDFWriter`
-    with `createPDF`, whose PDF is one page as long as the message. The GTK
-    and WPF library tests and `scripts/test-bindings.sh` check them.
+    with a print operation in a hidden window, all with ordinary pages of
+    the same paper (the system's own, A4 or US Letter) and margins in
+    millimetres, so that a backup looks the same on every system. The Mac's
+    `onePage` makes instead one page as long as the message, with
+    `createPDF`. The GTK and WPF library tests and
+    `scripts/test-bindings.sh` check the pages.
 17. **IPS publishers for illumos' dependencies.** Done on 12 October 2026.
     OpenIndiana's ffmpeg is `video/ffmpeg` in its second publisher,
     `hipster-encumbered`, which the site's install commands add before

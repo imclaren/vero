@@ -91,27 +91,54 @@ public struct VeroHtmlView: NSViewRepresentable {
     }
 }
 
+/// A PDF's paper: the system's own, which follows the region and printer
+/// (A4, or US Letter in the United States and Canada), or one named.
+public enum VeroPaper: Sendable {
+    case system, a4, letter
+
+    /// Width and height in points.
+    @MainActor
+    var size: NSSize {
+        switch self {
+        case .system: return NSPrintInfo.shared.paperSize
+        case .a4: return NSSize(width: 595.28, height: 841.89)
+        case .letter: return NSSize(width: 612, height: 792)
+        }
+    }
+}
+
 /// Turns HTML into PDF files without showing it, one after another through
-/// one web view that is never in a window, so that thousands can be written
-/// in turn:
+/// one web view in a window that is never seen, so that thousands can be
+/// written in turn:
 ///
 ///     let pdf = VeroPDFWriter()
 ///     try await pdf.write(html: message.body, to: folder.appendingPathComponent("message.pdf"))
 ///
-/// Each file is one page as long as the message, as WKWebView's createPDF
-/// makes it. Scripts are off and nothing is loaded from the network unless
-/// remote is set.
+/// Each PDF has ordinary pages of paper, the system's own unless set, with
+/// margin millimetres on every side, as vero's writers on Windows and
+/// Linux make them. onePage makes instead one page as long as the message,
+/// as WKWebView's createPDF does. Scripts are off and nothing is loaded
+/// from the network unless remote is set.
 @MainActor
 public final class VeroPDFWriter: NSObject, WKNavigationDelegate {
     public var remote: Bool
     public var policy: String
+    public var paper: VeroPaper
+    public var margin: Double
+    public var onePage: Bool
     private var view: WKWebView?
+    private var window: NSWindow?
     private var loaded: CheckedContinuation<Void, Error>?
+    private var printed: CheckedContinuation<Bool, Never>?
     private var last: Task<Error?, Never>?
 
-    public init(remote: Bool = false, policy: String = VeroHTML.policy) {
+    public init(remote: Bool = false, policy: String = VeroHTML.policy, paper: VeroPaper = .system,
+                margin: Double = 12.7, onePage: Bool = false) {
         self.remote = remote
         self.policy = policy
+        self.paper = paper
+        self.margin = margin
+        self.onePage = onePage
     }
 
     /// Writes html to url as a PDF. Writes asked for together run in turn.
@@ -127,20 +154,61 @@ public final class VeroPDFWriter: NSObject, WKNavigationDelegate {
     }
 
     private func writeNow(html: String, to url: URL) async throws {
-        let view = self.view ?? {
-            let v = VeroHTML.webView()
-            v.navigationDelegate = self
-            self.view = v
-            return v
-        }()
+        let view: WKWebView
+        if let existing = self.view {
+            view = existing
+        } else {
+            // Printing needs the web view in a window, so it has one far
+            // off the screen, which is never shown.
+            let window = NSWindow(contentRect: NSRect(x: -10000, y: -10000, width: 800, height: 1000),
+                                  styleMask: [.titled], backing: .buffered, defer: false)
+            window.isReleasedWhenClosed = false
+            view = VeroHTML.webView()
+            view.frame = window.contentView!.bounds
+            window.contentView!.addSubview(view)
+            view.navigationDelegate = self
+            self.view = view
+            self.window = window
+        }
         try await withCheckedThrowingContinuation { (c: CheckedContinuation<Void, Error>) in
             loaded = c
             view.loadHTMLString(VeroHTML.withPolicy(html, policy: policy, remote: remote), baseURL: nil)
         }
-        let data: Data = try await withCheckedThrowingContinuation { c in
-            view.createPDF { result in c.resume(with: result) }
+        if onePage {
+            let data: Data = try await withCheckedThrowingContinuation { c in
+                view.createPDF { result in c.resume(with: result) }
+            }
+            try data.write(to: url, options: .atomic)
+            return
         }
-        try data.write(to: url, options: .atomic)
+        try? FileManager.default.removeItem(at: url)
+        let info = NSPrintInfo()
+        info.paperSize = paper.size
+        let points = margin * 72 / 25.4
+        info.topMargin = points
+        info.bottomMargin = points
+        info.leftMargin = points
+        info.rightMargin = points
+        info.jobDisposition = .save
+        info.dictionary()[NSPrintInfo.AttributeKey.jobSavingURL] = url
+        info.horizontalPagination = .fit
+        info.verticalPagination = .automatic
+        let op = view.printOperation(with: info)
+        op.showsPrintPanel = false
+        op.showsProgressPanel = false
+        op.view?.frame = view.bounds
+        let ok = await withCheckedContinuation { (c: CheckedContinuation<Bool, Never>) in
+            printed = c
+            op.runModal(for: window!, delegate: self, didRun: #selector(didPrint(_:success:context:)), contextInfo: nil)
+        }
+        guard ok, FileManager.default.fileExists(atPath: url.path) else {
+            throw VeroError.failed("the PDF was not written")
+        }
+    }
+
+    @objc private func didPrint(_ op: NSPrintOperation, success: Bool, context: UnsafeMutableRawPointer?) {
+        printed?.resume(returning: success)
+        printed = nil
     }
 
     public func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {

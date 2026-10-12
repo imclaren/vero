@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -227,10 +228,11 @@ def scenario(name: str, worker: str, args: list[str]) -> int:
                 later(2.5, lambda: expect(links == ["vero-test:attachment/1"], f"the app's own link: {links}"))
             # HTML to a PDF file, offscreen, twice in turn.
             pdfs = tempfile.mkdtemp()
-            writer = vg.PdfWriter()
+            writer = vg.PdfWriter(paper="a4", margin=10)
+            long = "<p>A paragraph of a receipt, long enough to fill a line or two of the page.</p>" * 150
             for n in (1, 2):
                 path = os.path.join(pdfs, f"{n}.pdf")
-                writer.write(f"<h1>Message {n}</h1><p>Hello.</p>", path,
+                writer.write(f"<h1>Message {n}</h1>" + (long if n == 2 else "<p>Hello.</p>"), path,
                              lambda error, path=path: seen.setdefault(path, error or open(path, "rb").read(5)))
             seen["pdfs"] = pdfs
             if view.text is not None:
@@ -263,6 +265,12 @@ def scenario(name: str, worker: str, args: list[str]) -> int:
                 got = seen.get(os.path.join(seen["pdfs"], f"{n}.pdf"))
                 if vg.has_webview():
                     expect(got == b"%PDF-", f"PDF {n}: {got!r}")
+                    with open(os.path.join(seen["pdfs"], f"{n}.pdf"), "rb") as f:
+                        data = f.read()
+                    # Pages of A4, 595 by 842 points (841.9), and several for the long one.
+                    pages = len(re.findall(rb"/Type\s*/Page[^s]", data))
+                    expect(b"595" in data and (b"841" in data or b"842" in data), f"PDF {n} is on A4")
+                    expect(pages == 1 if n == 1 else pages > 1, f"PDF {n} has {pages} pages")
                 else:
                     expect(isinstance(got, str) and "web view" in got, f"no PDF without a web view: {got!r}")
             for win in list(app.get_windows()):

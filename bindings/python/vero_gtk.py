@@ -1616,12 +1616,16 @@ class PdfWriter:
         pdf.write(markup, "/path/to/message.pdf", lambda error: ...)
 
     done is called on the main loop with "" once the file is written, or
-    with what went wrong. Scripts are off and nothing is loaded from the
-    network unless remote is set. Where there is no web view, every write
-    fails, saying so; has_webview() tells an app beforehand."""
+    with what went wrong. Each PDF has pages of paper, "a4" or "letter", or
+    the system's own when it is "", with margin millimetres on every side,
+    as vero's writers on the Mac and Windows make them. Scripts are off and
+    nothing is loaded from the network unless remote is set. Where there is
+    no web view, every write fails, saying so; has_webview() tells an app
+    beforehand."""
 
-    def __init__(self, remote: bool = False, policy: str = HTML_POLICY) -> None:
-        self.remote, self.policy = remote, policy
+    def __init__(self, remote: bool = False, policy: str = HTML_POLICY, paper: str = "",
+                 margin: float = 12.7) -> None:
+        self.remote, self.policy, self.paper, self.margin = remote, policy, paper, margin
         self._queue: list[tuple[str, str, Callable[[str], Any]]] = []
         self._busy = False
         self._view: Any = None
@@ -1669,9 +1673,16 @@ class PdfWriter:
         settings.set_printer("Print to File")
         settings.set(Gtk.PRINT_SETTINGS_OUTPUT_FILE_FORMAT, "pdf")
         settings.set(Gtk.PRINT_SETTINGS_OUTPUT_URI, GLib.filename_to_uri(path, None))
+        setup = Gtk.PageSetup()
+        names = {"a4": Gtk.PAPER_NAME_A4, "letter": Gtk.PAPER_NAME_LETTER}
+        size = Gtk.PaperSize.new(names[self.paper]) if self.paper in names else Gtk.PaperSize.new(Gtk.PaperSize.get_default())
+        setup.set_paper_size(size)
+        for side in ("top", "bottom", "left", "right"):
+            getattr(setup, f"set_{side}_margin")(self.margin, Gtk.Unit.MM)
+        settings.set_paper_size(size)
         op = WebKit.PrintOperation.new(view)
         op.set_print_settings(settings)
-        op.set_page_setup(Gtk.PageSetup())
+        op.set_page_setup(setup)
         result: dict = {"error": ""}
         op.connect("failed", lambda _o, e: result.update(error=e.message))
 
