@@ -70,6 +70,23 @@ It asks for a one-line summary, a description and the publisher, as
 "Name <email>", when it first writes `vero-app.toml` at a terminal;
 `--summary`, `--description` and `--publisher` answer from a script.
 
+## vero upgrade
+
+An app made with vero 0.13 or later is brought up to the vero you have with
+`vero upgrade`, in its folder. It moves `go.mod` and the kit, the Mac app's
+pin on vero's Swift package (Up to Next Major) and the Windows app (.NET 10,
+with Windows Forms for the tray icon). It copies vero's files into each front
+end afresh, writes `vero-app.toml`'s dependencies as `uses` and `extra`, runs
+`vero gen`, and adds `WorkerAPI.swift` to an Xcode project that needs it.
+Then it lists what it changed, and what to change in the app's own code,
+such as a type of the app's own that `WorkerAPI.swift` now defines.
+
+vero's files say at their top that vero wrote them, and `.vero-files.json`,
+which belongs in git, records each one's hash. A file that has been changed
+since is left alone, and `vero upgrade` names it: an app changes what vero's
+libraries do through their settings or by subclassing. `--force` replaces
+it all the same.
+
 ## PORTING.md
 
 `vero add` also writes `PORTING.md`: what in your worker needs attention

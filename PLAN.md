@@ -202,12 +202,12 @@ want of ffmpeg, and its README says why.
    libadwaita 1.5 or later is installed, and a plain GTK 4 window with a
    header bar where it is not. Both starters call the libraries for
    everything in the table.
-3. **Dependencies worked out by vero-repo.** `[gtk]` names what the app
+3. **Dependencies worked out by vero-repo.** Done on 12 October 2026 (599e96f, 99cdee4): `cmd/vero-repo/deps.go` has the names, and the example installs from them on Debian 13 and 12, Ubuntu 24.04 and Fedora so far. `[gtk]` names what the app
    uses, such as `uses = ["adwaita", "webview", "keyring"]`, and `extra`
    lists what only that app needs, such as audiobooks' ffmpeg. vero-repo
    writes each system's package names from these and adds a font on every
    system. Sections that list every dependency in full are still accepted.
-4. **`vero upgrade`.** In an existing app, from vero 0.13 onwards, it
+4. **`vero upgrade`.** Done on 12 October 2026 (b1132fa), and tried on copies of audiobooks and treehouse. calmtasks and calmdocs run it once their workers move to `cmd/worker`. In an existing app, from vero 0.13 onwards, it
    updates `go.mod` and the kit, sets the Xcode project's pin on vero to
    Up to Next Major, copies the bindings and libraries afresh, rewrites
    the toml's dependency lists in the new form, and reports each change.
@@ -274,8 +274,8 @@ want of ffmpeg, and its README says why.
    amd64, aarch64 and i386 so far, and its arm and riscv64 packages are
    checked when they appear.
 
-   vero's tests use Debian 12 by default today, and move to Debian 13, with
-   Debian 12 kept as the test of the plain GTK 4 path.
+   vero's tests use Debian 13 by default, with Debian 12 kept as the test
+   of the plain GTK 4 path (3eea4b4).
 
    illumos moves from SmartOS's pkgsrc to OpenIndiana's own repository.
    SmartOS is a server system, and its pkgsrc lacks libadwaita and a GTK 4
@@ -298,7 +298,7 @@ want of ffmpeg, and its README says why.
    records and Python dataclasses. `vero ship` and `vero upgrade` run it,
    so that a field renamed in Go fails to build in Swift and C# and fails
    a type check in Python, rather than failing when a test runs.
-8. **Library files protected from edits.** Every file that vero copies
+8. **Library files protected from edits.** Done on 12 October 2026 (b1132fa): `.vero-files.json` records each file's hash. Every file that vero copies
    into an app says that vero wrote it and that it is not to be edited,
    and vero records its hash. `vero upgrade` stops and names any such file
    that has been edited. An app that needs something different changes it
