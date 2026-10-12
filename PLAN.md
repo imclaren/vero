@@ -40,14 +40,18 @@ app up to date.
 
 | Piece | Needed by | Where it goes |
 |---|---|---|
-| The app's shell, with WPF's Fluent theme and libadwaita, following the system's light or dark mode | Every app | vero's libraries |
+| The app's shell, with WPF's Fluent theme, and with libadwaita where the system has it, following the system's light or dark mode | Every app | vero's libraries |
 | A single copy, which brings the running copy forward | Every app | vero's libraries (the Mac already has `VeroSingleCopy`) |
 | An app that lives in the tray, with a small window from its icon, as the Mac's menu bar apps do | calmtasks, calmdocs | vero's libraries, when `menubar = true` |
 | Running with the window closed, and starting at sign-in | treehouse, calmtasks, calmdocs | vero's libraries and `kit/autostart` |
 | A web page, with the system's browser in its place where there is no web view | audiobooks, treehouse | vero's libraries |
 | A toast with an Undo button | treehouse, calmtasks (its worker has undo) | vero's libraries |
 | Notifications with buttons | treehouse | vero's libraries and `kit/notify` |
-| How each app looks: rows, avatars, empty states, settings pages | Each app | Each app, with libadwaita's own widgets on Linux |
+| How each app looks: rows, avatars, empty states, settings pages | Each app | Each app, with the library's widgets on Linux, the BSDs and illumos, which are libadwaita's where it is installed |
+
+Every app runs on every system and processor on which audiobooks runs
+today, as its README lists them. No app drops one of them by moving to
+0.18, and calmtasks and calmdocs gain all of them.
 
 A piece goes into vero when it is plumbing that every app would otherwise
 write, or when two apps need it. How an app looks stays in the app.
@@ -68,8 +72,10 @@ opening the app from the menu shows its small window.
    tray app on Windows and Linux. The WPF starter targets .NET 10, turns on
    the Fluent theme with `ThemeMode="System"`, keeps its layout in XAML,
    puts colours and spacing in `Theme.xaml`, and uses Segoe Fluent Icons.
-   The GTK starter uses `Adw.Application`, `Adw.ToolbarView` and a header
-   bar, and needs libadwaita 1.5 or later. Both call the libraries for
+   The GTK starter uses the library's window, which is an
+   `Adw.ApplicationWindow` with an `Adw.ToolbarView` and a header bar where
+   libadwaita 1.5 or later is installed, and a plain GTK 4 window with a
+   header bar where it is not. Both starters call the libraries for
    everything in the table.
 3. **Dependencies worked out by vero-repo.** `[gtk]` names what the app
    uses, such as `uses = ["adwaita", "webview", "keyring"]`, and `extra`
@@ -87,21 +93,36 @@ opening the app from the menu shows its small window.
    app run it as a program of its own. calmtasks no longer needs its C
    archive, and its App Store build can bundle the worker as the others
    do.
-6. **libadwaita 1.5 on every system and processor that the apps ship.**
-   audiobooks ships for many processors, such as i386, armhf, riscv64 and
-   loong64. vero's container and virtual-machine tests check each. A
-   system without libadwaita 1.5 is dropped, as Debian 12 is, and the
-   download page says why.
+6. **Every system and processor that audiobooks runs on.** audiobooks
+   ships for many processors, such as i386, armhf, riscv64 and loong64, and
+   on systems whose GTK is older than elsewhere, such as FreeBSD on 32-bit
+   ARM, whose packages have not been updated since 2025. Every app must
+   run on all of them.
+
+   So `vero_gtk.py` uses libadwaita 1.5 or later where it is installed, and
+   plain GTK 4 where it is not. Each piece in the table works both ways:
+   the window and its header bar, toasts, banners, dialogs and settings
+   pages. An app builds its windows from the library's pieces, and uses a
+   widget that only libadwaita has only after asking the library whether
+   libadwaita is there. Apps then look like GNOME apps where libadwaita is
+   installed, and like plain GTK apps elsewhere, but work the same
+   everywhere.
+
+   vero-repo makes libadwaita a dependency on each system and processor
+   whose packages have 1.5 or later, and leaves it out elsewhere. vero's
+   container and virtual-machine tests run every app both ways, with
+   `VERO_GTK_PLAIN=1` making the library use plain GTK 4 where libadwaita
+   is installed.
 
    The package indexes, checked on 11 October 2026, give these versions:
 
    | System | libadwaita |
    |---|---|
-   | Debian 12 | 1.2.2, too old, so Debian 12 is dropped |
+   | Debian 12 | 1.2.2, too old, so the library uses plain GTK 4 |
    | Debian 13 | 1.7.6, on amd64, arm64, armel, armhf, i386, ppc64el, riscv64 and s390x. The other processors that audiobooks ships for are Debian's ports, which follow unstable (1.10). |
    | Ubuntu 24.04 | 1.5.0 |
    | Fedora | 1.9.4 |
-   | openSUSE Tumbleweed | 1.9.4. Leap 15.6 has 1.4.2 and is not supported. |
+   | openSUSE Tumbleweed | 1.9.4. Leap 15.6 has 1.4.2, on which the library uses plain GTK 4. |
    | Alpine | 1.9.2 |
    | Void | 1.9.1 |
    | Chimera | 1.10.0 |
@@ -109,9 +130,10 @@ opening the app from the menu shows its small window.
    | DragonFly | 1.7.2 |
    | NetBSD 10 and 11 | 1.9.1 on x86_64 and i386, 1.8.0 on aarch64 |
    | OpenBSD | 1.9.4 |
-   | illumos | None in SmartOS's pkgsrc, from which vero installs GTK on OpenIndiana today. OpenIndiana's own repository has 1.6.10, and vero moves to it. |
+   | illumos | None in SmartOS's pkgsrc, from which vero installs GTK on OpenIndiana today. OpenIndiana's own repository has 1.6.10. |
 
-   vero's tests use Debian 12 by default today, and move to Debian 13.
+   vero's tests use Debian 12 by default today, and move to Debian 13, with
+   Debian 12 kept as the test of the plain GTK 4 path.
 
    illumos moves from SmartOS's pkgsrc to OpenIndiana's own repository.
    SmartOS is a server system, and its pkgsrc lacks libadwaita and a GTK 4
@@ -122,6 +144,10 @@ opening the app from the menu shows its small window.
    vero's OpenIndiana virtual machine. Whether OpenIndiana's WebKitGTK
    2.52.5 includes the GTK 4 web view is checked there. Without it, illumos
    shows pages in the browser, as any system without a web view does.
+   With its keyring, sign-ins on illumos move from a file into
+   gnome-keyring. The move is not needed for the libraries, which run on
+   SmartOS's plain GTK 4 as audiobooks does today, so it can come last in
+   Phase 1.
 7. **Typed requests generated from the worker.** The worker's handlers are
    typed in Go (`vero.Handle[Req, Rep]`), but the front ends call them by
    name with untyped JSON, and each Mac app keeps its own `Requests.swift`
@@ -154,11 +180,15 @@ audiobooks is small, so it proves `vero upgrade` and the window shape
 quickly.
 
 1. Run `vero upgrade`.
-2. Move `gtk/main.py` onto `vero_gtk.py` and libadwaita, and `windows/` onto
+2. Move `gtk/main.py` onto `vero_gtk.py`, and `windows/` onto
    `VeroWpf.cs`, .NET 10 and the Fluent theme. Amazon's sign-in uses the
    library's web page.
 3. Move every front end, the Mac's included, to the generated requests.
 4. Run `vero ship --no-release` on every system.
+5. Update the README's list of systems: libadwaita where the system has
+   it, the GTK 4 web view and keyring on OpenIndiana, and any system whose
+   features differ, with the reason, as it already explains FreeBSD on
+   32-bit ARM.
 
 ## Phase 3. treehouse, a large window app that runs in the background
 
@@ -230,5 +260,8 @@ These were decided on 11 October 2026.
    Store build stays with fastlane.
 3. **The repositories' names.** tasks-macos and sync-macos will hold
    Windows and Linux apps too. They keep their names for now.
-4. **Debian 12.** libadwaita 1.5 drops Debian 12 for every app, including
-   audiobooks, which supports it today.
+4. **Every system that audiobooks runs on.** Every app runs on every
+   system and processor on which audiobooks runs today. libadwaita is used
+   where it is installed and is not required, so Debian 12 and FreeBSD on
+   32-bit ARM stay. This replaces the earlier decision to require
+   libadwaita 1.5 and drop Debian 12, and was decided on 12 October 2026.
