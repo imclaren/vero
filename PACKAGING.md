@@ -158,7 +158,12 @@ fails and the error that stops it. Three causes are usual:
   database without it. `modernc.org/sqlite` has no port for DragonFly,
   illumos, NetBSD on arm64 or OpenBSD on riscv64. `ncruces/go-sqlite3`
   builds everywhere, and runs on every Linux processor that vero packages
-  for, which vero tested under emulation.
+  for, which vero tested under emulation. Two things to know. Full-text
+  search is an extension, which `github.com/ncruces/go-sqlite3/ext/fts5`
+  registers on each connection that `driver.Open` makes. And a sandboxed
+  Mac app's worker needs `PRAGMA temp_store=MEMORY`: there SQLite cannot
+  make its temporary files, and a write that needs one, such as one that
+  updates a search index, fails with "disk I/O error".
 - **A package for one system**, such as a notifier for the Mac's sleep and
   wake that needs cgo. vero's `kit` has packages that work on every system,
   for the keychain, notifications, starting at sign-in and updates; give

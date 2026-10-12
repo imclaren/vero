@@ -103,9 +103,17 @@ public struct VeroWorkerBundle {
 
     /// Returns a worker ready to launch, copying it out of the bundle if the
     /// copy on disk is missing, unusable, or older.
+    ///
+    /// A sandboxed app runs the bundled worker where it is: the sandbox lets
+    /// it start a program inside its own bundle, signed as its helper, as
+    /// vero-repo signs it, but not one it has written to its container.
     @discardableResult
     public func prepare() throws -> URL {
         let bundled = try bundledURL()
+        if VeroWorkerBundle.sandboxed {
+            log("sandboxed: running the bundled worker where it is")
+            return bundled
+        }
         let writable = try writableURL()
 
         try removeSuperseded(besides: writable)
@@ -132,6 +140,11 @@ public struct VeroWorkerBundle {
         let writable = try writableURL()
         try copy(from: bundled, to: writable)
         return writable
+    }
+
+    /// Whether this app runs in the App Sandbox, which sets this for it.
+    public static var sandboxed: Bool {
+        ProcessInfo.processInfo.environment["APP_SANDBOX_CONTAINER_ID"] != nil
     }
 
     /// The version the bundled worker reports, or nil if it cannot say.
