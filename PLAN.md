@@ -386,6 +386,25 @@ want of ffmpeg, and its README says why.
     installing an app that uses ffmpeg. OpenIndiana's `pkg` cannot send a
     password, so an app with private downloads, as audiobooks has, takes
     the token in the repository's path instead.
+18. **What calmtasks' move found.** Done on 13 October 2026.
+    - vero gen writes Go's `time.Time` as a Swift `Date`, through the Swift
+      package's `VeroDate`, and marks the Swift types `nonisolated` for an
+      app on the main actor by default.
+    - `vero add` and `vero gen` take a worker command that sets the worker
+      up in a package of the app's own, as `cmd/worker` does with
+      `core/app`.
+    - A sandboxed Mac app runs its bundled worker in place, as the
+      sandbox's helper. Its worker cannot read what the app was given
+      through a panel, so the app copies such files into its caches first.
+      SQLite there needs `PRAGMA temp_store=MEMORY`.
+    - `[macos] configuration` names the Xcode configuration a release
+      builds, such as one for direct downloads.
+    - The WPF starter keeps the Fluent look, `VeroApp.Ask` takes a request
+      that answers nothing, and the Windows recorder finds a tray window.
+    - `record-mac.sh` records a sandboxed app. `test-repo.sh` removes the
+      repositories earlier tests left in a VM, and runs its commands
+      through `sh`. `setup-windows-display.sh` gives the Windows VM a
+      1024 by 768 screen.
 
 vero's own tests check both starter shapes on every system that vero
 tests, and `vero ship counter.go` is run again as a new app would be.
@@ -398,6 +417,14 @@ that uses SQLite.
 
 audiobooks is small, so it proves `vero upgrade` and the window shape
 quickly.
+
+Done on 12 and 13 October 2026, on audiobooks' branch `vero-0.18`: all
+three front ends on the libraries and the generated requests, the Linux
+and Windows apps with the Mac's covers, OpenIndiana through IPS with the
+token in the repository's path, the README's table of systems, and new
+pictures for every system. Every system passes vero's test except FreeBSD
+and DragonFly, whose VMs held repositories and packages from earlier
+tests, and which run again with the fixed test.
 
 1. Run `vero upgrade`.
 2. Move `gtk/main.py` onto `vero_gtk.py`, and `windows/` onto
@@ -432,6 +459,12 @@ in treehouse has the detail.
 6. Run `vero ship --no-release` on every system.
 
 ## Phase 4. calmtasks, a sandboxed menu bar app
+
+Steps 1 to 7 done on 13 October 2026, on calmtasks' branch `vero-0.18`,
+with the Mac's typed requests used for the types and the replies, while
+`Core` still asks by name. Its first Windows and Linux apps are tray apps.
+Debian 13, Windows and the Mac pass and record; the other systems are
+being tested.
 
 1. Move the worker from `core/` to `cmd/worker` in a module at the top of
    the repository, drop `libcalmtaskscore.a` and `build-core.sh`, and bundle
