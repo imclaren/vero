@@ -54,6 +54,15 @@ type WorkerOptions struct {
 	// worker that has one.  Zero means DefaultStateInterval.
 	StateInterval time.Duration
 
+	// Lock, when set, is a name for this worker, such as the app's id, of
+	// which only one may run at a time for this user, however it was
+	// started: by an app, or on its own as a daemon, which then cannot both
+	// work on the same files. A second one started on its own says that
+	// another is running and exits; one started by an app answers every
+	// request with ErrAlreadyRunning, which the app shows, and runs none of
+	// the program's own code.
+	Lock string
+
 	// ShowVersion is set by RegisterFlags when -version was passed. Answer it
 	// and exit before anything else starts - it runs as its own short-lived
 	// process, several times per launch, and must not open a port, touch a
@@ -107,6 +116,9 @@ type Worker struct {
 
 	mu  sync.Mutex // serialises writes to out; one line must not interleave
 	enc *json.Encoder
+	// lock is the single-worker lock that WorkerOptions.Lock asks for,
+	// held while the process runs.
+	lock *os.File
 }
 
 // NewWorker prepares a worker.  Whether a supervisor launched it is read from
@@ -161,7 +173,34 @@ func NewWorker(opts WorkerOptions) *Worker {
 	if w.serve || w.opts.JSON {
 		w.enc = json.NewEncoder(w.out)
 	}
+	if opts.Lock != "" {
+		f, err := takeLock("worker:" + opts.Lock)
+		if err != nil {
+			if w.serve {
+				w.refuse(fmt.Errorf("another copy of this worker is running, on its own or for another copy of the app: %w", err))
+			}
+			fmt.Fprintf(w.err, "another copy of this worker is running, on its own or for its app: %v\n", err)
+			os.Exit(3)
+		}
+		w.lock = f
+	}
 	return w
+}
+
+// refuse answers every request with err, which says why this worker cannot
+// work, until the input closes, and then exits: nothing after NewWorker
+// runs.
+func (w *Worker) refuse(err error) {
+	sc := bufio.NewScanner(w.in)
+	sc.Buffer(make([]byte, 0, 64<<10), MaxLineSize)
+	for sc.Scan() {
+		var req Envelope
+		if json.Unmarshal(sc.Bytes(), &req) != nil {
+			continue
+		}
+		w.enc.Encode(failed(req.ID, err))
+	}
+	os.Exit(0)
 }
 
 // Supervised reports whether a Supervisor launched this worker.  Useful when

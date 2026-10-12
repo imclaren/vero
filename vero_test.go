@@ -28,6 +28,10 @@ func TestMain(m *testing.M) {
 		routerWorker()
 		return
 	}
+	if key := os.Getenv(envLockWorker); key != "" {
+		lockWorker(key)
+		return
+	}
 	os.Exit(m.Run())
 }
 

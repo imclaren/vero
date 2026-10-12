@@ -51,23 +51,34 @@ func (s *Supervisor) acquireLock() error {
 		}
 	}
 
+	f, err := takeLock(key)
+	if err != nil {
+		return err
+	}
+	s.lock = f
+	return nil
+}
+
+// takeLock takes the lock for key, held by the file it returns, or says
+// who has it.
+func takeLock(key string) (*os.File, error) {
 	path := lockPath(key)
 	f, err := openLockFile(path)
 	if err != nil {
 		// On Plan 9 the open is the lock, so this is where a second copy of
 		// an application finds out, rather than at lockFile below.
 		if errors.Is(err, ErrAlreadyRunning) {
-			return err
+			return nil, err
 		}
-		return fmt.Errorf("cannot open the worker lock: %w", err)
+		return nil, fmt.Errorf("cannot open the worker lock: %w", err)
 	}
 	if err := lockFile(f); err != nil {
 		held, _ := os.ReadFile(path)
 		f.Close()
 		if pid := string(held); pid != "" {
-			return fmt.Errorf("%w (process %s)", ErrAlreadyRunning, pid)
+			return nil, fmt.Errorf("%w (process %s)", ErrAlreadyRunning, pid)
 		}
-		return ErrAlreadyRunning
+		return nil, ErrAlreadyRunning
 	}
 
 	// Only for the message above: whoever comes second can say who has it.
@@ -75,8 +86,7 @@ func (s *Supervisor) acquireLock() error {
 		f.WriteAt([]byte(strconv.Itoa(os.Getpid())), 0)
 		f.Sync()
 	}
-	s.lock = f
-	return nil
+	return f, nil
 }
 
 // releaseLock lets the next process have it.  The file stays: removing it
