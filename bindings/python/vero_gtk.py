@@ -1338,6 +1338,37 @@ class App(_Base):  # type: ignore[misc, valid-type]
 
         self.ask("vero.update", {}, got, lambda e: done and done(f"Could not check for updates. {e}"))
 
+    # Sign-ins where there is no keychain.
+
+    def unlock_sign_ins(self, done: Callable[[], Any] | None = None) -> None:
+        """Where the system has no keychain, the worker's kit/keychain keeps
+        sign-ins in files encrypted with a password: this asks the person to
+        choose one, or to give it, as the worker says is needed, then calls
+        done. Where there is a keychain it calls done at once. Call it at
+        start, before anything signs in."""
+        finish = done or (lambda: None)
+
+        def ask(heading: str, body: str, ok: str, request: str, payload: Callable[[str], dict]) -> None:
+            def given(password: str) -> None:
+                self.ask(request, payload(password), lambda _r: finish(),
+                         lambda e: (self.problem(e), self.unlock_sign_ins(done)))
+            ask_text(self.active(), heading, body, given, ok=ok, password=True)
+
+        def got(status: Any) -> None:
+            status = status or {}
+            if status.get("needsPassword"):
+                ask("Choose a Password for Your Sign-Ins",
+                    f"This system has no keychain, so {self.name} keeps your sign-ins in a file encrypted with "
+                    "a password. Choose one of at least eight characters. You will be asked for it when "
+                    f"{self.name} opens.", "Choose", "vero.setPassword", lambda p: {"old": "", "password": p})
+            elif status.get("locked"):
+                ask("Unlock Your Sign-Ins", f"Give the password with which {self.name} keeps your sign-ins.",
+                    "Unlock", "vero.unlock", lambda p: {"password": p})
+            else:
+                finish()
+
+        self.ask("vero.keychain", {}, got, lambda _e: finish())
+
     # Notifications.
 
     def notify(self, ident: str, title: str, body: str = "",

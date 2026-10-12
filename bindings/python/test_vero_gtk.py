@@ -132,6 +132,20 @@ class GtkLibraryTests(unittest.TestCase):
         for line in ("window at start", "window hidden, still running", "window back from the tray"):
             self.assertIn(line, out)
 
+    @unittest.skipUnless(os.environ.get("VERO_TEST_KEYCHAIN_WORKER"), "no keychain worker")
+    def test_sign_ins_with_a_password(self) -> None:
+        """Where there is no keychain: a password chosen the first time,
+        then asked for, a wrong one refused, and the file encrypted."""
+        worker = os.environ["VERO_TEST_KEYCHAIN_WORKER"]
+        env = {"VERO_TEST_KEYCHAIN_DIR": tempfile.mkdtemp()}
+        out = self.check(run("keychain", worker, "correct horse", env=env))
+        self.assertIn("loaded: secret", out)
+        with open(os.path.join(env["VERO_TEST_KEYCHAIN_DIR"], "token"), "rb") as f:
+            self.assertNotIn(b"secret", f.read())
+        out = self.check(run("keychain", worker, "wrong horse", "correct horse", env=env))
+        self.assertIn("asked 2 times", out)
+        self.assertIn("loaded: secret", out)
+
     def test_tray_app_without_a_tray_is_a_window(self) -> None:
         out = self.check(run("tray-alone", self.worker, env={"DBUS_SESSION_BUS_ADDRESS": NO_BUS}))
         self.assertIn("closing asked first", out)
@@ -307,6 +321,31 @@ def scenario(name: str, worker: str, args: list[str]) -> int:
         later(1, first)
         GLib.timeout_add(250, look)
         return app.run(["vero-test", *args])
+
+    if name == "keychain":
+        # The person's answers, in turn, in place of typing them.
+        answers = list(args)
+        asked = [0]
+
+        def answer(_parent, _heading, _body, done, **_kw) -> None:
+            asked[0] += 1
+            GLib.idle_add(lambda: done(answers.pop(0)) and False)
+
+        vg.ask_text = answer
+        app = vg.App("com.calmdocs.vero.test.keychain", "vero keychain", worker,
+                     window=lambda a: vg.Window(a, "vero keychain"))
+
+        def unlocked() -> None:
+            print(f"asked {asked[0]} times", flush=True)
+            app.ask("save", {"text": "secret"}, lambda _r: app.ask("load", {}, loaded),
+                    lambda e: (failures.append(e), finish(app)))
+
+        def loaded(text: str) -> None:
+            print(f"loaded: {text}", flush=True)
+            finish(app)
+
+        later(1, lambda: app.unlock_sign_ins(unlocked))
+        return app.run(["vero-test"])
 
     if name == "tray-alone":
         app = vg.App("com.calmdocs.vero.test.alone", "vero alone", worker,

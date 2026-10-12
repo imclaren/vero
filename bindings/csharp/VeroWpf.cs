@@ -344,6 +344,40 @@ public class VeroApp : Application
         else done?.Invoke("This is the newest version.");
     }
 
+    // Sign-ins where there is no keychain.
+
+    /// <summary>Where the system has no keychain, the worker's kit/keychain
+    /// keeps sign-ins in files encrypted with a password: this asks the
+    /// person to choose one, or to give it, as the worker says is needed.
+    /// Where there is a keychain, as Windows always has, it does nothing.
+    /// Call it at start, before anything signs in.</summary>
+    public async Task UnlockSignIns()
+    {
+        while (true)
+        {
+            if (await Ask("vero.keychain", null, _ => { }) is not JsonElement status) return;
+            bool Has(string key) => status.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.True;
+            string? password;
+            JsonElement? reply;
+            if (Has("needsPassword"))
+            {
+                password = VeroDialogs.AskText(Active, "Choose a Password for Your Sign-Ins",
+                    $"This system has no keychain, so {Options.Name} keeps your sign-ins in a file encrypted with a password. Choose one of at least eight characters. You will be asked for it when {Options.Name} opens.",
+                    "Choose", password: true);
+                if (password is null) return;
+                reply = await Ask("vero.setPassword", new { old = "", password });
+            }
+            else if (Has("locked"))
+            {
+                password = VeroDialogs.AskText(Active, "Unlock Your Sign-Ins", $"Give the password with which {Options.Name} keeps your sign-ins.", "Unlock", password: true);
+                if (password is null) return;
+                reply = await Ask("vero.unlock", new { password });
+            }
+            else return;
+            if (reply is not null) return;
+        }
+    }
+
     // The tray.
 
     void MakeTray()
