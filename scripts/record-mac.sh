@@ -42,9 +42,24 @@ if [ -n "$VERO_REPO" ]; then cp "$VERO_REPO" "$CACHE/bin/vero-repo"; else go bui
 [ "$CACHE/bin/winid" -nt "$VERO/scripts/lib/winid.swift" ] || swiftc -O -o "$CACHE/bin/winid" "$VERO/scripts/lib/winid.swift"
 eval "$("$CACHE/bin/vero-repo" show --app "$TOML")"
 out="$CACHE/test-results/$APP_NAME/macos" L="$CACHE/mac-launch"
+info="$(cd "$BUNDLE" && pwd)/Contents/Info"
+exe="$BUNDLE/Contents/MacOS/$(defaults read "$info" CFBundleExecutable)"
+# A sandboxed app reads only its own container, so its steps and files go
+# there. The container is made on the app's first launch, which this does,
+# without steps, if it has not been launched before.
+if codesign -d --entitlements - "$BUNDLE" 2>/dev/null | grep -q 'com.apple.security.app-sandbox'; then
+    box="$HOME/Library/Containers/$(defaults read "$info" CFBundleIdentifier)/Data"
+    if [ ! -d "$box/tmp" ]; then
+        "$exe" >/dev/null 2>&1 &
+        first=$!
+        n=0; while [ ! -d "$box/tmp" ] && [ $n -lt 120 ]; do sleep 0.5; n=$((n + 1)); done
+        kill $first 2>/dev/null || true
+        wait $first 2>/dev/null || true
+    fi
+    L="$box/tmp/vero-launch"
+fi
 rm -rf "$out" "$L" && mkdir -p "$out/frames" "$L"
 "$CACHE/bin/vero-repo" steps --app "$TOML" --out "$L" >/dev/null
-exe="$BUNDLE/Contents/MacOS/$(defaults read "$(cd "$BUNDLE" && pwd)/Contents/Info" CFBundleExecutable)"
 
 echo "$CLEAN" | while IFS= read -r path; do if [ -n "$path" ]; then rm -rf "$path"; fi; done
 echo "== starting $(basename "$BUNDLE") and playing its steps, recorded"
