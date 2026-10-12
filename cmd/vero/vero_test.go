@@ -506,3 +506,53 @@ func Run() {
 		t.Errorf("state %+v, requests %+v", app.State, app.Requests)
 	}
 }
+
+// TestStateFromAMethod: a worker whose state starts as what a method of
+// its own returns, as calmdocs' does with s.appState(). Its build folder
+// holds a checkout of vero, with workers of its own, which Xcode keeps
+// there; the search leaves it out, and finds the app's worker.
+func TestStateFromAMethod(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/docs\n"), 0o644)
+	for _, d := range []string{"cmd/worker", "build/dd/SourcePackages/checkouts/vero/testdata/jobsworker"} {
+		os.MkdirAll(filepath.Join(dir, filepath.FromSlash(d)), 0o755)
+	}
+	os.WriteFile(filepath.Join(dir, "build/dd/SourcePackages/checkouts/vero/go.mod"), []byte("module github.com/imclaren/vero\n"), 0o644)
+	os.WriteFile(filepath.Join(dir, "build/dd/SourcePackages/checkouts/vero/testdata/jobsworker/main.go"), []byte(`package main
+
+import "github.com/imclaren/vero"
+
+type Jobs struct{}
+
+func main() { vero.NewState(vero.NewWorker(vero.WorkerOptions{}), Jobs{}) }
+`), 0o644)
+	os.WriteFile(filepath.Join(dir, "cmd", "worker", "main.go"), []byte(`package main
+
+import "github.com/imclaren/vero"
+
+type AppState struct {
+	NeedsLogin bool `+"`json:\"needsLogin\"`"+`
+}
+
+type store struct{}
+
+func (s *store) appState() AppState { return AppState{} }
+
+func main() {
+	s := &store{}
+	w := vero.NewWorker(vero.WorkerOptions{})
+	vero.NewState(w, s.appState())
+	w.Serve()
+}
+`), 0o644)
+	app, err := analyse(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if app.Worker != "cmd/worker" {
+		t.Errorf("worker %q, want cmd/worker", app.Worker)
+	}
+	if app.State == nil || len(app.State.Fields) != 1 || app.State.Fields[0].JSON != "needsLogin" {
+		t.Errorf("state %+v", app.State)
+	}
+}

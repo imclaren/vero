@@ -166,7 +166,7 @@ func (a *App) findWorker() error {
 			return nil
 		}
 		if d.IsDir() {
-			if n := d.Name(); n != "." && (strings.HasPrefix(n, ".") || n == "vendor" || n == "node_modules" || n == "dist") {
+			if skipDir(a.Dir, path, d.Name()) {
 				return fs.SkipDir
 			}
 			return nil
@@ -250,6 +250,16 @@ func (a *App) findWorker() error {
 			}
 		}
 	}
+	// What each function and method of the package returns, when that is
+	// one named type, for a state made by vero.NewState(w, s.snapshot()).
+	results := map[string]string{}
+	for _, f := range files {
+		for _, d := range f.Decls {
+			if fn, ok := d.(*ast.FuncDecl); ok && fn.Type.Results != nil && len(fn.Type.Results.List) == 1 {
+				results[fn.Name.Name] = typeName(fn.Type.Results.List[0].Type)
+			}
+		}
+	}
 	// The state's type: written in vero.NewState(w, Status{...}), or, for
 	// a worker that passes a variable, wherever it says vero.State[Status].
 	var stateName, declared string
@@ -277,6 +287,8 @@ func (a *App) findWorker() error {
 						stateName = typeName(cl.Type)
 					} else if id, ok := call.Args[1].(*ast.Ident); ok {
 						stateName = id.Name
+					} else if c, ok := call.Args[1].(*ast.CallExpr); ok {
+						stateName = results[calledName(c.Fun)]
 					}
 				}
 			case "Update", "UpdateWith", "UpdateItem", "Handle":
@@ -462,7 +474,7 @@ func (a *App) scan() {
 			return nil
 		}
 		if d.IsDir() {
-			if n := d.Name(); n != "." && (strings.HasPrefix(n, ".") || n == "vendor" || n == "node_modules" || n == "dist") {
+			if skipDir(a.Dir, path, d.Name()) {
 				return fs.SkipDir
 			}
 			return nil
@@ -535,7 +547,7 @@ func (a *App) commandImporting(dir string) string {
 			return nil
 		}
 		if d.IsDir() {
-			if n := d.Name(); n != "." && (strings.HasPrefix(n, ".") || n == "vendor" || n == "node_modules" || n == "dist") {
+			if skipDir(a.Dir, path, d.Name()) {
 				return fs.SkipDir
 			}
 			return nil
@@ -579,6 +591,38 @@ func (a *App) importedWorker(dir string) string {
 				return pkg
 			}
 		}
+	}
+	return ""
+}
+
+// skipDir says whether a search for the worker leaves out a folder: a
+// hidden one, others' code (vendor, node_modules), what a build makes
+// (dist, build, DerivedData, which Xcode can put in the project), and any
+// folder that is a Go module of its own, such as a checkout of vero that
+// Xcode keeps there.
+func skipDir(root, path, name string) bool {
+	if path == root || name == "." {
+		return false
+	}
+	switch name {
+	case "vendor", "node_modules", "dist", "build", "DerivedData":
+		return true
+	}
+	if strings.HasPrefix(name, ".") {
+		return true
+	}
+	_, err := os.Stat(filepath.Join(path, "go.mod"))
+	return err == nil
+}
+
+// calledName is the name of the function or method that a call calls:
+// snapshot in snapshot() and in s.snapshot().
+func calledName(fun ast.Expr) string {
+	switch f := fun.(type) {
+	case *ast.Ident:
+		return f.Name
+	case *ast.SelectorExpr:
+		return f.Sel.Name
 	}
 	return ""
 }
