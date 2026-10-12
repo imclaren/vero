@@ -93,7 +93,7 @@ requests; make it your own from there. ` + "`main.py`" + ` is the app's own;
     ./build.sh      builds the worker beside this file
     ./main.py       runs it
 
-It needs Python 3.11 or later with PyGObject and GTK 4.8 or later: on Debian
+It needs Python 3.9 or later with PyGObject and GTK 4.8 or later: on Debian
 and Ubuntu, ` + "`python3-gi gir1.2-gtk-4.0`" + `, with ` + "`gir1.2-adw-1`" + ` for libadwaita. On a Mac, ` + "`build.sh`" + ` installs them with Homebrew and
 says which Python to run it with. To see it on a Linux from a Mac instead,
 ` + "`path/to/vero/scripts/run-linux.sh --app gtk --entry main.py --worker ./{{.Worker}} --worker-name {{.WorkerName}}`" + `.
@@ -132,6 +132,8 @@ vero_gtk.py, beside it, does the plumbing: the worker, a single copy,
 libadwaita where the system has it. worker_api.py, which vero gen writes,
 has a typed method for each request, for a window of your own.
 """
+
+from __future__ import annotations
 
 import os
 import sys

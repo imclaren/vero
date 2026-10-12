@@ -9,8 +9,8 @@ It uses libadwaita 1.5 or later where it is installed, and plain GTK 4
 where it is not, as on Debian 12, OpenBSD on ARM and POWER, and illumos
 on SmartOS's packages. Every piece works both ways, and works without a
 D-Bus session bus, which some BSD and illumos desktops start without, and
-without a web view. It needs GTK 4.8, Python 3.11 and PyGObject 3.42, which
-is what Debian 12 has. VERO_GTK_PLAIN=1 makes it use plain GTK 4 where
+without a web view. It needs GTK 4.8 and PyGObject 3.42, as Debian 12 has,
+and Python 3.9, as OpenIndiana's PyGObject is for. VERO_GTK_PLAIN=1 makes it use plain GTK 4 where
 libadwaita is installed, for testing.
 
     from vero_gtk import App, Window

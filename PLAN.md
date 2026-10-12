@@ -88,8 +88,9 @@ a stated form for each case, and vero's tests run each case.
 | Sign-ins kept | Credential Manager | The Secret Service | The same | The password dialog | The same | The password dialog |
 | Autostart | The Run key | An autostart `.desktop` file, or the background portal in a Flatpak | The same | The autostart file | The same | The same |
 
-The libraries need GTK 4.8, Python 3.11 and PyGObject 3.42 at least,
-which is what Debian 12 has. The package indexes show no older floor on
+The libraries need GTK 4.8 and PyGObject 3.42 at least, as Debian 12
+has, and Python 3.9, since OpenIndiana's PyGObject is for Python 3.9
+alone (checked in its repository on 12 October 2026). The package indexes show no older floor on
 any system that audiobooks supports.
 
 ## Workers on every system

@@ -31,6 +31,15 @@ cp bindings/python/vero.py bindings/python/vero_gtk.py bindings/python/test_vero
 
 images=${*:-"debian:trixie ubuntu:24.04 debian:bookworm"}
 status=0
+# The oldest Python the libraries must run on is 3.9, which is what
+# OpenIndiana's PyGObject is for.
+if (cd bindings/python && tar cf - vero.py vero_gtk.py) |
+    docker run --rm -i python:3.9-slim sh -c "mkdir /t && cd /t && tar xf - && python3 -m py_compile vero.py vero_gtk.py"; then
+    echo "== Python 3.9: the libraries compile"
+else
+    echo "FAIL: the libraries do not compile with Python 3.9"
+    status=1
+fi
 for image in $images; do
 	packages="python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 xvfb xauth dbus dbus-x11 fonts-dejavu-core"
 	case $image in *trixie*|*forky*|*sid*|ubuntu*) packages="$packages gir1.2-webkit-6.0" ;; esac
