@@ -60,7 +60,8 @@ if not os.environ.get("VERO_GTK_PLAIN"):
 GTK_VERSION = (Gtk.get_major_version(), Gtk.get_minor_version())
 
 __all__ = [
-    "Adw", "App", "Cancel", "Window", "SmallWindow", "Settings", "UndoStack", "HtmlView", "SignInPage",
+    "Adw", "App", "Cancel", "Window", "SmallWindow", "Settings", "UndoStack", "HtmlView", "HTML_POLICY", "PdfWriter",
+    "SignInPage",
     "has_adwaita", "has_session_bus", "has_webview", "webkit", "web_bridge",
     "choose_files", "save_file", "choose_folder", "question", "ask_text",
     "open_uri", "show_in_folder", "status_page", "avatar", "split_view", "label",
@@ -1544,15 +1545,32 @@ def _plain_text(markup: str) -> str:
     return re.sub(r"\n{3,}", "\n\n", html.unescape(text)).strip()
 
 
+# What a page may load: its own styles, and pictures that come with it.
+HTML_POLICY = "default-src 'none'; style-src 'unsafe-inline'; img-src data: cid:"
+
+
+def _with_policy(markup: str, policy: str, remote: bool) -> str:
+    if remote:
+        policy = policy.replace("img-src", "img-src https: http:", 1) if "img-src" in policy else policy + "; img-src https: http: data:"
+    return f'<meta http-equiv="Content-Security-Policy" content="{html.escape(policy)}">' + markup
+
+
 class HtmlView(Gtk.Box):
     """Shows HTML, such as a message, with scripts off and nothing loaded
-    from the network unless remote is set. Links open in the browser.
-    Where there is no web view it shows the text of the HTML instead, never
-    the page in the browser, since what it shows may be private."""
+    from the network unless remote is set, which can change before each
+    load. policy is the Content Security Policy, HTML_POLICY unless the app
+    sets its own. Links to the web and mailto: open in the browser. A link
+    in one of the app's own schemes, such as myapp-attachment:, goes to
+    on_link, which returns True when it has dealt with it. Where there is
+    no web view it shows the text of the HTML instead, never the page in
+    the browser, since what it shows may be private."""
 
-    def __init__(self, remote: bool = False) -> None:
+    def __init__(self, remote: bool = False, policy: str = HTML_POLICY,
+                 on_link: Callable[[str], bool] | None = None) -> None:
         super().__init__(orientation=Gtk.Orientation.VERTICAL, vexpand=True, hexpand=True)
         self.remote = remote
+        self.policy = policy
+        self.on_link = on_link
         WebKit = webkit()
         if WebKit is not None:
             self.view = WebKit.WebView(vexpand=True, hexpand=True)
@@ -1569,22 +1587,101 @@ class HtmlView(Gtk.Box):
 
     def load(self, markup: str) -> None:
         if self.view is not None:
-            policy = "default-src 'none'; style-src 'unsafe-inline'; img-src data: cid:"
-            if self.remote:
-                policy += " https: http:"
-            self.view.load_html(f'<meta http-equiv="Content-Security-Policy" content="{policy}">' + markup, None)
+            self.view.load_html(_with_policy(markup, self.policy, self.remote), None)
         else:
             self.text.get_buffer().set_text(_plain_text(markup))
 
     def _decide(self, _view: Any, decision: Any, kind: Any) -> bool:
         WebKit = webkit()
-        if kind in (WebKit.PolicyDecisionType.NAVIGATION_ACTION, WebKit.PolicyDecisionType.NEW_WINDOW_ACTION):
+        if kind not in (WebKit.PolicyDecisionType.NAVIGATION_ACTION, WebKit.PolicyDecisionType.NEW_WINDOW_ACTION):
+            return False
+        action = decision.get_navigation_action()
+        uri = action.get_request().get_uri() or ""
+        # The page itself, as load() gives it.
+        if uri.startswith(("about:", "data:")) and action.get_navigation_type() == WebKit.NavigationType.OTHER:
+            return False
+        decision.ignore()
+        if self.on_link is not None and self.on_link(uri):
+            return True
+        if uri.startswith(("http:", "https:", "mailto:")):
+            open_uri(uri)
+        return True
+
+
+class PdfWriter:
+    """Turns HTML into PDF files without showing it, one after another
+    through one hidden web view, so that thousands can be written in turn:
+
+        pdf = PdfWriter()
+        pdf.write(markup, "/path/to/message.pdf", lambda error: ...)
+
+    done is called on the main loop with "" once the file is written, or
+    with what went wrong. Scripts are off and nothing is loaded from the
+    network unless remote is set. Where there is no web view, every write
+    fails, saying so; has_webview() tells an app beforehand."""
+
+    def __init__(self, remote: bool = False, policy: str = HTML_POLICY) -> None:
+        self.remote, self.policy = remote, policy
+        self._queue: list[tuple[str, str, Callable[[str], Any]]] = []
+        self._busy = False
+        self._view: Any = None
+        self._loaded: Any = None
+
+    def write(self, markup: str, path: str, done: Callable[[str], Any]) -> None:
+        self._queue.append((markup, os.path.abspath(path), done))
+        if not self._busy:
+            self._next()
+
+    def _next(self) -> None:
+        if not self._queue:
+            self._busy = False
+            return
+        self._busy = True
+        markup, path, done = self._queue.pop(0)
+        WebKit = webkit()
+        if WebKit is None:
+            GLib.idle_add(lambda: (done("This system has no web view, which writing a PDF needs."), self._next()) and False)
+            return
+        if self._view is None:
+            self._view = WebKit.WebView()
+            self._view.get_settings().set_enable_javascript(False)
+            # Nothing but the page: a link in it goes nowhere.
+            self._view.connect("decide-policy", self._decide)
+            self._view.connect("load-changed", self._load_changed)
+        self._job = (path, done)
+        self._view.load_html(_with_policy(markup, self.policy, self.remote), None)
+
+    def _decide(self, _view: Any, decision: Any, kind: Any) -> bool:
+        WebKit = webkit()
+        if kind == WebKit.PolicyDecisionType.NAVIGATION_ACTION:
             uri = decision.get_navigation_action().get_request().get_uri() or ""
-            if uri.startswith(("http:", "https:", "mailto:")):
+            if not uri.startswith(("about:", "data:")):
                 decision.ignore()
-                open_uri(uri)
                 return True
         return False
+
+    def _load_changed(self, view: Any, event: Any) -> None:
+        WebKit = webkit()
+        if event != WebKit.LoadEvent.FINISHED:
+            return
+        path, done = self._job
+        settings = Gtk.PrintSettings()
+        settings.set_printer("Print to File")
+        settings.set(Gtk.PRINT_SETTINGS_OUTPUT_FILE_FORMAT, "pdf")
+        settings.set(Gtk.PRINT_SETTINGS_OUTPUT_URI, GLib.filename_to_uri(path, None))
+        op = WebKit.PrintOperation.new(view)
+        op.set_print_settings(settings)
+        op.set_page_setup(Gtk.PageSetup())
+        result: dict = {"error": ""}
+        op.connect("failed", lambda _o, e: result.update(error=e.message))
+
+        def finished(_o: Any) -> None:
+            error = result["error"] or ("" if os.path.exists(path) else "The PDF was not written.")
+            done(error)
+            self._next()
+
+        op.connect("finished", finished)
+        op.print_()
 
 
 def web_bridge(view: Any, name: str, received: Callable[[Any, Callable[[Any], None]], Any]) -> Callable[[str], None]:

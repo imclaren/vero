@@ -218,8 +218,21 @@ def scenario(name: str, worker: str, args: list[str]) -> int:
             later(0.5, s.close)
             vg.question(w, "Delete it?", "It cannot be undone.", ["Cancel", "Delete"], destructive=1)
             vg.ask_text(w, "Password", "For the keyring file.", lambda t: None, password=True)
-            view = vg.HtmlView()
+            links: list = []
+            view = vg.HtmlView(on_link=lambda uri: uri.startswith("vero-test:") and not links.append(uri))
             view.load("<p>Hello <b>there</b></p><script>alert(1)</script>")
+            if view.view is not None:
+                # A link in the app's own scheme reaches on_link.
+                later(1, lambda: view.view.load_uri("vero-test:attachment/1"))
+                later(2.5, lambda: expect(links == ["vero-test:attachment/1"], f"the app's own link: {links}"))
+            # HTML to a PDF file, offscreen, twice in turn.
+            pdfs = tempfile.mkdtemp()
+            writer = vg.PdfWriter()
+            for n in (1, 2):
+                path = os.path.join(pdfs, f"{n}.pdf")
+                writer.write(f"<h1>Message {n}</h1><p>Hello.</p>", path,
+                             lambda error, path=path: seen.setdefault(path, error or open(path, "rb").read(5)))
+            seen["pdfs"] = pdfs
             if view.text is not None:
                 buf = view.text.get_buffer()
                 text = buf.get_text(buf.get_start_iter(), buf.get_end_iter(), False)
@@ -246,6 +259,12 @@ def scenario(name: str, worker: str, args: list[str]) -> int:
             expect(isinstance(seen.get("reply"), dict), f"status replied: {seen.get('reply')}")
             expect(bool(seen.get("refused")), "the refusal reached failed")
             expect(isinstance(seen.get("callable"), dict), "a function as the request")
+            for n in (1, 2):
+                got = seen.get(os.path.join(seen["pdfs"], f"{n}.pdf"))
+                if vg.has_webview():
+                    expect(got == b"%PDF-", f"PDF {n}: {got!r}")
+                else:
+                    expect(isinstance(got, str) and "web view" in got, f"no PDF without a web view: {got!r}")
             for win in list(app.get_windows()):
                 if win is not app.window:
                     win.destroy()
