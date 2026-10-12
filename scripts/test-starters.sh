@@ -32,6 +32,13 @@ cd "$work"
 ./vero new trayicon --vero "$VERO" --tray >/dev/null
 ./vero new trayapp --vero "$VERO" --menubar >/dev/null
 grep -q '^tray = true' trayicon/vero-app.toml || { echo "FAIL: trayicon's vero-app.toml has no tray = true"; fail=1; }
+# vero-repo reads each app's vero-app.toml, as vero ship would, and works
+# out each system's packages from it.
+(cd "$VERO/cmd/vero-repo" && go build -o "$work/vero-repo" .)
+for app in winapp trayicon trayapp; do
+    if "$work/vero-repo" show --app $app/vero-app.toml >"$work/$app-show.txt" 2>&1; then echo "ok: vero-repo reads $app's vero-app.toml"
+    else echo "FAIL: vero-repo cannot read $app's vero-app.toml"; cat "$work/$app-show.txt"; fail=1; fi
+done
 grep -q '^menubar = true' trayapp/vero-app.toml || { echo "FAIL: trayapp's vero-app.toml has no menubar = true"; fail=1; }
 
 apps="winapp trayicon trayapp"

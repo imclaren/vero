@@ -69,7 +69,10 @@ var unixSystems = []unixSystem{
 		arches: []unixArch{{"amd64", "x86_64", "", "", false}}},
 	{name: "openbsd", label: "OpenBSD", goos: "openbsd", prefix: "/usr/local", format: "openbsd",
 		arches: []unixArch{{"amd64", "amd64", "", "", false}, {"arm64", "aarch64", "", "", false},
-			{"386", "i386", "", "", true}, {"arm", "arm", "", "", true}, {"riscv64", "riscv64", "", "", true}}},
+			{"386", "i386", "", "", true}, {"arm", "arm", "", "", true}, {"riscv64", "riscv64", "", "", true},
+			// 64-bit POWER: POWER9, which OpenBSD needs there, is newer than
+			// the POWER8 that Go builds for.
+			{"ppc64", "powerpc64", "", "", true}}},
 }
 
 // system is one of unixSystems, by name.

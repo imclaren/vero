@@ -79,7 +79,14 @@ type GTK struct {
 	Folder string `toml:"folder"`
 	Entry  string `toml:"entry"`
 	// Include are files copied beside the entry: vero.py, for one.
-	Include    []string `toml:"include"`
+	Include []string `toml:"include"`
+	// Uses are what vero's GTK library can use, which vero works out each
+	// system's packages for: "adwaita", "webview" and "keyring". Extra are
+	// programs vero knows that this app needs, such as "ffmpeg". deps.go
+	// has the names; each system's own section adds what vero does not
+	// know.
+	Uses       []string `toml:"uses"`
+	Extra      []string `toml:"extra"`
 	Categories string   `toml:"categories"`
 	// Deb is what the Debian package needs from Debian; RPM what the rpm
 	// needs from Fedora or openSUSE; Arch what the AUR package needs from
@@ -183,6 +190,9 @@ type Pkgsrc struct {
 type OpenBSD struct {
 	Depends []string `toml:"depends"`
 	Python  string   `toml:"python"`
+	// only names the processors on which a dependency vero added exists,
+	// as libadwaita does not on arm and powerpc64.
+	only map[string][]string
 	// Arches are the architectures packaged: x86-64 and ARM64, where the
 	// system has them, when it's empty. Naming some narrows them, such as
 	// ["x86_64"] where the system's own packages lack something on ARM, or
@@ -330,6 +340,9 @@ func LoadApp(path string) (*App, error) {
 		return nil, err
 	}
 	a.dir = filepath.Dir(abs)
+	if err := a.GTK.resolveDeps(); err != nil {
+		return nil, fmt.Errorf("%s: %w", path, err)
+	}
 	if a.DisplayName == "" {
 		a.DisplayName = a.Name
 	}

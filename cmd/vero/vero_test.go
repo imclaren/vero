@@ -86,7 +86,7 @@ func TestAdd(t *testing.T) {
 	if icon, err := os.ReadFile(filepath.Join(dir, "icon.png")); err != nil || len(icon) < 1000 {
 		t.Errorf("no icon.png: %v", err)
 	}
-	for _, want := range []string{"[gtk.freebsd]", "[gtk.netbsd]", "[gtk.openbsd]", "[gtk.dragonfly]", "[gtk.illumos]", "[gtk.chimera]", "font-dejavu"} {
+	for _, want := range []string{"[gtk.freebsd]", "[gtk.netbsd]", "[gtk.openbsd]", "[gtk.dragonfly]", "[gtk.illumos]", "[gtk.chimera]", "uses = ["} {
 		if !strings.Contains(string(toml), want) {
 			t.Errorf("vero-app.toml lacks %s", want)
 		}

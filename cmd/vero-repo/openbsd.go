@@ -51,7 +51,7 @@ func writeOpenBSD(name string, a *App, sys *unixSystem, arch unixArch, files []t
 	fmt.Fprintf(&contents, "@comment pkgpath=misc/%s ftp=yes\n", a.Name)
 	fmt.Fprintf(&contents, "@arch %s\n", arch.name)
 	fmt.Fprintf(&contents, "+DESC\n@sha %s\n@size %d\n", sha256Base64(descData), len(descData))
-	for _, d := range a.GTK.OpenBSD.Depends {
+	for _, d := range a.GTK.OpenBSD.dependsOn(arch.name) {
 		fmt.Fprintf(&contents, "@depend %s\n", d)
 	}
 	fmt.Fprintf(&contents, "@cwd %s\n", sys.prefix)

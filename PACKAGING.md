@@ -166,11 +166,29 @@ Paths in it are relative to the file, and `site` is where the install
 site will be. Your worker's main package needs a `var version`, which
 the build sets.
 
-Each system names its packages differently, so `vero-app.toml` says what
-your app needs from each, in its own section: `[gtk.deb]`, `[gtk.rpm]`,
-`[gtk.arch]`, `[gtk.alpine]`, `[gtk.void]`, `[gtk.freebsd]` and so on.
-Leave out the sections of the systems you don't want; a system is
-packaged for only when its section is there. `[needs]` says what the app asks of the system, such as the
+Each system names its packages differently, so vero works them out from
+what `[gtk]` says the app uses:
+
+```toml
+[gtk]
+uses = ["adwaita", "webview", "keyring"]
+extra = ["ffmpeg"]
+```
+
+Every app gets Python, PyGObject, GTK 4 and, where a system brings none, a
+font. `uses` adds libadwaita, the web view and a keyring, which vero's GTK
+library uses where they are installed: they are recommended where a
+package manager can say so, and libadwaita is left out on each system and
+processor that lacks it. `extra` names programs that vero knows, such as
+ffmpeg. Anything else the app needs goes in a system's own section, such as
+`depends` in `[gtk.deb]`, and is added after what vero works out.
+[cmd/vero-repo/deps.go](cmd/vero-repo/deps.go) has the names. An app
+without `uses` or `extra` lists everything in each section itself, as
+before.
+
+Debian, Fedora, openSUSE and Arch are always packaged; each other system,
+such as `[gtk.alpine]`, `[gtk.void]` or `[gtk.freebsd]`, is packaged when
+its section is there, even an empty one. `[needs]` says what the app asks of the system, such as the
 network.
 
 **2. Release.**
