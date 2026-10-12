@@ -72,6 +72,9 @@ type TypeRef struct {
 	Kind string
 	Elem *TypeRef // list, map and optional
 	Name string   // named
+	// Time marks a string that is Go's time.Time, in RFC 3339, which Swift
+	// reads as a Date; the other languages keep the string.
+	Time bool
 }
 
 func gen(args []string) error {
@@ -508,7 +511,7 @@ func (r *reader) special(t types.Type) *TypeRef {
 	if n, ok := t.(*types.Named); ok && n.Obj().Pkg() != nil {
 		switch n.Obj().Pkg().Path() + "." + n.Obj().Name() {
 		case "time.Time":
-			return &TypeRef{Kind: "string"}
+			return &TypeRef{Kind: "string", Time: true}
 		case "time.Duration":
 			return &TypeRef{Kind: "int"}
 		case "encoding/json.RawMessage", "encoding/json.Number":

@@ -85,6 +85,10 @@ type MacOS struct {
 	Product string `toml:"product"`
 	Project string `toml:"project"`
 	Scheme  string `toml:"scheme"`
+	// Configuration is the Xcode configuration a release builds: "Release"
+	// unless it says, such as one of its own for direct downloads, beside
+	// the one the App Store build uses.
+	Configuration string `toml:"configuration"`
 	// Prebuild is a command run once in Folder before anything is built:
 	// what downloads or builds the files Resources lists, say. Prepare is
 	// run in Folder before each architecture is built, with GOARCH and CC
@@ -702,14 +706,18 @@ func buildSwiftPMApp(a *App, tmp string) (string, error) {
 func buildXcodeApp(a *App, tmp string) (string, error) {
 	m := a.MacOS
 	data := filepath.Join(tmp, "xcode")
+	config := m.Configuration
+	if config == "" {
+		config = "Release"
+	}
 	err := runIn(a.Path(m.Folder), "xcodebuild", "-quiet", "-project", m.Project, "-scheme", m.Scheme,
-		"-configuration", "Release", "-derivedDataPath", data, "ARCHS=arm64 x86_64", "ONLY_ACTIVE_ARCH=NO",
+		"-configuration", config, "-derivedDataPath", data, "ARCHS=arm64 x86_64", "ONLY_ACTIVE_ARCH=NO",
 		"MARKETING_VERSION="+a.Version, "CURRENT_PROJECT_VERSION="+a.buildNumber(),
 		"CODE_SIGNING_ALLOWED=NO", "build")
 	if err != nil {
 		return "", err
 	}
-	apps, _ := filepath.Glob(filepath.Join(data, "Build", "Products", "Release", "*.app"))
+	apps, _ := filepath.Glob(filepath.Join(data, "Build", "Products", config, "*.app"))
 	if len(apps) != 1 {
 		return "", fmt.Errorf("xcodebuild made %d apps, not one", len(apps))
 	}

@@ -34,13 +34,22 @@ func swiftAPI(api *API) string {
 		}
 		for _, f := range t.Fields {
 			name := swiftIdent(swiftName(f.JSON))
-			if f.Type.Kind == "optional" {
+			switch {
+			case isTime(f.Type):
+				fmt.Fprintf(&b, "        %s = try c.decodeIfPresent(String.self, forKey: .%s).flatMap(VeroDate.parse) ?? .distantPast\n", name, name)
+			case f.Type.Kind == "optional" && isTime(f.Type.Elem):
+				fmt.Fprintf(&b, "        %s = try c.decodeIfPresent(String.self, forKey: .%s).flatMap(VeroDate.parse)\n", name, name)
+			case f.Type.Kind == "list" && isTime(f.Type.Elem):
+				fmt.Fprintf(&b, "        %s = (try c.decodeIfPresent([String].self, forKey: .%s) ?? []).compactMap(VeroDate.parse)\n", name, name)
+			case f.Type.Kind == "optional":
 				fmt.Fprintf(&b, "        %s = try c.decodeIfPresent(%s.self, forKey: .%s)\n", name, genSwiftType(f.Type.Elem), name)
-			} else {
+			default:
 				fmt.Fprintf(&b, "        %s = try c.decodeIfPresent(%s.self, forKey: .%s) ?? %s\n", name, genSwiftType(f.Type), name, swiftDefault(f.Type))
 			}
 		}
-		b.WriteString("    }\n}\n")
+		b.WriteString("    }\n")
+		swiftEncode(&b, t.Fields)
+		b.WriteString("}\n")
 	}
 	for _, r := range api.Requests {
 		b.WriteString("\n")
@@ -54,6 +63,9 @@ func swiftAPI(api *API) string {
 			b.WriteString("    func encode(to encoder: Encoder) throws {\n        var c = encoder.singleValueContainer()\n        try c.encode(value)\n    }\n")
 		case len(r.Fields) > 0:
 			swiftFields(&b, r.Fields)
+			if hasTime(r.Fields) {
+				swiftEncode(&b, r.Fields)
+			}
 		}
 		b.WriteString("}\n")
 	}
@@ -80,7 +92,47 @@ func swiftFields(b *strings.Builder, fields []*APIField) {
 	b.WriteString("    }\n")
 }
 
+// isTime says whether t is Go's time.Time.
+func isTime(t *TypeRef) bool { return t != nil && t.Kind == "string" && t.Time }
+
+func hasTime(fields []*APIField) bool {
+	for _, f := range fields {
+		if isTime(f.Type) || (f.Type.Elem != nil && isTime(f.Type.Elem)) {
+			return true
+		}
+	}
+	return false
+}
+
+// swiftEncode writes encode(to:), which writes each Date as Go writes a
+// time.Time, in RFC 3339, where Swift's own would write a number.
+func swiftEncode(b *strings.Builder, fields []*APIField) {
+	b.WriteString("    func encode(to encoder: Encoder) throws {\n")
+	if len(fields) > 0 {
+		b.WriteString("        var c = encoder.container(keyedBy: CodingKeys.self)\n")
+	}
+	for _, f := range fields {
+		name := swiftIdent(swiftName(f.JSON))
+		switch {
+		case isTime(f.Type):
+			fmt.Fprintf(b, "        try c.encode(VeroDate.format(%s), forKey: .%s)\n", name, name)
+		case f.Type.Kind == "optional" && isTime(f.Type.Elem):
+			fmt.Fprintf(b, "        try c.encodeIfPresent(%s.map(VeroDate.format), forKey: .%s)\n", name, name)
+		case f.Type.Kind == "list" && isTime(f.Type.Elem):
+			fmt.Fprintf(b, "        try c.encode(%s.map(VeroDate.format), forKey: .%s)\n", name, name)
+		case f.Type.Kind == "optional":
+			fmt.Fprintf(b, "        try c.encodeIfPresent(%s, forKey: .%s)\n", name, name)
+		default:
+			fmt.Fprintf(b, "        try c.encode(%s, forKey: .%s)\n", name, name)
+		}
+	}
+	b.WriteString("    }\n")
+}
+
 func genSwiftType(t *TypeRef) string {
+	if isTime(t) {
+		return "Date"
+	}
 	switch t.Kind {
 	case "bool":
 		return "Bool"
@@ -109,6 +161,9 @@ func genSwiftType(t *TypeRef) string {
 func swiftReply(t *TypeRef) string { return genSwiftType(t) }
 
 func swiftDefault(t *TypeRef) string {
+	if isTime(t) {
+		return ".distantPast"
+	}
 	switch t.Kind {
 	case "bool":
 		return "false"

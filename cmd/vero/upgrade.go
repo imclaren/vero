@@ -282,7 +282,8 @@ func (u *upgrader) swiftPin() error {
 	if folder == "" {
 		return nil
 	}
-	v, err := output(u.dir, "go", "list", "-m", "-f", "{{.Version}}", "github.com/imclaren/vero")
+	// A replace with a checkout has no version, and the pin is left alone.
+	v, err := output(u.dir, "go", "list", "-m", "-f", "{{if .Replace}}{{.Replace.Version}}{{else}}{{.Version}}{{end}}", "github.com/imclaren/vero")
 	if err != nil {
 		return err
 	}

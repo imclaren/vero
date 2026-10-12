@@ -183,7 +183,10 @@ func (a *App) findWorker() error {
 		}
 		// The worker is the command that calls vero.NewWorker - or, once
 		// lift has moved that into a package, the command that imports it.
-		if !strings.Contains(string(src), "vero.NewWorker(") && !strings.Contains(string(src), `"`+a.Module+"/"+servePackage+`"`) {
+		// A command the toml names is the worker whatever it calls: its
+		// package may set the worker up in a package of the app's own.
+		named := a.Worker != "" && strings.Contains(string(src), "package main")
+		if !named && !strings.Contains(string(src), "vero.NewWorker(") && !strings.Contains(string(src), `"`+a.Module+"/"+servePackage+`"`) {
 			return nil
 		}
 		if strings.Contains(string(src), "package worker") && filepath.Dir(path) == filepath.Join(a.Dir, filepath.FromSlash(servePackage)) {
@@ -195,11 +198,22 @@ func (a *App) findWorker() error {
 	if found == "" {
 		return fmt.Errorf("no worker found: a package that calls vero.NewWorker")
 	}
+	// The state and requests are read from wherever the code is: a package
+	// that calls vero.NewWorker for a command of its own, as calmtasks'
+	// core/app does for cmd/worker, has the command as the worker.
+	scanDir := found
+	if fileHas(found, "package main") == "" {
+		if cmd := a.commandImporting(found); cmd != "" {
+			found = cmd
+		}
+	} else if fileHas(found, "vero.NewWorker(") == "" {
+		if pkg := a.importedWorker(found); pkg != "" {
+			scanDir = pkg
+		}
+	}
 	rel, _ := filepath.Rel(a.Dir, found)
 	a.Worker = filepath.ToSlash(rel)
-	// The state and requests are read from wherever the code is.
-	scanDir := found
-	if lifted := filepath.Join(a.Dir, filepath.FromSlash(servePackage)); fileHas(found, "vero.NewWorker(") == "" {
+	if lifted := filepath.Join(a.Dir, filepath.FromSlash(servePackage)); (scanDir == found || scanDir == lifted) && fileHas(found, "vero.NewWorker(") == "" {
 		if _, err := os.Stat(filepath.Join(lifted, "serve.go")); err == nil {
 			scanDir = lifted
 			a.ServeImport = a.Module + "/" + servePackage
@@ -505,4 +519,66 @@ func swiftPackage(dir string) string {
 	default:
 		return `.package(url: "` + url + `", from: "` + strings.TrimPrefix(fields[0], "v") + `")`
 	}
+}
+
+// commandImporting is the folder of a command in the app's module that
+// imports the package in dir, or "" when none does.
+func (a *App) commandImporting(dir string) string {
+	rel, err := filepath.Rel(a.Dir, dir)
+	if err != nil {
+		return ""
+	}
+	want := `"` + a.Module + "/" + filepath.ToSlash(rel) + `"`
+	found := ""
+	filepath.WalkDir(a.Dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || found != "" {
+			return nil
+		}
+		if d.IsDir() {
+			if n := d.Name(); n != "." && (strings.HasPrefix(n, ".") || n == "vendor" || n == "node_modules" || n == "dist") {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		if src, err := os.ReadFile(path); err == nil && strings.Contains(string(src), "package main") && strings.Contains(string(src), want) {
+			found = filepath.Dir(path)
+		}
+		return nil
+	})
+	return found
+}
+
+// importedWorker is the folder of a package of the app's own, imported by
+// the command in dir, that calls vero.NewWorker, or "" when none does.
+func (a *App) importedWorker(dir string) string {
+	entries, _ := os.ReadDir(dir)
+	prefix := `"` + a.Module + "/"
+	for _, e := range entries {
+		if !strings.HasSuffix(e.Name(), ".go") || strings.HasSuffix(e.Name(), "_test.go") {
+			continue
+		}
+		src, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		if err != nil {
+			continue
+		}
+		for _, line := range strings.Split(string(src), "\n") {
+			i := strings.Index(line, prefix)
+			if i < 0 {
+				continue
+			}
+			rest := line[i+len(prefix):]
+			end := strings.Index(rest, `"`)
+			if end < 0 {
+				continue
+			}
+			pkg := filepath.Join(a.Dir, filepath.FromSlash(rest[:end]))
+			if fileHas(pkg, "vero.NewWorker(") != "" {
+				return pkg
+			}
+		}
+	}
+	return ""
 }

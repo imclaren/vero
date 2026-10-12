@@ -465,3 +465,44 @@ func TestSetMenuBar(t *testing.T) {
 		t.Error("getBool read the wrong section")
 	}
 }
+
+// TestWorkerSetUpInAPackage: a worker whose command calls a package of the
+// app's own that calls vero.NewWorker, as calmtasks' cmd/worker calls
+// core/app. The command is the worker, which is built and shipped; the
+// package is where the state and requests are read from.
+func TestWorkerSetUpInAPackage(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/tasks\n"), 0o644)
+	os.MkdirAll(filepath.Join(dir, "cmd", "worker"), 0o755)
+	os.MkdirAll(filepath.Join(dir, "core", "app"), 0o755)
+	os.WriteFile(filepath.Join(dir, "cmd", "worker", "main.go"), []byte(`package main
+
+import "example.com/tasks/core/app"
+
+func main() { app.Run() }
+`), 0o644)
+	os.WriteFile(filepath.Join(dir, "core", "app", "app.go"), []byte(`package app
+
+import "github.com/imclaren/vero"
+
+type Status struct {
+	Tasks int `+"`json:\"tasks\"`"+`
+}
+
+func Run() {
+	w := vero.NewWorker(vero.WorkerOptions{})
+	state := vero.NewState(w, Status{})
+	vero.Update(state, "sync", func(*Status) error { return nil })
+}
+`), 0o644)
+	app, err := analyse(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if app.Worker != "cmd/worker" || app.WorkerName != "tasks-worker" {
+		t.Errorf("worker %q named %q, want cmd/worker named tasks-worker", app.Worker, app.WorkerName)
+	}
+	if app.State == nil || len(app.State.Fields) != 1 || len(app.Requests) != 1 {
+		t.Errorf("state %+v, requests %+v", app.State, app.Requests)
+	}
+}

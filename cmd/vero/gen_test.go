@@ -117,6 +117,14 @@ let package = Package(name: "Check", platforms: [.macOS(.v13)],
 let old = #"{"jobs": null, "labels": null, "speed": "fast", "task": {}}"#
 let s = try JSONDecoder().decode(Status.self, from: Data(old.utf8))
 precondition(s.jobs == [] && s.labels == [:] && s.speed == "fast" && s.owner == nil && s.extra == .null)
+// Go's time.Time is a Date: missing, it is Go's zero time, and it is read
+// from RFC 3339 with nine fractional digits and written back as Go reads it.
+precondition(s.changed == .distantPast)
+let when = #"{"changed": "2026-10-07T05:35:02.123456789Z"}"#
+let t = try JSONDecoder().decode(Status.self, from: Data(when.utf8))
+precondition(abs(t.changed.timeIntervalSince1970 - 1791351302.123) < 0.001)
+let back = String(data: try JSONEncoder().encode(t), encoding: .utf8)!
+precondition(back.contains(#""changed":"2026-10-07T05:35:02.123Z""#), back)
 let r = RenameRequest(id: 3, title: "new")
 let sent = String(data: try JSONEncoder().encode(r), encoding: .utf8)!
 precondition(sent.contains("\"id\":3") && RenameRequest.name == "rename")
