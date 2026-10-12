@@ -56,7 +56,23 @@ mac --mac"
 LOGS="$HOME/.cache/vero/test-runs"
 mkdir -p "$LOGS"
 JOBS=$(mktemp)
-trap 'rm -f "$JOBS"' EXIT
+# Each port is reserved, as a folder holding this run's process id, so
+# that two runs started together never take the same one: one that is
+# only about to listen on it is as taken as one that listens. A
+# reservation whose run has gone is taken over.
+PORTS="$HOME/.cache/vero/ports"
+mkdir -p "$PORTS"
+release() { for p in $(grep -lx "$$" "$PORTS"/*/pid 2>/dev/null); do rm -rf "$(dirname "$p")"; done; }
+trap 'rm -f "$JOBS"; release' EXIT
+reserve() {
+    if mkdir "$PORTS/$1" 2>/dev/null; then
+        echo $$ >"$PORTS/$1/pid"
+        return 0
+    fi
+    owner=$(cat "$PORTS/$1/pid" 2>/dev/null)
+    [ -n "$owner" ] && kill -0 "$owner" 2>/dev/null && return 1
+    echo $$ >"$PORTS/$1/pid"
+}
 port=8700
 echo "$all" | while read -r name args; do
     case " $SKIP " in *" $name "*) continue ;; esac
@@ -66,7 +82,7 @@ echo "$all" | while read -r name args; do
     # A port nothing listens on, so that two runs at once, or another
     # server, never answer for this one.
     port=$((port + 1))
-    while lsof -nP -iTCP:$port -sTCP:LISTEN >/dev/null 2>&1; do port=$((port + 1)); done
+    while lsof -nP -iTCP:$port -sTCP:LISTEN >/dev/null 2>&1 || ! reserve $port; do port=$((port + 1)); done
     echo "$name $port $args"
 done >"$JOBS"
 [ -s "$JOBS" ] || { echo "no systems to test" >&2; exit 2; }
@@ -83,7 +99,7 @@ else
     echo "FAIL $name ($(($(date +%s) - began))s): $(grep "FAIL" "$log" | head -1 | cut -c1-120)"
 fi'
 SAID=$(mktemp)
-trap 'rm -f "$JOBS" "$SAID"' EXIT
+trap 'rm -f "$JOBS" "$SAID"; release' EXIT
 xargs -P "$PARALLEL" -L 1 sh -c "$one" sh <"$JOBS" | tee "$SAID"
 sh "$VERO/scripts/lib/results-page.sh" "$HOME/.cache/vero/test-results"
 echo "every result: $HOME/.cache/vero/test-results/index.html"
