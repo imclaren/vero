@@ -241,3 +241,29 @@ func leadingNumber(s string) (n int, rest string, ok bool) {
 	}
 	return n, s[i:], i > 0
 }
+
+// Request is the name of the standard request with which vero's front-end
+// libraries ask the worker whether a newer version is out.
+const Request = "vero.update"
+
+// Reply is what the standard request answers, as the libraries read it.
+type Reply struct {
+	Current string `json:"current"`
+	Latest  string `json:"latest"`
+	Newer   bool   `json:"newer"`
+	URL     string `json:"url"`
+}
+
+// Handler answers the standard request from the site's latest.json at url,
+// for an app whose version is current. A worker registers it with
+//
+//	vero.Handle(w, update.Request, update.Handler(url, version))
+func Handler(url, current string) func(context.Context, struct{}) (Reply, error) {
+	return func(ctx context.Context, _ struct{}) (Reply, error) {
+		r, err := Check(ctx, url, current)
+		if err != nil {
+			return Reply{}, fmt.Errorf("could not check for a newer version: %w", err)
+		}
+		return Reply{Current: r.Current, Latest: r.Latest, Newer: r.Newer, URL: r.URL}, nil
+	}
+}

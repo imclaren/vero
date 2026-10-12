@@ -2,6 +2,7 @@ package update
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -79,5 +80,27 @@ func TestKeys(t *testing.T) {
 	}
 	if k := strings.Join(Keys("linux", "ppc64le"), " "); k != "linux-ppc64el rpm-ppc64le alpine-ppc64le" {
 		t.Errorf("POWER: %v", k)
+	}
+}
+
+// TestHandler checks the standard request's reply, as the front-end
+// libraries read it: lower-case keys, and the newer version.
+func TestHandler(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"name": "app", "version": "1.2.0", "downloads": {}}`))
+	}))
+	defer srv.Close()
+	reply, err := Handler(srv.URL, "1.1.0")(context.Background(), struct{}{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, _ := json.Marshal(reply)
+	if want := `{"current":"1.1.0","latest":"1.2.0","newer":true,"url":""}`; string(data) != want {
+		t.Errorf("reply %s, want %s", data, want)
+	}
+	gone := httptest.NewServer(http.NotFoundHandler())
+	gone.Close()
+	if _, err := Handler(gone.URL, "1.1.0")(context.Background(), struct{}{}); err == nil {
+		t.Error("a site that cannot be reached gave no error")
 	}
 }
