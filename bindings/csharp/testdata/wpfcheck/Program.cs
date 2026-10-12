@@ -138,7 +138,7 @@ public sealed class CheckApp : VeroApp
             var mail = new VeroHtmlView("vero-check") { LinkClicked = uri => { links.Add(uri); return uri.StartsWith("vero-check:"); } };
             mail.Click("vero-check:attachment/1");
             Expect(links.SequenceEqual(new[] { "vero-check:attachment/1" }), $"the app's own link: {string.Join(",", links)}");
-            using (var pdf = new VeroPdfWriter("vero-check"))
+            using (var pdf = new VeroPdfWriter("vero-check") { Paper = "a4", Margin = 10 })
             {
                 string folder = Path.Combine(Path.GetTempPath(), "vero-check-pdf");
                 Directory.CreateDirectory(folder);
@@ -146,9 +146,21 @@ public sealed class CheckApp : VeroApp
                 {
                     string path = Path.Combine(folder, $"{n}.pdf");
                     File.Delete(path);
-                    string error = await pdf.Write($"<h1>Message {n}</h1><p>Hello.</p>", path);
+                    string body = n == 2 ? string.Concat(Enumerable.Repeat("<p>A paragraph of a receipt, long enough to fill a line or two of the page.</p>", 150)) : "<p>Hello.</p>";
+                    string error = await pdf.Write($"<h1>Message {n}</h1>{body}", path);
                     if (VeroWeb.HasWebView)
+                    {
                         Expect(error == "" && File.ReadAllText(path).StartsWith("%PDF-"), $"PDF {n}: {error}");
+                        // Pages of A4, and several for the long one.
+                        string data = error == "" ? File.ReadAllText(path, System.Text.Encoding.Latin1) : "";
+                        int pages = System.Text.RegularExpressions.Regex.Matches(data, @"/Type\s*/Page[^s]").Count;
+                        // A4 is 595 by 842 points, which Chromium rounds to whole pixels.
+                        var box = System.Text.RegularExpressions.Regex.Match(data, @"/MediaBox\s*\[\s*0\s+0\s+([\d.]+)\s+([\d.]+)");
+                        double pw = box.Success ? double.Parse(box.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture) : 0;
+                        double ph = box.Success ? double.Parse(box.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture) : 0;
+                        Expect(Math.Abs(pw - 595.3) < 3 && Math.Abs(ph - 841.9) < 3, $"PDF {n} is on A4: {pw} by {ph}");
+                        Expect(n == 1 ? pages == 1 : pages > 1, $"PDF {n} has {pages} pages");
+                    }
                     else
                         Expect(error.Contains("web view"), $"no PDF without a web view: {error}");
                 }

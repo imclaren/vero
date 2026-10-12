@@ -161,8 +161,12 @@ public class VeroHtmlView : ContentControl
 ///     var pdf = new VeroPdfWriter("myapp");
 ///     string error = await pdf.Write(html, @"C:\path\message.pdf");
 ///
-/// Write returns "" once the file is written, or what went wrong. Scripts
-/// are off and nothing is loaded from the network unless Remote is set.
+/// Write returns "" once the file is written, or what went wrong. Each PDF
+/// has pages of Paper, "a4" or "letter", or the region's own when it is ""
+/// (US Letter where the region does not use metric, A4 elsewhere), with
+/// Margin millimetres on every side, as vero's writers on the Mac and Linux
+/// make them. Scripts are off and nothing is loaded from the network unless
+/// Remote is set.
 /// Where there is no web view, every write says so; VeroWeb.HasWebView
 /// tells an app beforehand. Call it on the window's thread.</summary>
 public sealed class VeroPdfWriter : IDisposable
@@ -173,6 +177,9 @@ public sealed class VeroPdfWriter : IDisposable
     WebView2? web;
     public bool Remote { get; set; }
     public string Policy { get; set; } = VeroWeb.HtmlPolicy;
+    public string Paper { get; set; } = "";
+    public double Margin { get; set; } = 12.7;
+    CoreWebView2Environment? env;
 
     public VeroPdfWriter(string app) => dataFolder = VeroWeb.DataFolder(app, "WebView2-pdf");
 
@@ -193,7 +200,7 @@ public sealed class VeroPdfWriter : IDisposable
                     WindowStyle = WindowStyle.None, ShowInTaskbar = false, ShowActivated = false,
                 };
                 host.Show();
-                var env = await CoreWebView2Environment.CreateAsync(null, dataFolder);
+                env = await CoreWebView2Environment.CreateAsync(null, dataFolder);
                 await web.EnsureCoreWebView2Async(env);
                 web.CoreWebView2.Settings.IsScriptEnabled = false;
                 web.CoreWebView2.NavigationStarting += (_, e) =>
@@ -209,7 +216,13 @@ public sealed class VeroPdfWriter : IDisposable
             web.CoreWebView2.NavigationCompleted -= Done;
             if (!ok) return "The page could not be shown.";
             string full = Path.GetFullPath(path);
-            return await web.CoreWebView2.PrintToPdfAsync(full) && File.Exists(full) ? "" : "The PDF was not written.";
+            var print = env!.CreatePrintSettings();
+            bool letter = Paper == "letter" || (Paper == "" && !System.Globalization.RegionInfo.CurrentRegion.IsMetric);
+            (print.PageWidth, print.PageHeight) = letter ? (8.5, 11.0) : (210 / 25.4, 297 / 25.4);
+            print.MarginTop = print.MarginBottom = print.MarginLeft = print.MarginRight = Margin / 25.4;
+            print.ShouldPrintBackgrounds = true;
+            print.ShouldPrintHeaderAndFooter = false;
+            return await web.CoreWebView2.PrintToPdfAsync(full, print) && File.Exists(full) ? "" : "The PDF was not written.";
         }
         catch (Exception e) { return e.Message; }
         finally { one.Release(); }
