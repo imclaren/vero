@@ -336,7 +336,7 @@ want of ffmpeg, and its README says why.
     other system's worker is built with the current Go. vero says so, and
     vero's kit and the app's worker must stay buildable with Go 1.26 for
     as long as the app supports macOS 12.
-13. **Link schemes and file types.** `vero-app.toml` gains `schemes` and
+13. **Link schemes and file types.** Done on 12 October 2026 (c90eb90), with the Windows installer's entries checked in the VM. `vero-app.toml` gains `schemes` and
     `opens`, which vero-repo writes into the `.desktop` file and the
     Windows installer. The installer also registers the app's id, which
     Windows needs for notifications with buttons.
