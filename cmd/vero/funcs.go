@@ -12,6 +12,8 @@ var funcs = template.FuncMap{
 	"pkgPath": func(id string) string { return strings.ReplaceAll(id, ".", "/") },
 	"ident":   ident,
 	"join":    strings.Join,
+	// swiftLabel is a request field's argument label in vero gen's Swift.
+	"swiftLabel": swiftName,
 }
 
 // pascal is "restartJob" or "restart-job" as "RestartJob".

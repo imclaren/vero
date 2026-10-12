@@ -8,11 +8,11 @@ package main
 var starters = map[string]*starter{}
 
 func init() {
-	starters["gtk"] = &starter{folder: "gtk", note: "a GTK 4 window in Python, for Linux, the BSDs and illumos; needs python3-gi and GTK 4", files: map[string]string{
-		"README.md": gtkReadme, "main.py": gtkMain, "build.sh": gtkBuild, ".gitignore": gtkIgnore}, bindings: []string{"bindings/python/vero.py"}, toml: gtkToml}
-	starters["wpf"] = &starter{folder: "windows", note: "a WPF window in C#, for Windows; needs the .NET SDK (dotnet)", files: map[string]string{
+	starters["gtk"] = &starter{folder: "gtk", note: "a GTK 4 app in Python, for Linux, the BSDs and illumos, on vero_gtk.py, which uses libadwaita where the system has it; needs python3-gi and GTK 4", files: map[string]string{
+		"README.md": gtkReadme, "main.py": gtkMain, "build.sh": gtkBuild, ".gitignore": gtkIgnore}, bindings: []string{"bindings/python/vero.py", "bindings/python/vero_gtk.py"}, toml: gtkToml}
+	starters["wpf"] = &starter{folder: "windows", note: "a WPF app in C#, for Windows, on VeroWpf.cs, with Windows' Fluent look; needs the .NET 10 SDK (dotnet)", files: map[string]string{
 		"README.md": wpfReadme, "App.xaml": wpfAppXaml, "App.xaml.cs": wpfAppCs, "MainWindow.xaml": wpfWindowXaml, "MainWindow.xaml.cs": wpfWindowCs,
-		"{{pascal .Name}}.csproj": wpfProj, ".gitignore": wpfIgnore}, bindings: []string{"bindings/csharp/Vero.cs"}, toml: wpfToml}
+		"Theme.xaml": wpfTheme, "{{pascal .Name}}.csproj": wpfProj, ".gitignore": wpfIgnore}, bindings: []string{"bindings/csharp/Vero.cs", "bindings/csharp/VeroWpf.cs"}, toml: wpfToml}
 	starters["macos"] = &starter{folder: "macos", note: "a SwiftUI app, for macOS; needs Xcode's command line tools", files: map[string]string{
 		"README.md": macReadme, "Package.swift": macPackage, "Sources/{{pascal .Name}}/App.swift": macApp, "build.sh": macBuild, ".gitignore": macIgnore}, toml: macToml}
 }
@@ -102,15 +102,17 @@ depends = ["x11/gtk+4:gtk+4-*:gtk+4-4.0", "devel/py-gobject3:py3-gobject3-*:py3-
 
 const gtkReadme = `# {{.Display}} for Linux, the BSDs and illumos
 
-A GTK 4 front end in Python, written by ` + "`vero add`" + ` for the worker in
+A GTK 4 {{if .MenuBar}}tray app{{else}}app{{end}} in Python, written by ` + "`vero add`" + ` for the worker in
 ` + "`../{{.Worker}}`" + `. It shows the state the worker pushes and offers each of its
-requests; make it your own from there.
+requests; make it your own from there. ` + "`main.py`" + ` is the app's own;
+` + "`vero.py`" + ` and ` + "`vero_gtk.py`" + ` are vero's, which ` + "`vero upgrade`" + ` replaces, and
+` + "`worker_api.py`" + ` is what ` + "`vero gen`" + ` writes from the worker.
 
     ./build.sh      builds the worker beside this file
     ./main.py       runs it
 
-It needs Python 3.10 or later with PyGObject and GTK 4: on Debian and Ubuntu,
-` + "`python3-gi gir1.2-gtk-4.0`" + `. On a Mac, ` + "`build.sh`" + ` installs them with Homebrew and
+It needs Python 3.11 or later with PyGObject and GTK 4.8 or later: on Debian
+and Ubuntu, ` + "`python3-gi gir1.2-gtk-4.0`" + `, with ` + "`gir1.2-adw-1`" + ` for libadwaita. On a Mac, ` + "`build.sh`" + ` installs them with Homebrew and
 says which Python to run it with. To see it on a Linux from a Mac instead,
 ` + "`path/to/vero/scripts/run-linux.sh --app gtk --entry main.py --worker ./{{.Worker}} --worker-name {{.WorkerName}}`" + `.
 `
@@ -136,26 +138,25 @@ echo "built: $PYTHON main.py runs it"
 `
 
 const gtkMain = `#!/usr/bin/env python3
-"""{{.Display}}: a GTK 4 front end for the worker in ../{{.Worker}}.
+"""{{.Display}}: the {{if .MenuBar}}tray app{{else}}window{{end}} for Linux, the BSDs and illumos, on the worker in
+../{{.Worker}}.
 
-Written by vero add. It shows the worker's state - every field of
-{{.State.Name}} - and a control for each request{{if .Requests}} ({{range $i, $r := .Requests}}{{if $i}}, {{end}}{{$r.Name}}{{end}}){{end}}.
+Written by vero add. It shows the worker's state, every field of
+{{.State.Name}}, and a control for each request{{if .Requests}} ({{range $i, $r := .Requests}}{{if $i}}, {{end}}{{$r.Name}}{{end}}){{end}}.
 Start from here and make it your own.
+
+vero_gtk.py, beside it, does the plumbing: the worker, a single copy,
+{{if .MenuBar}}the tray icon and its small window, {{end}}banners and toasts, light and dark, and
+libadwaita where the system has it. worker_api.py, which vero gen writes,
+has a typed method for each request, for a window of your own.
 """
 
-import json
 import os
 import sys
 
-import gi
-
-gi.require_version("Gtk", "4.0")
-from gi.repository import GLib, Gtk  # noqa: E402
-
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from vero import NotRunning, Vero, VeroError, run_in_thread  # noqa: E402
-
-HERE = os.path.dirname(os.path.abspath(__file__))
+import vero_gtk as vg  # noqa: E402
+from gi.repository import Gtk  # noqa: E402
 
 # The requests the worker handles, and what each takes: name, then each
 # field's JSON key and kind.
@@ -166,14 +167,11 @@ REQUESTS = [
 ]
 
 
-class Window(Gtk.ApplicationWindow):
-    def __init__(self, app: Gtk.Application, vero: Vero) -> None:
-        super().__init__(application=app, title="{{.Display}}")
-        self.vero = vero
-        self.set_default_size(460, -1)
+class Main(vg.Window):
+    def __init__(self, app: vg.App) -> None:
+        super().__init__(app, "{{.Display}}", {{if .MenuBar}}360, 480{{else}}480, 560{{end}})
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12,
                       margin_top=16, margin_bottom=16, margin_start=16, margin_end=16)
-        self.set_child(box)
 
         # The state, as a tree of its fields.
         self.tree = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
@@ -193,24 +191,15 @@ class Window(Gtk.ApplicationWindow):
                 self.entries[name].append((key, kind, entry))
             box.append(row)
 
-        self.problem = Gtk.Label(xalign=0, wrap=True)
-        self.problem.add_css_class("dim-label")
-        box.append(self.problem)
+        self.set_content(Gtk.ScrolledWindow(child=box, hscrollbar_policy=Gtk.PolicyType.NEVER))
+        app.on_state(self.apply)
 
-        try:
-            if (status := self.vero.latest()):
-                self.apply(status)
-        except NotRunning:
-            pass
-        run_in_thread(self.vero, lambda s: GLib.idle_add(self.apply, s))
-
-    def apply(self, status: dict) -> bool:
+    def apply(self, state: dict) -> None:
         """Redraws the state as rows: scalars as "key: value", lists and
         nested objects indented under their key."""
         while child := self.tree.get_first_child():
             self.tree.remove(child)
-        self.rows(status, 0)
-        return False
+        self.rows(state, 0)
 
     def rows(self, value, depth: int) -> None:
         if isinstance(value, dict):
@@ -221,7 +210,7 @@ class Window(Gtk.ApplicationWindow):
                 else:
                     self.row(f"{key}: {v}", depth)
         elif isinstance(value, list):
-            for i, v in enumerate(value):
+            for v in value:
                 if isinstance(v, dict):
                     self.row(", ".join(f"{k}: {x}" for k, x in v.items() if not isinstance(x, (dict, list))), depth)
                     self.rows({k: x for k, x in v.items() if isinstance(x, (dict, list))}, depth + 1)
@@ -229,13 +218,13 @@ class Window(Gtk.ApplicationWindow):
                     self.row(str(v), depth)
 
     def row(self, text: str, depth: int, bold: bool = False) -> None:
-        label = Gtk.Label(label=text, xalign=0, margin_start=depth * 16)
-        if bold:
-            label.add_css_class("heading")
+        label = vg.label(text, "heading" if bold else "")
+        label.set_margin_start(depth * 16)
         self.tree.append(label)
 
     def send(self, name: str) -> None:
-        """Sends a request with what its entries hold, and draws the reply."""
+        """Sends a request with what its entries hold. The worker pushes
+        the new state, and a refusal shows in the banner."""
         data = {}
         for key, kind, entry in self.entries[name]:
             text = entry.get_text()
@@ -247,33 +236,12 @@ class Window(Gtk.ApplicationWindow):
                 data[key] = text.lower() in ("1", "true", "yes")
             else:
                 data[key] = text
-        try:
-            reply = self.vero.call(name, data)
-            self.problem.set_text("")
-            if isinstance(reply, dict):
-                self.apply(reply)
-        except VeroError as e:
-            self.problem.set_text(str(e))
-
-
-class Application(Gtk.Application):
-    def __init__(self) -> None:
-        super().__init__(application_id="{{.ID}}")
-        self.vero: Vero | None = None
-
-    def do_activate(self) -> None:
-        if self.vero is None:
-            self.vero = Vero(os.path.join(HERE, "{{.WorkerName}}"))
-        Window(self, self.vero).present()
-
-    def do_shutdown(self) -> None:
-        if self.vero:
-            self.vero.stop()
-        Gtk.Application.do_shutdown(self)
+        self.problem("")
+        self.app.ask(name, data)
 
 
 if __name__ == "__main__":
-    sys.exit(Application().run(sys.argv))
+    vg.main(vg.App("{{.ID}}", "{{.Display}}", "{{.WorkerName}}", {{if .MenuBar}}small_window{{else}}window{{end}}=Main))
 `
 
 const wpfToml = `# The Windows front end, which vero add wrote.
@@ -284,23 +252,29 @@ exe = "{{pascal .Name}}.exe"
 
 const wpfReadme = `# {{.Display}} for Windows
 
-A WPF front end in C#, written by ` + "`vero add`" + ` for the worker in ` + "`../{{.Worker}}`" + `.
-It shows the state the worker pushes and offers each of its requests; make it
-your own from there.
+A WPF {{if .MenuBar}}tray app{{else}}app{{end}} in C#, written by ` + "`vero add`" + ` for the worker in ` + "`../{{.Worker}}`" + `,
+with Windows' Fluent look. It shows the state the worker pushes and offers each
+of its requests; make it your own from there. The window's layout is in
+` + "`MainWindow.xaml`" + `, and the app's spacing and type in ` + "`Theme.xaml`" + `.
 
     GOOS=windows go build -o {{.WorkerName}}.exe ../{{.Worker}}   # the worker, beside the app
     dotnet build                                               # on Windows, or on a Mac to check it compiles
 
-` + "`Vero.cs`" + ` is vero's C# binding, copied here by vero add (copy it again from
-vero's bindings/csharp when you update vero). The packaging in
-vero-app.toml builds the app and puts the worker beside it.
+` + "`Vero.cs`" + ` and ` + "`VeroWpf.cs`" + ` are vero's binding and library, which ` + "`vero upgrade`" + `
+replaces, and ` + "`WorkerApi.cs`" + ` is what ` + "`vero gen`" + ` writes from the worker. The
+packaging in vero-app.toml builds the app and puts the worker beside it.
 `
 
 const wpfProj = `<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Written by vero add. Vero.cs and VeroWpf.cs, beside it, are vero's
+       binding and library; WorkerApi.cs is what vero gen writes from the
+       worker. Windows Forms is for the tray icon. -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows</TargetFramework>
     <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>{{pascal .Name}}</RootNamespace>
     <AssemblyName>{{pascal .Name}}</AssemblyName>
@@ -309,96 +283,125 @@ const wpfProj = `<Project Sdk="Microsoft.NET.Sdk">
 </Project>
 `
 
-const wpfAppXaml = `<Application x:Class="{{pascal .Name}}.App"
-             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             StartupUri="MainWindow.xaml"/>
+const wpfTheme = `<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- The app's own spacing, type and icons, kept here so that the
+         windows' XAML stays about layout. Colours come from Windows'
+         Fluent theme, which follows light and dark mode; add the app's own
+         here when it needs them. -->
+    <Thickness x:Key="PagePadding">16</Thickness>
+    <Thickness x:Key="RowGap">0,4,0,0</Thickness>
+    <Thickness x:Key="SectionGap">0,12,0,0</Thickness>
+    <FontFamily x:Key="Icons">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
+    <Style x:Key="Heading" TargetType="TextBlock">
+        <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+</ResourceDictionary>
+`
+
+const wpfAppXaml = `<vero:VeroApp x:Class="{{pascal .Name}}.App"
+              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+              xmlns:vero="clr-namespace:Vero">
+    <Application.Resources>
+        <ResourceDictionary Source="Theme.xaml"/>
+    </Application.Resources>
+</vero:VeroApp>
 `
 
 const wpfAppCs = `using System.Windows;
+using Vero;
 
 namespace {{pascal .Name}};
 
-public partial class App : Application { }
+/// <summary>The app, which VeroApp runs: the worker, a single copy, {{if .MenuBar}}the
+/// tray icon and its small window, {{end}}and Windows' Fluent look, light or dark as
+/// Windows is. Written by vero add.</summary>
+public partial class App : VeroApp
+{
+    public App() : base(new VeroAppOptions
+    {
+        Id = "{{.ID}}",
+        Name = "{{.Display}}",
+        Worker = "{{.WorkerName}}.exe",{{if .MenuBar}}
+        MenuBar = true,{{end}}
+    })
+    { }
+
+    protected override Window {{if .MenuBar}}CreateSmallWindow{{else}}CreateWindow{{end}}() => new MainWindow();
+}
 `
 
-const wpfWindowXaml = `<Window x:Class="{{pascal .Name}}.MainWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="{{.Display}}" Width="480" SizeToContent="Height">
+const wpfWindowXaml = `<vero:VeroWindow x:Class="{{pascal .Name}}.MainWindow"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:vero="clr-namespace:Vero"
+                 Title="{{.Display}}" Width="{{if .MenuBar}}360{{else}}480{{end}}" Height="{{if .MenuBar}}480{{else}}560{{end}}">
     <!-- Written by vero add: the worker's state as rows, and a control for
-         each request. Make it your own. -->
-    <StackPanel Margin="16">
-        <StackPanel x:Name="Tree"/>
-        <StackPanel x:Name="Requests" Margin="0,12,0,0"/>
-        <TextBlock x:Name="Problem" Foreground="Gray" TextWrapping="Wrap" Margin="0,8,0,0"/>
-    </StackPanel>
-</Window>
+         each request. Make it your own. VeroWindow puts its banners and
+         toasts around this. -->
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="{StaticResource PagePadding}">
+            <StackPanel x:Name="Tree"/>
+            <StackPanel x:Name="Requests" Margin="{StaticResource SectionGap}"/>
+        </StackPanel>
+    </ScrollViewer>
+</vero:VeroWindow>
 `
 
-const wpfWindowCs = `using System;
-using System.IO;
+const wpfWindowCs = `using System.Collections.Generic;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Windows;
 using System.Windows.Controls;
 using Vero;
 
 namespace {{pascal .Name}};
 
-// The shapes the worker pushes and takes, as in ../{{.Worker}}: for a window
-// of your own, bind to these instead of the generic rows below.
-{{range $name, $s := .Types}}public record {{$s.Name}}({{range $i, $f := $s.Fields}}{{if $i}}, {{end}}[property: JsonPropertyName("{{$f.JSON}}")] {{csType $f}} {{pascal $f.Name}}{{end}});
-{{end}}
-public partial class MainWindow : Window
+/// <summary>The worker's state as rows, and a control for each request.
+/// Written by vero add; make it your own. WorkerApi.cs, which vero gen
+/// writes, has a typed method for each request, for a window of your
+/// own.</summary>
+public partial class MainWindow : VeroWindow
 {
-    private readonly VeroClient _vero;
-    // The requests the worker handles, and the entries for what each takes.
-    private static readonly (string name, (string key, string kind)[] fields)[] _requests =
+    // The requests the worker handles, and what each takes.
+    static readonly (string name, (string key, string kind)[] fields)[] requests =
     {
 {{- range .Requests}}
         ("{{.Name}}", new (string key, string kind)[] { {{range .Fields}}("{{.JSON}}", "{{.Kind}}"), {{end}} }),
 {{- end}}
     };
-    private readonly System.Collections.Generic.Dictionary<string, System.Collections.Generic.List<(string, string, TextBox)>> _entries = new();
+    readonly Dictionary<string, List<(string key, string kind, TextBox box)>> entries = new();
 
     public MainWindow()
     {
         InitializeComponent();
-        foreach (var (name, fields) in _requests)
+        foreach (var (name, fields) in requests)
         {
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 4, 0, 0) };
-            var button = new Button { Content = name, Padding = new Thickness(8, 3, 8, 3) };
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = (Thickness)FindResource("RowGap") };
+            var button = new Button { Content = name };
             button.Click += async (_, _) => await Send(name);
             row.Children.Add(button);
-            _entries[name] = new();
+            entries[name] = new();
             foreach (var (key, kind) in fields)
             {
-                var box = new TextBox { Width = 120, Margin = new Thickness(6, 0, 0, 0), ToolTip = key + " (" + kind + ")" };
+                var box = new TextBox { Width = 120, Margin = new Thickness(6, 0, 0, 0), ToolTip = $"{key} ({kind})" };
                 row.Children.Add(box);
-                _entries[name].Add((key, kind, box));
+                entries[name].Add((key, kind, box));
             }
             Requests.Children.Add(row);
         }
-        _vero = new VeroClient(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "{{.WorkerName}}.exe"));
-        _ = ReadEvents();
-    }
-
-    private async System.Threading.Tasks.Task ReadEvents()
-    {
-        await foreach (var element in _vero.Events())
-            Dispatcher.Invoke(() => Apply(element));
+        Loaded += (_, _) => App.OnState(Apply);
     }
 
     // Redraws the state as rows: scalars as "key: value", lists and nested
     // objects indented under their key.
-    private void Apply(JsonElement state)
+    void Apply(JsonElement state)
     {
         Tree.Children.Clear();
         Rows(state, 0);
     }
 
-    private void Rows(JsonElement value, int depth)
+    void Rows(JsonElement value, int depth)
     {
         if (value.ValueKind == JsonValueKind.Object)
         {
@@ -409,7 +412,7 @@ public partial class MainWindow : Window
                     Row(p.Name + ":", depth, bold: true);
                     Rows(p.Value, depth + 1);
                 }
-                else Row(p.Name + ": " + p.Value, depth);
+                else Row($"{p.Name}: {p.Value}", depth);
             }
         }
         else if (value.ValueKind == JsonValueKind.Array)
@@ -418,9 +421,9 @@ public partial class MainWindow : Window
             {
                 if (item.ValueKind == JsonValueKind.Object)
                 {
-                    var parts = new System.Collections.Generic.List<string>();
+                    var parts = new List<string>();
                     foreach (var p in item.EnumerateObject())
-                        if (p.Value.ValueKind is not (JsonValueKind.Object or JsonValueKind.Array)) parts.Add(p.Name + ": " + p.Value);
+                        if (p.Value.ValueKind is not (JsonValueKind.Object or JsonValueKind.Array)) parts.Add($"{p.Name}: {p.Value}");
                     Row(string.Join(", ", parts), depth);
                 }
                 else Row(item.ToString(), depth);
@@ -428,14 +431,19 @@ public partial class MainWindow : Window
         }
     }
 
-    private void Row(string text, int depth, bool bold = false) =>
-        Tree.Children.Add(new TextBlock { Text = text, Margin = new Thickness(depth * 16, 1, 0, 1), FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal });
-
-    // Sends a request with what its entries hold, and draws the reply.
-    private async System.Threading.Tasks.Task Send(string name)
+    void Row(string text, int depth, bool bold = false)
     {
-        var data = new System.Collections.Generic.Dictionary<string, object?>();
-        foreach (var (key, kind, box) in _entries[name])
+        var row = new TextBlock { Text = text, Margin = new Thickness(depth * 16, 1, 0, 1) };
+        if (bold) row.Style = (Style)FindResource("Heading");
+        Tree.Children.Add(row);
+    }
+
+    // Sends a request with what its entries hold. The worker pushes the new
+    // state, and a refusal shows in the banner.
+    async System.Threading.Tasks.Task Send(string name)
+    {
+        var data = new Dictionary<string, object?>();
+        foreach (var (key, kind, box) in entries[name])
             data[key] = kind switch
             {
                 "int" => long.TryParse(box.Text, out var n) ? n : 0,
@@ -443,16 +451,8 @@ public partial class MainWindow : Window
                 "bool" => box.Text is "1" or "true" or "yes",
                 _ => box.Text,
             };
-        try
-        {
-            var reply = await _vero.CallAsync<object, JsonElement>(name, data);
-            Problem.Text = "";
-            if (reply.ValueKind == JsonValueKind.Object) Apply(reply);
-        }
-        catch (VeroException e)
-        {
-            Problem.Text = e.Message;
-        }
+        Problem("");
+        await App.Ask(name, data);
     }
 }
 `
@@ -481,7 +481,7 @@ import PackageDescription
 let package = Package(
     name: "{{pascal .Name}}",
     platforms: [.macOS(.v13)],
-    dependencies: [.package(url: "https://github.com/imclaren/vero", from: "0.17.0")],
+    dependencies: [{{.SwiftPackage}}],
     targets: [
         .executableTarget(name: "{{pascal .Name}}", dependencies: [.product(name: "Vero", package: "vero")])
     ]
@@ -502,54 +502,12 @@ echo "run it with:  ./.build/debug/{{pascal .Name}}"
 const macApp = `import SwiftUI
 import Vero
 
-// The shapes the worker pushes and takes, as in ../{{.Worker}}. A window
-// of your own reads vero.state through these.
-{{range $name, $s := .Types}}struct {{$s.Name}}: Decodable {
-{{range $s.Fields}}    let {{camel .Name}}: {{swiftType .}}?
-{{end}}    private enum CodingKeys: String, CodingKey {
-{{range $s.Fields}}        case {{camel .Name}} = "{{.JSON}}"
-{{end}}    }
-}
+// {{.Display}} for macOS, {{if .MenuBar}}in the menu bar{{else}}in a window{{end}}, on the worker in ../{{.Worker}}.
+// Written by vero add: it shows the worker's state, every field of
+// {{.State.Name}}, and a control for each request. Make it your own.
+// WorkerAPI.swift, beside it, is what vero gen writes from the worker: a
+// type for the state and for each request, which a view of your own reads.
 
-{{end}}
-/// Anything JSON, for fields the worker leaves open.
-enum JSONValue: Decodable {
-    case string(String), number(Double), bool(Bool), null, array([JSONValue]), object([String: JSONValue])
-    init(from decoder: Decoder) throws {
-        let c = try decoder.singleValueContainer()
-        if c.decodeNil() { self = .null }
-        else if let b = try? c.decode(Bool.self) { self = .bool(b) }
-        else if let n = try? c.decode(Double.self) { self = .number(n) }
-        else if let s = try? c.decode(String.self) { self = .string(s) }
-        else if let a = try? c.decode([JSONValue].self) { self = .array(a) }
-        else { self = .object(try c.decode([String: JSONValue].self)) }
-    }
-}
-
-extension JSONValue: Encodable {
-    func encode(to encoder: Encoder) throws {
-        var c = encoder.singleValueContainer()
-        switch self {
-        case .string(let s): try c.encode(s)
-        case .number(let n): try c.encode(n)
-        case .bool(let b): try c.encode(b)
-        case .null: try c.encodeNil()
-        case .array(let a): try c.encode(a)
-        case .object(let o): try c.encode(o)
-        }
-    }
-}
-
-// One of these per handler on the worker: the name routes the request.
-{{range .Requests}}struct {{pascal .Name}}Request: NamedRequest {
-    static let name = "{{.Name}}"
-    typealias Reply = JSONValue
-{{range .Fields}}    let {{camel .Name}}: {{swiftReqType .}}
-{{end}}{{if .Fields}}    private enum CodingKeys: String, CodingKey {
-{{range .Fields}}        case {{camel .Name}} = "{{.JSON}}"
-{{end}}    }
-{{end}}}
-{{end}}
 /// The requests the worker handles, and what each takes.
 let requests: [(name: String, fields: [(key: String, kind: String)])] = [
 {{- range .Requests}}
@@ -566,18 +524,22 @@ struct {{pascal .Name}}App: App {
     @StateObject private var vero = VeroModel<JSONValue>(bundledWorker: "{{.WorkerName}}", directoryName: "{{.Name}}/bin")
 
     var body: some Scene {
-        // A window, as on every other system. For an app that lives in
-        // the menu bar, make this a MenuBarExtra and set menubar = true in
-        // vero-app.toml's [macos].
+{{- if .MenuBar}}
+        // In the menu bar, with no Dock icon once vero ship makes it an app.
+        MenuBarExtra("{{.Display}}", systemImage: "circle.grid.2x2") {
+            StarterView().environmentObject(vero)
+        }
+        .menuBarExtraStyle(.window)
+{{- else}}
         Window("{{.Display}}", id: "main") {
             StarterView().environmentObject(vero)
         }
         .windowResizability(.contentSize)
+{{- end}}
     }
 }
 
-/// The state as rows, and a control for each request. Written by vero add;
-/// make it your own.
+/// The state as rows, and a control for each request.
 struct StarterView: View {
     @EnvironmentObject var vero: VeroModel<JSONValue>
     @State private var entries: [String: [String: String]] = [:]
@@ -596,9 +558,13 @@ struct StarterView: View {
                     }
                 }
             }
+{{- if .MenuBar}}
+            Divider()
+            Button("Quit {{.Display}}") { NSApplication.shared.terminate(nil) }
+{{- end}}
         }
         .padding(16)
-        .frame(width: 460)
+        .frame(width: {{if .MenuBar}}340{{else}}460{{end}})
     }
 
     @ViewBuilder private func rows(_ v: JSONValue, depth: Int) -> some View {
@@ -645,13 +611,13 @@ struct StarterView: View {
     private func double(_ name: String, _ key: String) -> Double { Double(entry(name, key)) ?? 0 }
     private func bool(_ name: String, _ key: String) -> Bool { ["1", "true", "yes"].contains(entry(name, key).lowercased()) }
 
-    /// Sends a request with what its entries hold. A refusal shows as
-    /// vero.problem, and the worker pushes the new state.
+    /// Sends a request, from WorkerAPI.swift, with what its entries hold. A
+    /// refusal shows as vero.problem, and the worker pushes the new state.
     private func send(_ name: String) {
         switch name {
 {{- range $r := .Requests}}
         case "{{$r.Name}}":
-            vero.call({{pascal $r.Name}}Request({{range $i, $f := $r.Fields}}{{if $i}}, {{end}}{{camel $f.Name}}: {{if eq $f.Kind "int"}}int("{{$r.Name}}", "{{$f.JSON}}"){{else if eq $f.Kind "float"}}double("{{$r.Name}}", "{{$f.JSON}}"){{else if eq $f.Kind "bool"}}bool("{{$r.Name}}", "{{$f.JSON}}"){{else if eq $f.Kind "string"}}entry("{{$r.Name}}", "{{$f.JSON}}"){{else}}.null{{end}}{{end}}))
+            vero.call({{pascal $r.Name}}Request({{$first := true}}{{range $f := $r.Fields}}{{if or (eq $f.Kind "int") (eq $f.Kind "float") (eq $f.Kind "bool") (eq $f.Kind "string")}}{{if not $first}}, {{end}}{{$first = false}}{{swiftLabel $f.JSON}}: {{if eq $f.Kind "int"}}int("{{$r.Name}}", "{{$f.JSON}}"){{else if eq $f.Kind "float"}}double("{{$r.Name}}", "{{$f.JSON}}"){{else if eq $f.Kind "bool"}}bool("{{$r.Name}}", "{{$f.JSON}}"){{else}}entry("{{$r.Name}}", "{{$f.JSON}}"){{end}}{{end}}{{end}}))
 {{- end}}
         default:
             break

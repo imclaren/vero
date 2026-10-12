@@ -110,6 +110,10 @@ func add(app *App, want []string, force bool) ([]string, error) {
 	if err := addTest(app); err != nil {
 		return added, err
 	}
+	// The typed requests each front end's starter uses, from the worker.
+	if err := gen([]string{"--dir", app.Dir}); err != nil {
+		fmt.Printf("vero gen did not finish (%v); run it in %s before building\n", err, app.Dir)
+	}
 	if err := addIcon(app); err != nil {
 		fmt.Printf("icon: %v\n", err)
 	}

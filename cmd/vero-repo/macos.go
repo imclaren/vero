@@ -715,7 +715,7 @@ func infoPlist(a *App) []byte {
 		fmt.Fprintf(&b, "\t<key>%s</key>\n\t<string>%s</string>\n", k[0], xmlText(k[1]))
 	}
 	b.WriteString("\t<key>NSHighResolutionCapable</key>\n\t<true/>\n")
-	if m.Menubar {
+	if m.Menubar || a.Menubar {
 		b.WriteString("\t<key>LSUIElement</key>\n\t<true/>\n")
 	}
 	b.WriteString("</dict>\n</plist>\n")

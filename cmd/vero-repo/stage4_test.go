@@ -59,6 +59,22 @@ func TestInfoPlist(t *testing.T) {
 	}
 }
 
+// TestInfoPlistMenubar: a menu bar app has no Dock icon, whether
+// vero-app.toml says so at its top, for every system, or in [macos] alone;
+// a window app has one.
+func TestInfoPlistMenubar(t *testing.T) {
+	for _, c := range []struct {
+		top, mac, want bool
+	}{{false, false, false}, {true, false, true}, {false, true, true}} {
+		a, _ := linuxApp(t)
+		a.Menubar = c.top
+		a.MacOS = &MacOS{Product: "Example", Menubar: c.mac}
+		if got := strings.Contains(string(infoPlist(a)), "<key>LSUIElement</key>"); got != c.want {
+			t.Errorf("menubar = %v, [macos] menubar = %v: LSUIElement %v, want %v", c.top, c.mac, got, c.want)
+		}
+	}
+}
+
 // TestSparkleKeys: a key vero makes, a seed Sparkle's tools make, and an
 // expanded key older Sparkle kept all sign the same, as Sparkle checks.
 func TestSparkleKeys(t *testing.T) {

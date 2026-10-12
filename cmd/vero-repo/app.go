@@ -32,6 +32,10 @@ type App struct {
 	Site    string `toml:"site"`
 	Licence string `toml:"licence"`
 	Icon    string `toml:"icon"`
+	// Menubar is an app that lives in the menu bar on the Mac and in the
+	// tray elsewhere, with no Dock icon. [macos] menubar says the same for
+	// the Mac alone.
+	Menubar bool `toml:"menubar"`
 
 	Worker Worker `toml:"worker"`
 	GTK    *GTK   `toml:"gtk"`

@@ -44,6 +44,37 @@ func (t *tomlFile) get(section, key string) string {
 	return ""
 }
 
+// getBool is a setting's true or false value in a section, "" at the top.
+func (t *tomlFile) getBool(section, key string) bool {
+	in := section == ""
+	for _, line := range strings.Split(t.text, "\n") {
+		l := strings.TrimSpace(line)
+		if strings.HasPrefix(l, "[") {
+			in = strings.TrimSuffix(strings.TrimPrefix(l, "["), "]") == section
+			continue
+		}
+		if in && regexp.MustCompile(`^`+regexp.QuoteMeta(key)+`\s*=\s*true\b`).MatchString(l) {
+			return true
+		}
+	}
+	return false
+}
+
+// setMenuBar adds menubar = true to the top of a file that has none, after
+// its id, and writes it.
+func (t *tomlFile) setMenuBar() error {
+	if t.text == "" || t.getBool("", "menubar") {
+		return nil
+	}
+	re := regexp.MustCompile(`(?m)^id\s*=.*$`)
+	if loc := re.FindStringIndex(t.text); loc != nil {
+		t.text = t.text[:loc[1]] + "\nmenubar = true" + t.text[loc[1]:]
+	} else {
+		t.text = "menubar = true\n" + t.text
+	}
+	return os.WriteFile(t.path, []byte(t.text), 0o644)
+}
+
 // quote is s as a TOML basic string.
 func quote(s string) string {
 	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`, "\n", `\n`, "\t", `\t`).Replace(s) + `"`
@@ -62,6 +93,7 @@ func (t *tomlFile) write(app *App, add string) error {
 			"name = \"" + app.Name + "\"\n" +
 			"display_name = \"" + app.Display + "\"\n" +
 			"id = \"" + app.ID + "\"\n" +
+			menubarLine(app) +
 			"summary = " + quote(d.Summary) + "\n" +
 			"description = " + quote(d.Text) + "\n" +
 			"publisher = " + quote(d.Publisher) + "\n" +
@@ -77,4 +109,13 @@ func (t *tomlFile) write(app *App, add string) error {
 	}
 	t.text += "\n" + strings.TrimSpace(add) + "\n"
 	return os.WriteFile(t.path, []byte(t.text), 0o644)
+}
+
+// menubarLine is the setting for an app that lives in the menu bar and
+// the tray, and nothing for a window app.
+func menubarLine(app *App) string {
+	if !app.MenuBar {
+		return ""
+	}
+	return "# It lives in the menu bar on the Mac and in the tray elsewhere.\nmenubar = true\n"
 }

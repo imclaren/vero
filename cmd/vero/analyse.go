@@ -7,6 +7,7 @@ import (
 	"go/token"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -39,6 +40,15 @@ type App struct {
 	// ServeImport is the worker as a package with a Serve, for the front
 	// ends that run it inside themselves; "" until lift makes one.
 	ServeImport string
+	// MenuBar says the app lives in the menu bar on the Mac and in the tray
+	// elsewhere, with a small window from its icon, rather than in a
+	// window: menubar = true in vero-app.toml, which vero add --menubar
+	// writes.
+	MenuBar bool
+	// SwiftPackage is the Mac starter's dependency on vero's Swift package:
+	// the checkout that go.mod replaces vero with, or the published
+	// version that it requires.
+	SwiftPackage string
 	// KeepWorker says not to move the worker's code for those front ends,
 	// and to leave them a placeholder instead.
 	KeepWorker bool
@@ -110,6 +120,8 @@ func analyseWith(dir string, stateOptional bool) (*App, error) {
 	for _, p := range platforms {
 		app.Existing[p] = app.toml.has(sectionOf[p])
 	}
+	app.MenuBar = app.toml.getBool("", "menubar") || app.toml.getBool("macos", "menubar")
+	app.SwiftPackage = swiftPackage(dir)
 	if err := app.findWorker(); err != nil {
 		return nil, err
 	}
@@ -467,5 +479,25 @@ func (a *App) scan() {
 	sort.Strings(titles)
 	for _, t := range titles {
 		a.Notes = append(a.Notes, *found[t])
+	}
+}
+
+// swiftPackage is the Mac starter's dependency on vero's Swift package,
+// as Package.swift writes it: the local checkout when go.mod replaces vero
+// with one, so that both use the same vero, and the version go.mod
+// requires otherwise.
+func swiftPackage(dir string) string {
+	const url = "https://github.com/imclaren/vero"
+	cmd := exec.Command("go", "list", "-m", "-f", "{{.Version}} {{with .Replace}}{{.Dir}}{{end}}", "github.com/imclaren/vero")
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	fields := strings.Fields(string(out))
+	switch {
+	case err != nil || len(fields) == 0:
+		return `.package(url: "` + url + `", from: "0.18.0")`
+	case len(fields) > 1:
+		return `.package(path: "` + fields[1] + `")`
+	default:
+		return `.package(url: "` + url + `", from: "` + strings.TrimPrefix(fields[0], "v") + `")`
 	}
 }

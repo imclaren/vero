@@ -365,3 +365,97 @@ func TestNew(t *testing.T) {
 		t.Errorf("analysed: name %q, worker %q", app.Name, app.Worker)
 	}
 }
+
+// jobsApp is a copy of vero's example worker as an app of its own, in a
+// temporary folder, analysed.
+func jobsApp(t *testing.T) *App {
+	t.Helper()
+	root, _ := filepath.Abs("../..")
+	dir := t.TempDir()
+	os.MkdirAll(filepath.Join(dir, "worker"), 0o755)
+	src, _ := os.ReadFile(filepath.Join(root, "example", "worker", "main.go"))
+	os.WriteFile(filepath.Join(dir, "worker", "main.go"), src, 0o644)
+	os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example.com/jobs\n\ngo 1.22\n\nrequire github.com/imclaren/vero v0.0.0\n\nreplace github.com/imclaren/vero => "+root+"\n"), 0o644)
+	tidy := exec.Command("go", "mod", "tidy")
+	tidy.Dir = dir
+	if out, err := tidy.CombinedOutput(); err != nil {
+		t.Fatalf("go mod tidy: %v\n%s", err, out)
+	}
+	app, err := analyse(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return app
+}
+
+// TestShapes checks that each starter is a window app, or with menubar a
+// tray app, and that the Mac starter uses this checkout of vero, as go.mod
+// does.
+func TestShapes(t *testing.T) {
+	root, _ := filepath.Abs("../..")
+	for _, menubar := range []bool{false, true} {
+		app := jobsApp(t)
+		app.MenuBar = menubar
+		if _, err := add(app, []string{"gtk", "wpf", "macos"}, false); err != nil {
+			t.Fatal(err)
+		}
+		read := func(name string) string {
+			data, err := os.ReadFile(filepath.Join(app.Dir, name))
+			if err != nil {
+				t.Fatal(err)
+			}
+			return string(data)
+		}
+		want := map[string][2]string{
+			"gtk/main.py":                  {"window=Main", "small_window=Main"},
+			"windows/App.xaml.cs":          {"CreateWindow()", "MenuBar = true"},
+			"macos/Sources/Jobs/App.swift": {"Window(\"jobs\"", "MenuBarExtra(\"jobs\""},
+			"vero-app.toml":                {"[worker]", "menubar = true"},
+		}
+		for file, w := range want {
+			text := read(file)
+			shape := w[0]
+			if menubar {
+				shape = w[1]
+			}
+			if !strings.Contains(text, shape) {
+				t.Errorf("menubar %v: %s has no %q", menubar, file, shape)
+			}
+		}
+		if strings.Contains(read("vero-app.toml"), "menubar = true") != menubar {
+			t.Errorf("menubar %v: vero-app.toml says otherwise", menubar)
+		}
+		if !strings.Contains(read("macos/Package.swift"), `.package(path: "`+root+`")`) {
+			t.Errorf("Package.swift does not use this checkout:\n%s", read("macos/Package.swift"))
+		}
+		// The libraries and what vero gen writes are beside each starter.
+		for _, f := range []string{"gtk/vero_gtk.py", "gtk/worker_api.py", "windows/VeroWpf.cs", "windows/WorkerApi.cs", "windows/Theme.xaml", "macos/Sources/Jobs/WorkerAPI.swift"} {
+			if _, err := os.Stat(filepath.Join(app.Dir, f)); err != nil {
+				t.Errorf("menubar %v: %v", menubar, err)
+			}
+		}
+	}
+}
+
+// TestSetMenuBar checks that vero add --menubar on an app that has a
+// vero-app.toml adds the setting after its id, once.
+func TestSetMenuBar(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "vero-app.toml")
+	os.WriteFile(path, []byte("name = \"a\"\nid = \"com.example.a\"\n\n[macos]\nfolder = \"macos\"\n"), 0o644)
+	f := readToml(path)
+	if f.getBool("", "menubar") {
+		t.Fatal("menubar before it was set")
+	}
+	for i := 0; i < 2; i++ {
+		if err := f.setMenuBar(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	data, _ := os.ReadFile(path)
+	if want := "name = \"a\"\nid = \"com.example.a\"\nmenubar = true\n\n[macos]\nfolder = \"macos\"\n"; string(data) != want {
+		t.Errorf("got\n%s\nwant\n%s", data, want)
+	}
+	if !readToml(path).getBool("", "menubar") || readToml(path).getBool("macos", "menubar") {
+		t.Error("getBool read the wrong section")
+	}
+}

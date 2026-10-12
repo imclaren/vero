@@ -38,6 +38,29 @@ one Kotlin, the browser, WASI and Plan 9 ones Go. The shapes of your state
 and requests are written out in each language, for the window you build
 next.
 
+## Two shapes
+
+An app is either a window app or a tray app, which lives in the menu bar on
+the Mac and in the tray elsewhere, with a small window from its icon.
+
+```bash
+vero add                 # a window app
+vero add --menubar       # a tray app; vero new NAME --menubar does the same
+```
+
+`--menubar` writes `menubar = true` at the top of `vero-app.toml`, so that
+front ends added later take the same shape, and the Mac app has no Dock
+icon. Where a desktop shows no tray icons, such as GNOME without its
+extension, a tray app opens as an ordinary window.
+
+The Windows and GTK starters are built on vero's libraries, `VeroWpf.cs`
+and `vero_gtk.py`, copied beside them. These do the plumbing: the worker, a
+single copy, the tray, banners and toasts, dialogs, notifications, light and
+dark mode, and, on Linux, the BSDs and illumos, libadwaita where the system
+has it and plain GTK 4 where it does not. A starter is then only how the app
+looks. `vero gen` writes a typed method for each request beside each
+starter, and `vero add` runs it.
+
 It asks for a one-line summary, a description and the publisher, as
 "Name <email>", when it first writes `vero-app.toml` at a terminal;
 `--summary`, `--description` and `--publisher` answer from a script.
@@ -67,9 +90,11 @@ For a front end of your own, the same ideas in each toolkit:
 
 | SwiftUI | GTK 4 (Python) | WPF (C#) |
 |---|---|---|
-| `WindowGroup`, `MenuBarExtra` | `Gtk.ApplicationWindow`; a status icon needs an extension on GNOME, so a window is the usual choice | `Window`; a tray icon with `NotifyIcon` from Windows Forms |
+| `WindowGroup`, `MenuBarExtra` | `vero_gtk.Window`; `App(..., small_window=...)` for a tray app | `VeroWindow`; `MenuBar = true` in `VeroAppOptions` for a tray app |
+| an alert or a toast | `vero_gtk.question`, `Window.toast` | `VeroDialogs.Question`, `VeroWindow.Toast` |
+| settings | `vero_gtk.Settings`, libadwaita's preferences dialog where it is installed | a window of the app's own, in XAML |
 | `List`, `ForEach` | `Gtk.ListBox` with a row per item, or `Gtk.ListView` for many | `ListBox` or `ItemsControl` with an `ItemTemplate` |
-| `NavigationSplitView` | `Gtk.Paned` with a sidebar `Gtk.ListBox` | a `Grid` with a `GridSplitter` |
-| `.sheet`, `.alert` | `Gtk.Dialog`, `Gtk.AlertDialog` | a `Window` shown with `ShowDialog`, `MessageBox` |
-| `@StateObject` model fed by events | `run_in_thread` from `vero.py` with `GLib.idle_add` | `await foreach` over `VeroClient.Events()` and `Dispatcher.Invoke` |
-| a `WKWebView` | `WebKit.WebView` from WebKitGTK 6 | `WebView2` |
+| `NavigationSplitView` | `vero_gtk.split_view`, libadwaita's where it is installed and a pane where not | a `Grid` with a `GridSplitter` |
+| `.sheet` | `Gtk.Window` with `transient_for`, or `Adw.Dialog` where `vero_gtk.has_adwaita()` | a `Window` shown with `ShowDialog` |
+| `@StateObject` model fed by events | `App.on_state`, which calls back on the main loop | `VeroApp.OnState`, which calls back on the window's thread |
+| a `WKWebView` | `vero_gtk.HtmlView` and `SignInPage`, which fall back where there is no web view | `VeroHtmlView` and `VeroSignInPage`, in `VeroWebView.cs` |
