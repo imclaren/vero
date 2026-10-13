@@ -78,6 +78,12 @@ until win=$("$CACHE/bin/winid" $app) && [ -n "$win" ]; do
     # A copy that was signed a moment ago is checked before it starts,
     # which can take a minute or more.
     n=$((n + 1)); [ $n -gt 240 ] && { echo "FAIL: the app showed no window in two minutes" >&2; exit 1; }
+    # A menu bar app shows its window when its item is clicked, as
+    # somebody using it would, every five seconds after the first ten.
+    # Clicking needs Accessibility permission for the terminal.
+    if [ $n -ge 20 ] && [ $((n % 10)) -eq 0 ]; then
+        osascript -e "tell application \"System Events\" to tell (first process whose unix id is $app) to click menu bar item 1 of menu bar 2" >/dev/null 2>&1 || true
+    fi
     sleep 0.5
 done
 # In front, as somebody using it would see it.
