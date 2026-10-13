@@ -139,12 +139,16 @@ func csharpType(t *TypeRef, aliases map[string]*TypeRef) string {
 }
 
 func csharpDefault(t *TypeRef, aliases map[string]*TypeRef) string {
-	switch resolve(t, aliases).Kind {
+	t = resolve(t, aliases)
+	switch t.Kind {
 	case "bool":
 		return "false"
 	case "int", "float":
 		return "0"
 	case "string":
+		if t.Time {
+			return `"` + goZeroTime + `"`
+		}
 		return `""`
 	case "json", "empty", "optional":
 		return "default"

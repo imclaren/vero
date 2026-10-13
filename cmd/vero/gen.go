@@ -77,9 +77,13 @@ type TypeRef struct {
 	Elem *TypeRef // list, map and optional
 	Name string   // named
 	// Time marks a string that is Go's time.Time, in RFC 3339, which Swift
-	// reads as a Date; the other languages keep the string.
+	// reads as a Date; the other languages keep the string, which starts
+	// as goZeroTime, since Go cannot read an empty one.
 	Time bool
 }
+
+// goZeroTime is Go's zero time.Time as JSON carries it.
+const goZeroTime = "0001-01-01T00:00:00Z"
 
 func gen(args []string) error {
 	fs := flag.NewFlagSet("gen", flag.ExitOnError)

@@ -167,6 +167,9 @@ func pythonDefault(t *TypeRef, dataclass bool, al map[string]*TypeRef) string {
 	case "float":
 		return "0.0"
 	case "string":
+		if t.Time {
+			return `"` + goZeroTime + `"`
+		}
 		return `""`
 	case "json", "optional", "empty":
 		return "None"

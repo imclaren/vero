@@ -170,6 +170,8 @@ assert api.owner() is None and api.ping() is None and api.count() == 0
 api.pause(id=2)
 assert f.sent[-1] == ("pause", {"id": 2})
 assert w.Status.from_json(s.to_json()) == s
+# An unset time is Go's zero time, which Go reads, where it cannot read "".
+assert s.changed == "0001-01-01T00:00:00Z" and w.Status().changed == s.changed, s.changed
 print("ok")
 `
 	os.WriteFile(filepath.Join(dir, "check.py"), []byte(check), 0o644)
@@ -196,6 +198,8 @@ func TestGenCSharp(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "Program.cs"), []byte(`using System.Text.Json;
 var s = Genapp.WorkerApi.ReadState(JsonDocument.Parse("{\"jobs\": null, \"labels\": null, \"speed\": \"fast\", \"task\": {}}").RootElement);
 if (s.Jobs.Count != 0 || s.Labels.Count != 0 || s.Speed != "fast" || s.Owner != null) throw new Exception("decoded wrongly");
+// An unset time is Go's zero time, which Go reads, where it cannot read "".
+if (new Genapp.Status().Changed != "0001-01-01T00:00:00Z" || s.Changed != "0001-01-01T00:00:00Z") throw new Exception("time " + s.Changed);
 var sent = JsonSerializer.Serialize(new Genapp.RenameRequest { Id = 3, Title = "new" });
 if (!sent.Contains("\"id\":3")) throw new Exception(sent);
 Console.WriteLine("ok");
