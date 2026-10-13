@@ -61,6 +61,12 @@ public sealed class VeroAppOptions
     /// <summary>The tray icon, as a .ico file beside the app or a path; the
     /// app's own icon when empty.</summary>
     public string Icon { get; init; } = "";
+    /// <summary>The app's accent in place of Windows' own, as "#2E6E4A", for
+    /// light mode, and AccentDark for dark mode, lighter so that it reads on
+    /// a dark background. Ticked boxes, chosen rows, default buttons and the
+    /// accent brushes then take it. Empty keeps Windows' accent.</summary>
+    public string Accent { get; init; } = "";
+    public string AccentDark { get; init; } = "";
 }
 
 /// <summary>The app: the worker, a single copy, the window, and, for an app
@@ -131,9 +137,10 @@ public class VeroApp : Application
         string worker = Path.IsPathRooted(Options.Worker) ? Options.Worker : Path.Combine(AppContext.BaseDirectory, Options.Worker);
         Vero = new VeroClient(worker, Options.Arguments);
         _ = ReadEvents();
+        ApplyAccent();
         SystemEvents.UserPreferenceChanged += (_, ev) =>
         {
-            if (ev.Category == UserPreferenceCategory.General) Dispatcher.InvokeAsync(() => DarkChanged?.Invoke(Dark));
+            if (ev.Category == UserPreferenceCategory.General) Dispatcher.InvokeAsync(() => { ApplyAccent(); DarkChanged?.Invoke(Dark); });
         };
         NetworkChange.NetworkAvailabilityChanged += (_, ev) =>
         {
@@ -612,6 +619,63 @@ public class VeroApp : Application
 
     // Light and dark.
 
+    /// <summary>Puts Options.Accent in place of Windows' accent, for light or
+    /// dark as Windows is now. Fluent fills with the darker shades in light
+    /// mode and the lighter ones in dark mode, so one set of shades, from
+    /// Accent's darkest to AccentDark's lightest, serves both. Fluent's
+    /// brushes take their colours from SystemColors' accent, so those keys
+    /// are set too, or a ticked box stays Windows' blue.</summary>
+    void ApplyAccent()
+    {
+        if (Options.Accent.Length == 0) return;
+        Color light = Hex(Options.Accent), dark = Options.AccentDark.Length > 0 ? Hex(Options.AccentDark) : Mix(light, Colors.White, 0.35);
+        Color middle = Mix(light, dark, 0.3);
+        var shades = new (string key, ResourceKey sys, ResourceKey brush, Color c)[]
+        {
+#pragma warning disable WPF0001
+            ("SystemAccentColor", SystemColors.AccentColorKey, SystemColors.AccentColorBrushKey, middle),
+            ("SystemAccentColorDark1", SystemColors.AccentColorDark1Key, SystemColors.AccentColorDark1BrushKey, light),
+            ("SystemAccentColorDark2", SystemColors.AccentColorDark2Key, SystemColors.AccentColorDark2BrushKey, Mix(light, Colors.Black, 0.22)),
+            ("SystemAccentColorDark3", SystemColors.AccentColorDark3Key, SystemColors.AccentColorDark3BrushKey, Mix(light, Colors.Black, 0.5)),
+            ("SystemAccentColorLight1", SystemColors.AccentColorLight1Key, SystemColors.AccentColorLight1BrushKey, Mix(middle, dark, 0.4)),
+            ("SystemAccentColorLight2", SystemColors.AccentColorLight2Key, SystemColors.AccentColorLight2BrushKey, dark),
+            ("SystemAccentColorLight3", SystemColors.AccentColorLight3Key, SystemColors.AccentColorLight3BrushKey, Mix(dark, Colors.White, 0.35)),
+#pragma warning restore WPF0001
+        };
+        foreach (var (key, sys, brush, c) in shades)
+        {
+            Resources[key] = c;
+            Resources[sys] = c;
+            Resources[brush] = Frozen(c);
+        }
+        bool isDark = Dark;
+        Color fill = isDark ? dark : light, text = isDark ? Mix(dark, Colors.White, 0.35) : Mix(light, Colors.Black, 0.22);
+        Color on = isDark ? Colors.Black : Colors.White;
+        Resources["AccentFillColorDefaultBrush"] = Frozen(fill);
+        Resources["AccentFillColorSecondaryBrush"] = Frozen(Color.FromArgb(0xE6, fill.R, fill.G, fill.B));
+        Resources["AccentFillColorTertiaryBrush"] = Frozen(Color.FromArgb(0xCC, fill.R, fill.G, fill.B));
+        Resources["AccentTextFillColorPrimaryBrush"] = Frozen(text);
+        Resources["AccentTextFillColorSecondaryBrush"] = Frozen(text);
+        Resources["AccentTextFillColorTertiaryBrush"] = Frozen(text);
+        Resources["TextOnAccentFillColorPrimaryBrush"] = Frozen(on);
+        Resources["TextOnAccentFillColorSecondaryBrush"] = Frozen(Color.FromArgb(0xB3, on.R, on.G, on.B));
+    }
+
+    static Color Hex(string s) => (Color)ColorConverter.ConvertFromString(s.StartsWith('#') ? s : "#" + s);
+
+    static Color Mix(Color a, Color b, double t) => Color.FromRgb(
+        (byte)Math.Round(a.R + (b.R - a.R) * t), (byte)Math.Round(a.G + (b.G - a.G) * t), (byte)Math.Round(a.B + (b.B - a.B) * t));
+
+    static SolidColorBrush Frozen(Color c)
+    {
+        var b = new SolidColorBrush(c);
+        b.Freeze();
+        return b;
+    }
+
+    /// <summary>For tests: the accent's fill now, as Fluent draws it.</summary>
+    public Color AccentFill() => TryFindResource("AccentFillColorDefaultBrush") is SolidColorBrush b ? b.Color : Colors.Transparent;
+
     /// <summary>Whether Windows is set to dark for apps.</summary>
     public bool Dark
     {
@@ -636,6 +700,12 @@ public class VeroWindow : Window
     readonly TextBlock toastText = new() { TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center, Foreground = Brushes.White };
     readonly Button toastButton = new() { Margin = new Thickness(12, 0, 0, 0), Visibility = Visibility.Collapsed };
     readonly DispatcherTimer toastTimer = new();
+    // The toast floats in a popup, a window of its own, so that a web view
+    // in the window's content, which WPF cannot draw over, does not hide it.
+    readonly System.Windows.Controls.Primitives.Popup toastPopup = new()
+    {
+        AllowsTransparency = true, StaysOpen = true, Placement = System.Windows.Controls.Primitives.PlacementMode.Relative,
+    };
     Action? toastAction;
     string updateLink = "";
     bool wrapping;
@@ -673,9 +743,16 @@ public class VeroWindow : Window
             Padding = new Thickness(16, 8, 8, 8), Margin = new Thickness(16), MaxWidth = 560,
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Bottom, Visibility = Visibility.Collapsed,
         };
-        Grid.SetRow(toastBar, 2);
-        root.Children.Add(toastBar);
+        toastPopup.Child = toastBar;
+        toastPopup.PlacementTarget = body;
         toastTimer.Tick += (_, _) => HideToast();
+        // A popup stays where it was put, over other apps too: it follows
+        // the window, and goes when the window is not in front.
+        LocationChanged += (_, _) => PlaceToast();
+        SizeChanged += (_, _) => PlaceToast();
+        Deactivated += (_, _) => toastPopup.IsOpen = false;
+        Activated += (_, _) => { if (toastBar.Visibility == Visibility.Visible) { toastPopup.IsOpen = true; PlaceToast(); } };
+        StateChanged += (_, _) => { if (WindowState == WindowState.Minimized) toastPopup.IsOpen = false; };
 
         // Ctrl+Z and Ctrl+Shift+Z undo what the worker did. A text box
         // handles them first, for its own text.
@@ -740,6 +817,8 @@ public class VeroWindow : Window
         toastButton.Visibility = button.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         toastAction = pressed;
         toastBar.Visibility = Visibility.Visible;
+        toastPopup.IsOpen = IsActive;
+        PlaceToast();
         toastTimer.Stop();
         if (seconds > 0)
         {
@@ -754,7 +833,21 @@ public class VeroWindow : Window
     {
         toastTimer.Stop();
         toastBar.Visibility = Visibility.Collapsed;
+        toastPopup.IsOpen = false;
         toastAction = null;
+    }
+
+    // At the bottom of the content, in the middle.
+    void PlaceToast()
+    {
+        if (!toastPopup.IsOpen) return;
+        toastBar.Measure(new Size(body.ActualWidth, double.PositiveInfinity));
+        var size = toastBar.DesiredSize;
+        double x = Math.Max(0, (body.ActualWidth - size.Width) / 2), y = Math.Max(0, body.ActualHeight - size.Height);
+        // A popup moves only when its offset changes, so it is nudged first.
+        toastPopup.HorizontalOffset = x + 0.5;
+        toastPopup.HorizontalOffset = x;
+        toastPopup.VerticalOffset = y;
     }
 
     /// <summary>For tests: what the banners and toast show.</summary>

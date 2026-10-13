@@ -73,6 +73,33 @@ public static class VeroWeb
         return $"<meta http-equiv=\"Content-Security-Policy\" content=\"{WebUtility.HtmlEncode(policy)}\">{html}";
     }
 
+    /// <summary>What a light page starts with, before its own styles, which
+    /// win: a white background and dark text, whatever Windows' own mode, as
+    /// mail is written for.</summary>
+    public const string LightStart = "<meta name=\"color-scheme\" content=\"light\"><style>html{background:#fff;color:#000}</style>";
+
+    /// <summary>Above this, WebView2 refuses a page given as a string, so a
+    /// larger one is shown from a file of its own.</summary>
+    const int StringLimit = 1_500_000;
+
+    /// <summary>Shows a page, from a string or, when it is too large for
+    /// one, from a file in folder, which it gives back so that the
+    /// navigation to it is let through.</summary>
+    public static string Show(CoreWebView2 core, string page, string folder)
+    {
+        if (System.Text.Encoding.UTF8.GetByteCount(page) <= StringLimit)
+        {
+            core.NavigateToString(page);
+            return "";
+        }
+        Directory.CreateDirectory(folder);
+        string file = Path.Combine(folder, "page.html");
+        File.WriteAllText(file, page);
+        string uri = new Uri(file).AbsoluteUri;
+        core.Navigate(uri);
+        return uri;
+    }
+
     /// <summary>HTML's text, for where there is no web view.</summary>
     public static string PlainText(string html)
     {
@@ -100,6 +127,18 @@ public class VeroHtmlView : ContentControl
     public bool Remote { get; set; }
     public string Policy { get; set; } = VeroWeb.HtmlPolicy;
     public Func<string, bool>? LinkClicked { get; set; }
+    /// <summary>Shows a page that sets no colours of its own dark on white,
+    /// as mail is written for, rather than as Windows' dark mode would.</summary>
+    public bool Light { get; set; }
+    // The file a large page is shown from, which navigation may reach.
+    string pageFile = "";
+
+    /// <summary>How large the page is shown, 1 being as it is.</summary>
+    public double Zoom
+    {
+        get => web?.ZoomFactor ?? 1;
+        set { if (web is not null) web.ZoomFactor = value; }
+    }
 
     public VeroHtmlView(string app)
     {
@@ -135,13 +174,14 @@ public class VeroHtmlView : ContentControl
             core.Settings.AreDefaultContextMenusEnabled = false;
             core.NavigationStarting += (_, e) =>
             {
-                if (e.Uri.StartsWith("data:") || e.Uri.StartsWith("about:")) return;
+                if (e.Uri.StartsWith("data:") || e.Uri.StartsWith("about:") || e.Uri == pageFile) return;
                 e.Cancel = true;
                 Clicked(e.Uri);
             };
             core.NewWindowRequested += (_, e) => { e.Handled = true; Clicked(e.Uri); };
         }
-        web.CoreWebView2!.NavigateToString(VeroWeb.WithPolicy(html, Policy, Remote));
+        string page = VeroWeb.WithPolicy((Light ? VeroWeb.LightStart : "") + html, Policy, Remote);
+        pageFile = VeroWeb.Show(web.CoreWebView2!, page, Path.Combine(dataFolder, "page"));
     }
 
     void Clicked(string uri)
@@ -180,6 +220,8 @@ public sealed class VeroPdfWriter : IDisposable
     public string Paper { get; set; } = "";
     public double Margin { get; set; } = 12.7;
     CoreWebView2Environment? env;
+    // The file a large page is written from, which navigation may reach.
+    string pageFile = "";
 
     public VeroPdfWriter(string app) => dataFolder = VeroWeb.DataFolder(app, "WebView2-pdf");
 
@@ -205,13 +247,15 @@ public sealed class VeroPdfWriter : IDisposable
                 web.CoreWebView2.Settings.IsScriptEnabled = false;
                 web.CoreWebView2.NavigationStarting += (_, e) =>
                 {
-                    if (!e.Uri.StartsWith("data:") && !e.Uri.StartsWith("about:")) e.Cancel = true;
+                    if (!e.Uri.StartsWith("data:") && !e.Uri.StartsWith("about:") && e.Uri != pageFile) e.Cancel = true;
                 };
             }
             var loaded = new TaskCompletionSource<bool>();
             void Done(object? _, CoreWebView2NavigationCompletedEventArgs e) => loaded.TrySetResult(e.IsSuccess);
             web.CoreWebView2.NavigationCompleted += Done;
-            web.CoreWebView2.NavigateToString(VeroWeb.WithPolicy(html, Policy, Remote));
+            string page = VeroWeb.WithPolicy(VeroWeb.LightStart + html, Policy, Remote);
+            pageFile = new Uri(Path.Combine(dataFolder, "pdf", "page.html")).AbsoluteUri;
+            pageFile = VeroWeb.Show(web.CoreWebView2, page, Path.Combine(dataFolder, "pdf"));
             bool ok = await loaded.Task;
             web.CoreWebView2.NavigationCompleted -= Done;
             if (!ok) return "The page could not be shown.";

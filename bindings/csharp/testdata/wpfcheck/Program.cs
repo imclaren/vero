@@ -50,6 +50,8 @@ public sealed class CheckApp : VeroApp
         Worker = worker,
         MenuBar = scenario == "tray",
         Tray = scenario == "windowtray",
+        Accent = scenario == "window" ? "#2E6E4A" : "",
+        AccentDark = scenario == "window" ? "#6DAF7E" : "",
     })
     {
         this.output = output;
@@ -110,6 +112,10 @@ public sealed class CheckApp : VeroApp
             Expect(refused.Length > 0, "the refusal reached failed");
             Expect(await Ask(() => Vero.CallAsync("status", new { })) is JsonElement, "a function as the request");
 
+            // The app's accent in place of Windows' own.
+            var accent = AccentFill();
+            Expect(accent == (Dark ? System.Windows.Media.Color.FromRgb(0x6D, 0xAF, 0x7E) : System.Windows.Media.Color.FromRgb(0x2E, 0x6E, 0x4A)), $"the app's accent: {accent}");
+
             w.Problem("Something is wrong.");
             w.ShowUpdate("vero check 2 is out.", "https://example.com");
             var dismiss = w.Toast("Sent.", "Undo", () => { });
@@ -142,11 +148,18 @@ public sealed class CheckApp : VeroApp
             {
                 string folder = Path.Combine(Path.GetTempPath(), "vero-check-pdf");
                 Directory.CreateDirectory(folder);
-                foreach (var n in new[] { 1, 2 })
+                foreach (var n in new[] { 1, 2, 3 })
                 {
                     string path = Path.Combine(folder, $"{n}.pdf");
                     File.Delete(path);
-                    string body = n == 2 ? string.Concat(Enumerable.Repeat("<p>A paragraph of a receipt, long enough to fill a line or two of the page.</p>", 150)) : "<p>Hello.</p>";
+                    // The third is larger than WebView2 takes as a string,
+                    // as mail with pictures in it can be.
+                    string body = n switch
+                    {
+                        2 => string.Concat(Enumerable.Repeat("<p>A paragraph of a receipt, long enough to fill a line or two of the page.</p>", 150)),
+                        3 => "<p>Hello.</p><!--" + new string('x', 2_500_000) + "-->",
+                        _ => "<p>Hello.</p>",
+                    };
                     string error = await pdf.Write($"<h1>Message {n}</h1>{body}", path);
                     if (VeroWeb.HasWebView)
                     {
@@ -159,7 +172,7 @@ public sealed class CheckApp : VeroApp
                         double pw = box.Success ? double.Parse(box.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture) : 0;
                         double ph = box.Success ? double.Parse(box.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture) : 0;
                         Expect(Math.Abs(pw - 595.3) < 3 && Math.Abs(ph - 841.9) < 3, $"PDF {n} is on A4: {pw} by {ph}");
-                        Expect(n == 1 ? pages == 1 : pages > 1, $"PDF {n} has {pages} pages");
+                        Expect(n == 2 ? pages > 1 : pages == 1, $"PDF {n} has {pages} pages");
                     }
                     else
                         Expect(error.Contains("web view"), $"no PDF without a web view: {error}");
