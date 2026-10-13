@@ -20,6 +20,10 @@ echo "== Swift"
 (cd testdata/swiftcancel && swift build -q && .build/debug/SwiftCancel "$TMP/worker") || failed=1
 echo "== Swift's PDFs"
 (cd testdata/swiftpdf && swift build -q && .build/debug/SwiftPDF) || failed=1
+# Sparkle starts only inside an app bundle with a feed, so the updater is
+# built here, and run by the apps that use it.
+echo "== Swift's updater"
+swift build -q --product VeroUpdates || failed=1
 echo "== C#"
 dotnet run -v q --project bindings/csharp/testdata/cancelcheck -- "$TMP/worker" || failed=1
 [ "$failed" = 0 ] && echo "PASS" || { echo "FAIL" >&2; exit 1; }

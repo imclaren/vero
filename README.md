@@ -167,7 +167,11 @@ worker in `cmd/worker` of the app's own module, and `vero add desktop` in
 the module's folder for the front ends and `vero-app.toml`. An existing
 SwiftUI app uses vero's Swift package with the worker bundled in its
 Resources, as `macos/` does, and names its Xcode project in `[macos]`.
-Then `vero ship` works as above. [PACKAGING.md](PACKAGING.md) covers
+For updates, it adds the package's `VeroUpdates` product, whose
+`VeroUpdater` is Sparkle set up for an app that people leave open: it
+installs an update as soon as the app is not busy, rather than when the
+app quits, and its `isBusy` holds the update back while the worker is in
+the middle of something. Then `vero ship` works as above. [PACKAGING.md](PACKAGING.md) covers
 the settings in full.
 
 ## Build and run the macOS example

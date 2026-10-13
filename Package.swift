@@ -14,6 +14,13 @@ let package = Package(
     platforms: [.macOS(.v12)],
     products: [
         .library(name: "Vero", targets: ["Vero"]),
+        // Sparkle, set up for a vero app. A separate product, so that an
+        // app on the App Store, which may not update itself, leaves
+        // Sparkle out.
+        .library(name: "VeroUpdates", targets: ["VeroUpdates"]),
+    ],
+    dependencies: [
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.5.1"),
     ],
     targets: [
         // The C archive built from ./cshim, which is the same for every
@@ -29,5 +36,6 @@ let package = Package(
             checksum: "5814df19aaad93efe360b54b8b68dcf94a5894303feae28bb4a6f87304567cfc"
         ) : .binaryTarget(name: "CVero", path: "dist/CVero.xcframework"),
         .target(name: "Vero", dependencies: ["CVero"]),
+        .target(name: "VeroUpdates", dependencies: [.product(name: "Sparkle", package: "Sparkle")]),
     ]
 )
