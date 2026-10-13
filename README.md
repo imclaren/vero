@@ -6,11 +6,11 @@ Run a Go binary embedded in a native (e.g. macOS SwiftUI) app. The Go binary and
 
 [![Go reference](https://pkg.go.dev/badge/github.com/imclaren/vero.svg)](https://pkg.go.dev/github.com/imclaren/vero)
 
-[Ship an app from one Go file](#ship-an-app-from-one-go-file) ·
 [Build and run the macOS example](#build-and-run-the-macos-example) ·
 [Create a vero macOS app](#create-a-vero-macos-app) ·
-[Build and run the example on all platforms using your Mac](#build-and-run-the-example-on-all-platforms-using-your-mac) ·
-[Taking your app to more platforms, and packaging it](#taking-your-app-to-more-platforms-and-packaging-it)
+[Ship an app from one Go file](docs/ship.md) ·
+[Build and run the example on all platforms using your Mac](docs/all-platforms.md) ·
+[Taking your app to more platforms, and packaging it](docs/more-platforms.md)
 
 | Operating system | Example | Required on your Mac to build and run | Build and run on your Mac |
 |---|:---:|---|---|
@@ -29,150 +29,6 @@ Run a Go binary embedded in a native (e.g. macOS SwiftUI) app. The Go binary and
 | **Plan 9** — `plan9/386`, **`plan9/amd64`**, `plan9/arm` | <a href="example/plan9-app"><img src="docs/screenshots/plan9.gif" width="300"></a> | qemu, which can be installed by running [`setup-plan9.sh`](scripts/setup-plan9.sh) | Builds and runs. The same three rows drawn with libdraw in a rio window, started in a VM by running [`scripts/run-plan9.sh`](scripts/run-plan9.sh); `--test` runs vero's test suite there instead. Plan 9 is x86 only, so the VM is emulated. We also had to fix the Go libdraw it uses because it did not build for Plan 9 until [9fans/go#147](https://github.com/9fans/go/pull/147), so the example pins our fork carrying that fix. |
 | **Solaris** — **`solaris/amd64`** | — | — | Builds by running [`scripts/build-all.sh`](scripts/build-all.sh), and does not run. Oracle Solaris needs an Oracle account and licence to download, and runs on x86, which this Mac emulates rather than virtualises. Oracle's repository ships GTK 3, not GTK 4, so the GTK example would not run there as written; the worker and vero's tests would work. |
 | **AIX** — **`aix/ppc64`** | — | — | Builds by running [`scripts/build-all.sh`](scripts/build-all.sh), and does not run. There is no public AIX media: IBM provides it only under entitlement, with POWER hardware. qemu can emulate `pseries`, but there is nothing to boot on qemu. |
-
-## Ship an app from one Go file
-
-### Before you start
-
-You need:
-
-- a Mac with Apple silicon;
-- Homebrew, from [https://brew.sh](https://brew.sh);
-- Go, with `brew install go`;
-- Xcode, from the App Store;
-- a Developer ID Application certificate in your keychain, from the Apple
-  Developer Program, and a Developer ID Installer certificate as well if
-  you want a `.pkg`;
-- for Windows, Microsoft's Windows 11 ARM64 ISO in `~/vm/vero-windows/`.
-  Microsoft will not serve it to a script, so download it yourself from
-  [https://www.microsoft.com/en-us/software-download/windows11arm64](https://www.microsoft.com/en-us/software-download/windows11arm64).
-
-Then install vero into Homebrew's folder of programs, which is already on
-your `PATH`, and let it set up the rest:
-
-```bash
-GOBIN=$(brew --prefix)/bin go install github.com/imclaren/vero/cmd/vero@latest
-vero setup
-```
-
-`vero setup` installs the tools that every system needs, such as colima,
-Docker, qemu, the .NET SDK, makensis and ffmpeg. It makes the notarytool
-profile named `vero`, for which it asks for your Apple ID, your team ID
-and an app-specific password. Then it lists anything still missing.
-
-### Write the worker
-
-A worker is a Go program that keeps the app's state and answers its
-requests. Every window, on every system, shows the state that the worker
-pushes and sends the requests that it answers. This one counts:
-
-```go
-package main
-
-import (
-	"flag"
-
-	"github.com/imclaren/vero"
-)
-
-var version = "0.1.0"
-
-// Status is what every window shows. The worker pushes it on each change.
-type Status struct {
-	Count int `json:"count"`
-}
-
-// By is what the add request takes.
-type By struct {
-	N int `json:"n"`
-}
-
-func main() {
-	var opts vero.WorkerOptions
-	opts.Version = version
-	opts.RegisterFlags(flag.CommandLine)
-	flag.Parse()
-	opts.PrintVersionAndExit()
-
-	w := vero.NewWorker(opts)
-	state := vero.NewState(w, Status{})
-	vero.Update(state, "status", func(*Status) error { return nil })
-	vero.UpdateWith(state, "add", func(s *Status, req By) error {
-		s.Count += req.N
-		return nil
-	})
-	if err := w.Serve(); err != nil {
-		w.Log("stopped: %v", err)
-	}
-}
-```
-
-A handler's context ends when the front end stops waiting for its reply,
-as a window does when what asked has scrolled out of sight, and when the
-front end goes away. A handler that does slow work watches `ctx.Done()` and
-stops early. Swift cancels a request with its task, C# with a
-`CancellationToken`, and Python and Kotlin with a `Cancel`.
-
-### Ship it
-
-```bash
-vero ship counter.go
-```
-
-`vero ship` makes an app called `counter` from the file, with a window for
-the Mac, for Linux, the BSDs and illumos, and for Windows. Before it does
-anything else, it prints what it will build and test on this Mac, what it
-will skip and why, and how long each virtual machine takes to make the
-first time. Then it tests the app on every system it can, records each
-one, and releases it. It stops at the first failure, and says where its
-log is.
-
-### What you get
-
-| | |
-|---|---|
-| The app | `counter/`, a Go module with the worker in `cmd/worker`, a SwiftUI app in `macos/`, a GTK app in `gtk/`, a WPF app in `windows/`, an icon, and `vero-app.toml`, which describes it |
-| Installers | a signed and notarised `.dmg` for the Mac, packages for Debian, Fedora, openSUSE, Arch, Alpine, Void, Chimera, FreeBSD, DragonFly, NetBSD, OpenBSD and illumos, and installers for Windows |
-| A site | `dist/site`, plain files to put on any web server, with a page that offers each system its installer, and signed repositories through which every system updates the app |
-| Recordings | each system's window as a GIF and a picture, in `~/.cache/vero/test-results/`, with one page of every result, which the site's page shows too |
-
-### What it cannot do
-
-- It cannot make an app for iOS, Android or the browser by itself, since
-  each of those runs the worker inside the app. `vero add ios`, `vero add
-  android` and `vero add web` write those front ends, and
-  [PACKAGING.md](PACKAGING.md) says how to release them.
-- It does not choose where the site lives. Put its address in `site` in
-  `vero-app.toml`, and `vero ship --upload user@host:/path` copies it to
-  your server, or copy `dist/site` there yourself. Until then, the site is
-  made for `http://localhost:8080`, to look at.
-- It does not sign the Windows installers, which needs a certificate of
-  your own. Until then, Windows asks people once whether to run them, as
-  the site's page explains.
-
-### After the first time
-
-Change `counter/cmd/worker/main.go`, or the windows in `counter/macos`,
-`counter/gtk` and `counter/windows`, and run `vero ship` in `counter/`.
-Each release takes the next version. Add steps to `[test]` in
-`vero-app.toml` so that each recording shows the app at work.
-`vero ship --plan` says what it would do and stops, `--no-release` tests
-without releasing, and `--only "macos debian"` tests on just those
-systems.
-
-### Bringing an existing app to vero
-
-An app whose worker is already a Go program needs the same layout: the
-worker in `cmd/worker` of the app's own module, and `vero add desktop` in
-the module's folder for the front ends and `vero-app.toml`. An existing
-SwiftUI app uses vero's Swift package with the worker bundled in its
-Resources, as `macos/` does, and names its Xcode project in `[macos]`.
-For updates, it adds the package's `VeroUpdates` product, whose
-`VeroUpdater` is Sparkle set up for an app that people leave open: it
-installs an update as soon as the app is not busy, rather than when the
-app quits, and its `isBusy` holds the update back while the worker is in
-the middle of something. Then `vero ship` works as above. [PACKAGING.md](PACKAGING.md) covers
-the settings in full.
 
 ## Build and run the macOS example
 
@@ -424,61 +280,11 @@ Press Cmd-R in Xcode. The icon appears in the menu bar, and spins while the
 worker has jobs in flight. Click the menu bar icon to see progress changes.
 Click the button on a row to restart that job.
 
-## Build and run the example on all platforms using your Mac
+## More
 
-[`./scripts/setup.sh`](scripts/setup.sh) installs what every platform
-needs, with Homebrew. Four things it cannot install for you:
-
-- Homebrew itself, from [https://brew.sh](https://brew.sh);
-- Go, with `brew install go`;
-- Xcode, from the App Store;
-- a Windows 11 ARM64 ISO, which Microsoft will not serve to a script.
-  Download it from
-  [https://www.microsoft.com/en-us/software-download/windows11arm64](https://www.microsoft.com/en-us/software-download/windows11arm64)
-  and put it in `~/vm/vero-windows/`.
-
-[`./scripts/doctor.sh`](scripts/doctor.sh) says what is there and what is
-missing, which VMs are made, and how much disk they need. The scripts
-assume a Mac with Apple silicon.
-
-[`./scripts/run.sh`](scripts/run.sh) then builds and opens the example on
-macOS (natively), and Linux and Windows (by showing the app in VMs) side
-by side. Each other system has a `scripts/run-*.sh` of its own, in the
-table above, which makes its VM the first time.
-
-[`./scripts/test-all.sh`](scripts/test-all.sh) tests the example, or your
-app with `--app vero-app.toml`, on every system at once: it installs it
-from a site it builds, starts it and plays its test steps, records each
-system as a GIF and a picture, checks that the system's own updates bring
-the next version, and shows every result on one page.
-
-All targets in **bold** (e.g. `darwin/arm64`), other than `android/arm64`,
-`ios/arm64` and `js/wasm`, can be built by running
-[`./scripts/build-all.sh`](scripts/build-all.sh).
-[`android/arm64`](example/android-app/build.sh),
-[`ios/arm64`](example/ios-app/build.sh) and
-[`js/wasm`](example/web-app/build.sh) have their own build scripts because
-they do not build a standalone worker. To build targets not in bold, specify
-them when building: `TARGETS=plan9/386 ./scripts/build-all.sh`.
-
-† targets need a C toolchain: either an NDK for the three Androids that are
-not `arm64`, or the Simulator SDK for `ios/amd64`. The other 43 targets only
-need Go.
-
-## Taking your app to more platforms, and packaging it
-
-vero can add front ends for more platforms to your app: `vero add` writes a
-starter for each, wired to your worker, with a checklist of what to change.
-`vero release` then builds your app's installers for every system, and a
-website of plain files that people install from and get updates from:
-signed repositories for Linux and the BSDs, a disk image and Sparkle
-updates for macOS, an installer and winget for Windows, and more. A
-release needs only your Mac, and no account with anyone; `vero
-credentials` is the checklist for signing and the stores, when you want
-them.
-
-[Taking your app to more platforms, and packaging it](PACKAGING.md) explains
-both, step by step.
+- [Ship an app from one Go file](docs/ship.md) explains how `vero ship` makes, tests and releases an app for every system from one Go file, and how to bring an existing app to vero.
+- [Build and run the example on all platforms using your Mac](docs/all-platforms.md) explains how to install what each platform needs, and how to build, run and test the example on every system from your Mac.
+- [Taking your app to more platforms, and packaging it](docs/more-platforms.md) explains how `vero add` and `vero release` take your app to more platforms and build its installers and update site.
 
 ## Licence
 
