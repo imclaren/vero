@@ -93,16 +93,21 @@ public final class VeroClient: ObservableObject {
     ///     let worker = try VeroClient(
     ///         bundledWorker: "myapp-worker",
     ///         directoryName: "MyApp/bin")
+    ///
+    /// replace says when the shipped worker replaces the copy on disk:
+    /// `.whenDifferent` for an app whose worker always ships with it.
     public convenience init(
         bundledWorker name: String,
         directoryName: String,
         supersededNames: [String] = [],
+        replace: VeroWorkerBundle.Replace = .whenNewer,
         arguments: [String] = []
     ) throws {
         let bundle = VeroWorkerBundle(
             bundledName: name,
             directoryName: directoryName,
-            supersededNames: supersededNames)
+            supersededNames: supersededNames,
+            replace: replace)
         let url = try bundle.prepare()
         try self.init(workerPath: url.path, arguments: arguments)
         self.bundle = bundle

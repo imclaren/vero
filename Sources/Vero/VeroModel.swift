@@ -67,6 +67,7 @@ public final class VeroModel<State: Decodable>: ObservableObject {
         bundledWorker name: String,
         directoryName: String,
         supersededNames: [String] = [],
+        replace: VeroWorkerBundle.Replace = .whenNewer,
         arguments: [String] = []
     ) {
         do {
@@ -74,6 +75,7 @@ public final class VeroModel<State: Decodable>: ObservableObject {
                 bundledWorker: name,
                 directoryName: directoryName,
                 supersededNames: supersededNames,
+                replace: replace,
                 arguments: arguments)
             adopt(worker)
         } catch {
