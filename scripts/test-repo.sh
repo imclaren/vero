@@ -19,7 +19,7 @@
 #   scripts/test-repo.sh --vm netbsd              # pkgin, in vero's NetBSD VM
 #   scripts/test-repo.sh --vm openbsd             # pkg_add, in vero's OpenBSD VM
 #   scripts/test-repo.sh --vm dragonfly           # pkg, in vero's DragonFly VM
-#   scripts/test-repo.sh --vm illumos             # pkgin, with pkgsrc, in vero's OpenIndiana VM
+#   scripts/test-repo.sh --vm illumos             # pkg, from an IPS repository, in vero's OpenIndiana VM
 #   scripts/test-repo.sh --mac                    # the disk image, on this Mac, and the appcast
 #   scripts/test-repo.sh --vm windows             # the installer and the MSIX, in vero's Windows VM, over SSH
 #   [--app path/to/vero-app.toml] [--port 8642] [--no-launch] [--limit SECONDS]

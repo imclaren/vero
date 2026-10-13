@@ -4,7 +4,7 @@
 #
 #   vero release                      from the folder this file is in
 #
-# The README's "Creating app installers" section goes through it all.
+# docs/release.md goes through it all, and PACKAGING.md lists every setting.
 
 # The package and command name: lower case letters, digits and hyphens.
 name = "vero-example"

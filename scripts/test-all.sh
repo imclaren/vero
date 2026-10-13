@@ -14,7 +14,7 @@
 # flatpak freebsd netbsd openbsd dragonfly illumos windows, and mac for
 # vero's example (an app of your own records the Mac with record-mac.sh).
 # A VM is made the first time it is needed, which takes from minutes to
-# more than an hour (cmd/vero-repo/README.md says how long each takes),
+# more than an hour (the README's table of systems says how long each takes),
 # and needs room: run scripts/doctor.sh to see what is missing.
 #
 # Each system's log is in ~/.cache/vero/test-runs/, and a line for each
