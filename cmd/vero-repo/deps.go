@@ -30,7 +30,7 @@ import (
 // then uses plain GTK 4, but recommending it does no harm.
 //
 // The names were checked against each system's package index on 12 October
-// 2026.
+// 2026, and the fonts for openSUSE and Chimera on 13 October.
 
 var knownUses = []string{"adwaita", "webview", "keyring"}
 
@@ -57,7 +57,8 @@ var linuxDeps = map[string]sysDeps{
 	// Fedora's and openSUSE's names differ; rpm's rich dependencies take
 	// whichever the system has.
 	"rpm": {
-		base: []string{"python3 >= 3.11", "python3-gobject", "(typelib(Gtk) = 4.0 if openSUSE-release else (gtk4 and gobject-introspection))"},
+		// openSUSE's GTK brings no font, so an app drew no text there.
+		base: []string{"python3 >= 3.11", "python3-gobject", "(typelib(Gtk) = 4.0 if openSUSE-release else (gtk4 and gobject-introspection))", "(dejavu-fonts if openSUSE-release)"},
 		need: map[string][]string{"ffmpeg": {"(ffmpeg or ffmpeg-free)"}},
 		recommend: map[string][]string{
 			"adwaita": {"(typelib(Adw) = 1 if openSUSE-release else libadwaita)"},
@@ -80,7 +81,7 @@ var linuxDeps = map[string]sysDeps{
 		need: map[string][]string{"adwaita": {"libadwaita"}, "ffmpeg": {"ffmpeg6"}},
 	},
 	"chimera": {
-		base: []string{"python", "python-gobject", "gtk4"},
+		base: []string{"python", "python-gobject", "gtk4", "fonts-dejavu"},
 		need: map[string][]string{"adwaita": {"libadwaita"}, "ffmpeg": {"ffmpeg"}},
 	},
 }

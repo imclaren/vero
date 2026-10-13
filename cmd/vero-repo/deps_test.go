@@ -112,3 +112,19 @@ func TestResolveDepsUnknown(t *testing.T) {
 		t.Errorf("an app without uses changed: %+v, %v", g.Deb, err)
 	}
 }
+
+// TestEveryLinuxHasAFont: GTK draws no text without a font, and Alpine,
+// Void, Chimera and openSUSE bring none with it.
+func TestEveryLinuxHasAFont(t *testing.T) {
+	for _, sys := range []string{"alpine", "void", "chimera", "rpm"} {
+		found := false
+		for _, p := range linuxDeps[sys].base {
+			if strings.Contains(p, "dejavu") {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("%s's packages have no font: %v", sys, linuxDeps[sys].base)
+		}
+	}
+}
