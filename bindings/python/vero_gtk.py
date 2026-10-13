@@ -141,10 +141,14 @@ def _load_css() -> None:
         return
     _css_loaded = True
     provider = Gtk.CssProvider()
+    # libadwaita names the accent colour; plain GTK does not, so it is
+    # named here, as GNOME's blue, or the banners and avatars that use it
+    # have no colour, and an avatar's white initials vanish.
+    css = _CSS if Adw is not None else "@define-color accent_bg_color #3584e4;\n" + _CSS
     if hasattr(provider, "load_from_string"):
-        provider.load_from_string(_CSS)
+        provider.load_from_string(css)
     else:
-        provider.load_from_data(_CSS.encode())
+        provider.load_from_data(css.encode())
     Gtk.StyleContext.add_provider_for_display(Gdk_display(), provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 
 
@@ -1000,13 +1004,16 @@ class App(_Base):  # type: ignore[misc, valid-type]
     opened is told what the app was asked to open: links, such as mailto:
     or the app's own scheme, and files, as given on the command line or
     from the file manager, whether to this copy or to a second one, which
-    passes them on and stops.
+    passes them on and stops. on_hidden is called when closing the main
+    window hides it and the app keeps running, as for an app that says,
+    the first time, that it is still running in the tray.
     """
 
     def __init__(self, app_id: str, name: str, worker: str, arguments: list[str] | None = None, *,
                  window: Callable[["App"], Gtk.Window] | None = None,
                  small_window: Callable[["App"], Gtk.Window] | None = None,
-                 tray: bool = False, icon: str = "", opened: Callable[[list[str]], Any] | None = None) -> None:
+                 tray: bool = False, icon: str = "", opened: Callable[[list[str]], Any] | None = None,
+                 on_hidden: Callable[[], Any] | None = None) -> None:
         flags = Gio.ApplicationFlags.HANDLES_COMMAND_LINE
         self._local: _LocalCopy | None = None
         if not has_session_bus():
@@ -1024,6 +1031,7 @@ class App(_Base):  # type: ignore[misc, valid-type]
         self.keeps_running = tray or self.tray_app
         self.icon = icon or app_id
         self.opened = opened
+        self.on_hidden = on_hidden
         self.vero: Vero | None = None
         self.window: Gtk.Window | None = None
         self.small: Gtk.Window | None = None
@@ -1185,6 +1193,8 @@ class App(_Base):  # type: ignore[misc, valid-type]
             return True
         if window is self.window and self._tray_possible():
             window.set_visible(False)
+            if self.on_hidden is not None:
+                self.on_hidden()
             return True
         if window is self.window and self.tray_app and self.small is not None and self.small.get_visible():
             window.set_visible(False)
@@ -1700,8 +1710,9 @@ def web_bridge(view: Any, name: str, received: Callable[[Any, Callable[[Any], No
     in a web view (from webkit().WebView, which exists only where
     has_webview() is true). The page sends with
     window.webkit.messageHandlers[name].postMessage(value); received gets
-    the value and a function that replies to it. Returns a function that
-    runs a script in the page."""
+    the value and a function that replies to it: with a value, or, given
+    error=, with that error, which the page's promise rejects with. Returns
+    a function that runs a script in the page."""
     gi.require_version("JavaScriptCore", "6.0")
     from gi.repository import JavaScriptCore
 
@@ -1713,7 +1724,14 @@ def web_bridge(view: Any, name: str, received: Callable[[Any, Callable[[Any], No
         except (AttributeError, ValueError, TypeError):
             data = None
         context = value.get_context()
-        received(data, lambda v: reply.return_value(JavaScriptCore.Value.new_from_json(context, json.dumps(v))))
+
+        def answer(v: Any = None, error: str = "") -> None:
+            if error:
+                reply.return_error_message(error)
+            else:
+                reply.return_value(JavaScriptCore.Value.new_from_json(context, json.dumps(v)))
+
+        received(data, answer)
         return True
 
     manager.connect(f"script-message-with-reply-received::{name}", got)

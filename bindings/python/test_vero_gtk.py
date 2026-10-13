@@ -130,7 +130,8 @@ class GtkLibraryTests(unittest.TestCase):
         """A window app with a tray icon: closing its window leaves it in the
         tray, and the icon brings the window back."""
         out = self.with_watcher("windowtray", "vero windowtray")
-        for line in ("window at start", "window hidden, still running", "window back from the tray"):
+        for line in ("window at start", "told that the window was hidden", "window hidden, still running",
+                     "window back from the tray"):
             self.assertIn(line, out)
 
     @unittest.skipUnless(os.environ.get("VERO_TEST_KEYCHAIN_WORKER"), "no keychain worker")
@@ -344,7 +345,8 @@ def scenario(name: str, worker: str, args: list[str]) -> int:
             return True
 
         app = vg.App("com.calmdocs.vero.test.windowtray", "vero windowtray", worker,
-                     window=lambda a: vg.Window(a, "vero windowtray"), tray=True)
+                     window=lambda a: vg.Window(a, "vero windowtray"), tray=True,
+                     on_hidden=lambda: print("told that the window was hidden", flush=True))
         later(1, first)
         GLib.timeout_add(250, look)
         return app.run(["vero-test", *args])
