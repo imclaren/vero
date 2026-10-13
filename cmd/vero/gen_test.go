@@ -210,3 +210,11 @@ Console.WriteLine("ok");
 		t.Fatalf("%v\n%s", err, out)
 	}
 }
+
+// TestReplyIsTaken: a worker's type called Reply, as kit/update has, would
+// make a request's typealias Reply = Reply refer to itself in Swift.
+func TestReplyIsTaken(t *testing.T) {
+	if !takenNames["Reply"] {
+		t.Error("Reply is not among the names a worker's type cannot keep")
+	}
+}

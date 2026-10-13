@@ -593,7 +593,7 @@ func init() {
 		App Scene Window WindowGroup Settings View Text Image Button Label List Section Form Group Menu
 		Link Toggle Picker Color Font Path Shape Table Grid Stack Spacer Divider Alert Binding State
 		Environment Animation Transaction Gesture Commands Tab Toolbar Sheet
-		JSONValue EmptyReply NamedRequest Vero VeroClient VeroModel VeroError Worker WorkerApi
+		JSONValue EmptyReply NamedRequest Reply Vero VeroClient VeroModel VeroError Worker WorkerApi
 		Object Exception Action Func Delegate Attribute Enum Math Convert Console Environment Guid
 		TimeSpan DateTime DateTimeOffset Dictionary HashSet Queue Stack JsonElement JsonSerializer
 		Window Application Control Brush Brushes Colors Thickness Visibility Point Size Rect
