@@ -106,6 +106,7 @@ either of them.
 
 ## See also
 
-- [example/gtk-app](.) - this app, finished and runnable
-- [README](../../README.md) - the same worker with a macOS SwiftUI app
-- [example/wpf-app](../wpf-app) - the same worker with a Windows WPF app
+- [example/gtk-app](.) is this app, finished and runnable.
+- [The front ends](../../docs/front-ends.md#a-mac-app-by-hand-in-xcode) drives the same worker with a macOS SwiftUI app.
+- [example/wpf-app](../wpf-app) drives the same worker with a Windows WPF app.
+- [Package and release](../../docs/release.md) packages a GTK app for Linux, the BSDs and illumos.

@@ -1,199 +1,60 @@
-# Taking your app to more platforms, and packaging it
+# vero-app.toml
 
-[Back to vero's README](README.md)
+This page lists the settings in `vero-app.toml`, the file that describes
+an app to vero's packaging and tests. `vero new` and `vero add` write it
+beside the app's `go.mod`, and [`example/vero-app.toml`](example/vero-app.toml)
+has a comment on every setting. Paths in it are relative to the file.
+[Package and release](docs/release.md) goes through the steps that use it.
 
-A few commands do all of it. `vero new` makes an app, `vero add` writes
-a front end for each system, `vero release` builds the installers and the
-site, and `vero credentials` is the checklist for signing and the stores,
-when you want them. Start with [a worked example](#a-worked-example), which takes a
-small app from macOS to an install page with them. The rest of the guide
-has two parts. [Taking your app to more
-platforms](#taking-your-app-to-more-platforms) adds front ends for the
-systems you want; skip it if your app already runs everywhere you want it
-to. [Creating app installers](#creating-app-installers) then builds the
-installers for every system your app has, and the website people install
-and update from.
+## The app
 
-## A worked example
+| Setting | What it is |
+|---|---|
+| `name` | The package and command name, in lower case letters, digits and hyphens. |
+| `display_name` | The name that people see, in menus and on the install page. |
+| `id` | A reverse-domain name of your own, such as `com.example.myapp`, by which systems tell apps apart. |
+| `version` | Usually given with `--version` instead, or worked out by `vero release`. |
+| `summary` | One line about the app. |
+| `description` | A paragraph or two, for package managers and software centres. A blank line starts a new paragraph. |
+| `publisher` | Who publishes the app, as `"Name <email>"`. |
+| `homepage` | The app's web page. |
+| `site` | Where the install site will be. Leave it out to build a site for a look at it on your Mac. |
+| `licence` | An SPDX licence identifier. |
+| `icon` | A square PNG of 512 or 1024 pixels. |
+| `tray`, `menubar` | A window app with a tray icon, or a tray app, as [Start an app](docs/start.md#a-window-app-a-tray-app-or-both) describes. |
+| `schemes`, `opens` | The link schemes that the app opens, such as `"mailto"`, and the file types that it opens, by extension, such as `"eml"`. Each system's installer registers them. |
 
-The whole journey in a few minutes, on your Mac: a small app that runs on
-macOS gains front ends for Linux and Windows, gets packaged, and gets an
-install page. vero's example worker stands in for your app's. The rest of
-this guide explains each step and the options.
+## The worker
 
-**1. Install vero's tool.** Go puts it in `$(go env GOPATH)/bin`, which
-needs to be on your `PATH`. (`vero` installs `vero-repo`, the packaging,
-the first time it needs it; `vero-site` serves a site, for looking at
-one.)
+`[worker]` names the worker's main `package` and the program's `name`,
+to which `.exe` is added on Windows. The front ends start the worker from
+beside themselves by this name. `cgo = true` builds the Mac's worker with
+cgo, as [Write the worker](docs/worker.md#a-worker-for-every-system)
+explains. The worker's main package needs a `var version`, which the
+build sets.
 
-```bash
-go install github.com/imclaren/vero/cmd/vero@latest
-go install github.com/imclaren/vero/kit/cmd/vero-site@latest
-```
+## The front ends
 
-**2. Make the app, with front ends for macOS, Linux and Windows.**
-`vero new` makes a Go module that requires vero, with vero's example
-worker in `cmd/worker` to start from, and then does what `vero add` does:
-it reads the worker and writes a starter app for each system, which shows
-the worker's state and has a button for each request. It also writes
-`vero-app.toml`, which describes the app to the packaging, an icon to
-replace, a starter test, and `PORTING.md`, a checklist for your own app.
+Each front end has a section, and a system is packaged when its section is
+there. [`vero-repo`](cmd/vero-repo/README.md) describes each section's
+settings and what each system's users get.
 
-```bash
-vero new hello
-cd hello
-```
+| Section | Front end | Details |
+|---|---|---|
+| `[gtk]` | GTK, for Linux, the BSDs and illumos | [Linux, the BSDs and illumos](#linux-the-bsds-and-illumos), below |
+| `[macos]` | SwiftUI, for macOS | [macOS](cmd/vero-repo/README.md#macos) |
+| `[wpf]`, `[wpf.msix]` | WPF, for Windows and the Microsoft Store | [Windows](cmd/vero-repo/README.md#windows) |
+| `[android]`, `[ios]` | Android, iPhone and iPad | [Android, iPhone and iPad](cmd/vero-repo/README.md#android-iphone-and-ipad) |
+| `[web]`, `[wasi]`, `[plan9]` | A browser, a terminal with WASI, and Plan 9 | [The browser, WASI and Plan 9](cmd/vero-repo/README.md#the-browser-wasi-and-plan-9) |
 
-It asks for the three things the packaging needs that the worker cannot
-tell it, which are a one-line summary, a description, and your name and
-email as the publisher, and writes them into `vero-app.toml`. (`--summary`,
-`--description` and `--publisher` answer from a script, and `--module`
-gives the module a path such as `example.com/hello`.) An app you have
-already is the same from here on: `vero add desktop` in its folder, beside
-its `go.mod`.
+### Linux, the BSDs and illumos
 
-**3. Run it on the Mac.** `cd macos && ./build.sh`, then run what it
-prints. The Linux and Windows starters' READMEs say how to run them in a
-container and a VM.
-
-**4. Release.** One command: it makes the signing key the first time
-(which signs this and every later release, so that people's systems trust
-your updates: back the folder up), builds every installer your Mac has
-the tools for - here the Debian packages, the rpms, the Arch packages, the
-Mac disk image and the Windows installers - and builds the install site
-into `dist/site`, checked.
-
-```bash
-vero release
-```
-
-It ends by saying how each installer was signed. Nothing in it needs an
-account with anyone: the Mac app is signed ad hoc and the Windows
-installer not at all, and the site's page tells people the one click each
-asks for; the Linux packages are signed with your key, as they must be.
-Step 5 of [Creating app installers](#creating-app-installers) is for
-when you want more.
-
-**5. Look at it.** `vero-site` serves the site.
-
-```bash
-vero-site -dir dist/site
-```
-
-Open the address it prints. The page shows the install commands for the
-visitor's system, and `/download?for=mac` hands out the disk image.
-
-**6. Put it online.** Put the site's address in `vero-app.toml`, so the
-page and the repositories point there, and release again; then upload
-`dist/site` to that address, or let `vero release` do it.
-
-```toml
-site = "https://example.com/hello"
-```
-
-```bash
-vero release --upload you@host:/srv/hello
-```
-
-**7. Release an update.** Change the app, run `vero release` again: the
-version goes up by one, and people get it with their usual updates.
-
-## Taking your app to more platforms
-
-An app written for one system - a Mac menu bar app, say - can run on the
-others with the worker it already has.
-
-**1. Add the front ends.** In your app's folder, the one with its
-`go.mod`:
-
-```bash
-go install github.com/imclaren/vero/cmd/vero@latest
-vero add                 # the desktop: macOS, GTK (Linux, the BSDs, illumos) and WPF (Windows)
-vero add mobile          # Android and iOS
-vero add all             # everything vero has a front end for
-```
-
-It reads your worker - the state it pushes and the requests it handles -
-and writes a starter for each system: a window that shows every field of
-the state and a control for every request, so that it runs against your
-worker as it is. Front ends you already have are left alone. On iOS and
-in a browser the worker runs inside the app, and `vero add` arranges
-that too, by moving the worker's code into a package those two can run.
-
-**2. Build and run each one.** Each starter's folder has a README with
-the two commands: `./build.sh`, then run it. The starters are a first
-draft to make your own, not a design; the shapes of your state and
-requests are written out in each language, for the window you build
-next. [cmd/vero/README.md](cmd/vero/README.md) has what each starter is,
-and the same ideas in each toolkit for a window of your own.
-
-**3. Work through PORTING.md.** `vero add` also writes `PORTING.md`:
-what in your worker needs attention on the new systems, found by reading
-its code - cgo, programs it starts, a port it listens on, secrets and
-notifications done one system's way - each with the files and lines, and
-what to change it to. Most of those are a `kit` package:
-[kit/README.md](kit/README.md) lists them.
-
-**4. Test it, and record it at work.** `vero add` also gives
-`vero-app.toml` a `[test]`: steps the tests play in your installed app,
-with examples from your worker, and `testdata/` for the files they use.
-`scripts/test-repo.sh --app vero-app.toml` installs your app from a site
-it builds on each system you name, plays the steps and records a GIF;
-`scripts/record-mac.sh` does the Mac.
-[cmd/vero-repo/README.md](cmd/vero-repo/README.md#steps-and-a-gif-of-your-app-at-work)
-has how.
-
-**5. Release.** `vero release`, as below: the new systems' packages and
-instructions are in the same site, and the page shows each system's
-recording that passed.
-
-## A worker for every system
-
-vero builds the worker without cgo, for every system and processor the app
-is packaged for, so that one Mac can build them all. `vero ship` and
-`vero-repo plan` build it for each before anything else, and name each that
-fails and the error that stops it. Three causes are usual:
-
-- **SQLite.** `mattn/go-sqlite3` needs cgo, and fails as soon as it opens a
-  database without it. `modernc.org/sqlite` has no port for DragonFly,
-  illumos, NetBSD on arm64 or OpenBSD on riscv64. `ncruces/go-sqlite3`
-  builds everywhere, and runs on every Linux processor that vero packages
-  for, which vero tested under emulation. Two things to know. Full-text
-  search is an extension, which `github.com/ncruces/go-sqlite3/ext/fts5`
-  registers on each connection that `driver.Open` makes. And a sandboxed
-  Mac app's worker needs `PRAGMA temp_store=MEMORY`: there SQLite cannot
-  make its temporary files, and a write that needs one, such as one that
-  updates a search index, fails with "disk I/O error".
-- **A package for one system**, such as a notifier for the Mac's sleep and
-  wake that needs cgo. vero's `kit` has packages that work on every system,
-  for the keychain, notifications, starting at sign-in and updates; give
-  the rest a build tag, so that other systems get a version that does
-  nothing or does it another way.
-- **A system call that differs**, such as `syscall.Rlimit`, which Windows
-  lacks and 32-bit systems type differently. `golang.org/x/sys` has each
-  system's own.
-
-## Creating app installers
-
-vero builds your app's installers, and the website your users install
-them from and get updates from: a page saying how to install on each
-system, signed repositories their systems update from, and the
-downloads, as plain files to put on any web host. A release never needs
-a virtual machine, a container or anything but your Mac.
-[cmd/vero-repo/README.md](cmd/vero-repo/README.md) has what each system
-gets and what your Mac needs for it.
-
-From your app's folder, the one with its `go.mod`:
-
-**1. Describe your app.** Copy
-[`example/vero-app.toml`](example/vero-app.toml) beside your `go.mod`, and
-change it to describe your app. The comments in it explain each setting.
-Paths in it are relative to the file, and `site` is where the install
-site will be. Your worker's main package needs a `var version`, which
-the build sets.
+`[gtk]` names the app's `folder`, its `entry`, which is the Python file
+that starts it, the files to `include` beside it, and its menu
+`categories`.
 
 Each system names its packages differently, so vero works them out from
-what `[gtk]` says the app uses:
+what `[gtk]` says the app uses.
 
 ```toml
 [gtk]
@@ -203,94 +64,50 @@ extra = ["ffmpeg"]
 
 Every app gets Python, PyGObject, GTK 4 and, where a system brings none, a
 font. `uses` adds libadwaita, the web view and a keyring, which vero's GTK
-library uses where they are installed: they are recommended where a
+library uses where they are installed. They are recommended where a
 package manager can say so, and libadwaita is left out on each system and
 processor that lacks it. `extra` names programs that vero knows, such as
-ffmpeg. Anything else the app needs goes in a system's own section, such as
-`depends` in `[gtk.deb]`, and is added after what vero works out.
+ffmpeg. Anything else that the app needs goes in a system's own section,
+such as `depends` in `[gtk.deb]`, and is added after the packages that vero chooses.
 [cmd/vero-repo/deps.go](cmd/vero-repo/deps.go) has the names. An app
-without `uses` or `extra` lists everything in each section itself, as
-before.
+without `uses` or `extra` lists everything in each section itself.
 
-Debian, Fedora, openSUSE and Arch are always packaged; each other system,
-such as `[gtk.alpine]`, `[gtk.void]` or `[gtk.freebsd]`, is packaged when
-its section is there, even an empty one. `[needs]` says what the app asks of the system, such as the
-network.
+Debian, Fedora, openSUSE and Arch are always packaged, with `[gtk.deb]`,
+`[gtk.rpm]` and `[gtk.arch]` for their settings. Each other system is
+packaged when its section is there, even an empty one. These are
+`[gtk.alpine]`, `[gtk.void]`, `[gtk.chimera]`, `[gtk.flatpak]`,
+`[gtk.freebsd]`, `[gtk.dragonfly]`, `[gtk.netbsd]`, `[gtk.illumos]` and
+`[gtk.openbsd]`. A Flatpak is made only when `[gtk.flatpak]` has
+`build = true`, or `--targets flatpak` asks for one, since it needs Docker. Each section's `arches` narrows or
+widens the processors for which it is packaged, as
+[`vero-repo`](cmd/vero-repo/README.md#processors) describes, and
+`[[gtk.data]]` adds files to the desktop, such as a search provider, as
+[the site's files](cmd/vero-repo/README.md#what-is-in-the-site) describe.
 
-**2. Release.**
+## What the app needs
 
-```bash
-vero release
-```
+`[needs]` says what the app asks of the system, with each of these set to
+`true` or `false`:
 
-It works out the version (the next after the newest the site has), makes
-the signing key the first time, builds every installer your Mac has the
-tools for, builds the site into `dist/site` and checks it, and says how
-each installer was signed. With no credentials set it releases everything
-but an iOS app for phones, which only Apple's store can carry: see step
-5, below.
+- `network`;
+- `files`;
+- `keyring`;
+- `notifications`;
+- `autostart`;
+- `webview`.
 
-```bash
-vero release --version 2.0.0 --notes "..."     # a version you choose, with what's new for the Mac's update prompt
-vero release --targets deb,macos               # some of it
-```
+The Microsoft Store's package, for one, declares a startup task for
+`autostart` and the internet for `network`.
 
-**3. Put it online.** Upload `dist/site` to the address `site` gives -
-any static web host does, or `--upload` does it for you:
+## The tests
 
-```bash
-vero release --upload you@host:/srv/myapp
-```
+`[test]` and its `[[test.step]]` entries say what vero's tests do with
+the app once its window is open. [Build, run and test on every
+system](docs/test.md#steps-and-a-recording-of-the-app-at-work) describes
+them.
 
-If you'd rather run your own server, `vero-site` serves the folder by
-itself, with the page, the repositories, `/download?for=SYSTEM` links and
-`latest.json`; with `-domain` it gets an HTTPS certificate from Let's
-Encrypt for that name. If your app already has a Go web server, serve the
-folder from it with `kit/site` instead.
+## Secrets
 
-```bash
-go install github.com/imclaren/vero/kit/cmd/vero-site@latest
-vero-site -dir /srv/myapp -domain downloads.example.com
-```
-
-**4. Release an update.** Change the app and run `vero release` again.
-People get it with their usual updates: apt (on Debian, Ubuntu and
-Chromebooks, where Linux is turned on in Settings → Developers), dnf,
-zypper, pacman, apk, xbps, pkg, pkgin and Flatpak find it by themselves, a
-Mac app with Sparkle reads the appcast, and OpenBSD's `pkg_add -u` does
-with the folder the page says to give it. Your app can read `latest.json`
-from the site to tell Windows and Android users that a new version is
-out.
-
-**5. Signing, stores and listings.** A release needs no account with anyone, and the site's page tells people
-the one click an unsigned app asks of them: on a Mac, Open Anyway in
-Privacy & Security; on Windows, More info, then Run anyway. The Linux
-and BSD repositories are signed with your key and ask nothing. For the
-rest, `vero credentials` is the checklist: it says what is set up, finds
-what it can on your Mac (a Developer ID in your keychain, say, and the
-export line that uses it), and prints the exact commands for what isn't.
-
-```bash
-vero credentials
-```
-
-| For | What it takes | Then |
-|---|---|---|
-| macOS: no Open Anyway | the Apple Developer Program; a Developer ID Application certificate in your keychain, and a Developer ID Installer one for a `.pkg`; `vero setup`, which makes the notarytool profile named `vero` | nothing; `VERO_MAC_IDENTITY`, `VERO_MAC_INSTALLER` and `VERO_NOTARY_PROFILE` choose others |
-| Windows: no SmartScreen | a code-signing certificate, as a `.pfx`; `brew install osslsigncode` | `VERO_WINDOWS_CERT`, `VERO_WINDOWS_CERT_PASSWORD` |
-| Android: a keystore you already ship with | the keystore | `VERO_ANDROID_KEYSTORE`, `VERO_ANDROID_KEY_ALIAS`, `VERO_ANDROID_PASSWORD`; without them vero makes one and keeps it beside your key |
-| iOS: phones | the Apple Developer Program; an Apple Distribution certificate and an App Store profile | `VERO_IOS_IDENTITY`, `VERO_IOS_PROFILE`; the `.ipa` goes up with Transporter |
-| Homebrew | `gh` signed in | `vero publish --homebrew`: a tap of your own, `USER/homebrew-tap`, made the first time |
-| winget | `gh` signed in | `vero publish --winget`: a pull request to microsoft/winget-pkgs from a fork of yours |
-| the AUR | an account at aur.archlinux.org with your SSH key | `vero publish --aur`: `NAME-bin`, made the first time |
-| the Microsoft Store, Google Play, Flathub | an account with each; Flathub reviews by hand | upload the `.msix` or `.aab` vero built; a pull request to flathub/flathub |
-
-The environment variables are read by the next `vero release`; the
-publishing is a command each after it. `vero publish --all` does
-whichever of the three the site has files for.
-
-## References
-
-- [cmd/vero/README.md](cmd/vero/README.md) - `vero add`: every form of the command, the starter it writes for each system, and a table showing how a SwiftUI window is built in GTK and in WPF.
-- [cmd/vero-repo/README.md](cmd/vero-repo/README.md) - `vero release`: what each system's users get, the settings in `vero-app.toml` for each system, the files in the site, and the three commands that `vero release` runs.
-- [kit/README.md](kit/README.md) - the `kit` packages: one Go API for secrets, autostart, notifications and updates on every system.
+Nothing secret goes in `vero-app.toml`. Signing certificates, passwords and
+keystores are given in environment variables, which
+[Package and release](docs/release.md#signing-stores-and-listings) lists.

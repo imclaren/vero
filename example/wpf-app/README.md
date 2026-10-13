@@ -90,6 +90,7 @@ CD drive to your home directory, and run `VeroExample.exe` inside it.
 
 ## See also
 
-- [example/wpf-app](.) - this app, finished and runnable
-- [README](../../README.md) - the same worker with a macOS SwiftUI app
-- [example/gtk-app](../gtk-app) - the same worker with a Linux GTK4 app
+- [example/wpf-app](.) is this app, finished and runnable.
+- [The front ends](../../docs/front-ends.md#a-mac-app-by-hand-in-xcode) drives the same worker with a macOS SwiftUI app.
+- [example/gtk-app](../gtk-app) drives the same worker with a Linux GTK4 app.
+- [Package and release](../../docs/release.md) makes the Windows installers.
