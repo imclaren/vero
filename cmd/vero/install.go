@@ -24,6 +24,7 @@ func install(args []string) error {
 	fs := flag.NewFlagSet("install", flag.ExitOnError)
 	dir := fs.String("dir", ".", "the app's folder")
 	published := fs.String("published", "", "the newest published version, where vero cannot find it")
+	ldflags := fs.String("ldflags", "", "more of Go's -ldflags for the worker, such as -X values a release builds in")
 	fs.Parse(args)
 	version, from, err := localVersion(*dir, *published)
 	if err != nil {
@@ -39,11 +40,20 @@ func install(args []string) error {
 		return err
 	}
 	defer os.RemoveAll(tmp)
-	cmd := exec.Command(repo, "package", "--app", filepath.Join(*dir, "vero-app.toml"), "--targets", "macos",
-		"--version", version, "--build", version, "--install", "--out", tmp)
+	cmd := exec.Command(repo, installArgs(*dir, version, tmp, *ldflags)...)
 	cmd.Env = append(os.Environ(), "VERO_NOTARISE=no")
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	return cmd.Run()
+}
+
+// installArgs are vero-repo's arguments for vero install.
+func installArgs(dir, version, out, ldflags string) []string {
+	args := []string{"package", "--app", filepath.Join(dir, "vero-app.toml"), "--targets", "macos",
+		"--version", version, "--build", version, "--install", "--out", out}
+	if ldflags != "" {
+		args = append(args, "--ldflags", ldflags)
+	}
+	return args
 }
 
 // localVersionCommand prints the number a local build of the app takes,

@@ -97,8 +97,10 @@ Sparkle installs any release with a higher number and vero keeps whichever
 worker is newer. This one is above the release that is out and below the
 next, which replaces it as usual. vero finds the release's number in a
 `latest.json` in the app's folder, on a `releases` branch or at its site;
-`--published 1.2.3` gives it. `vero local-version` prints the number, for
-a prebuild script that numbers Xcode's own builds the same way.
+`--published 1.2.3` gives it. `--ldflags` adds to the worker's build
+flags what a release builds into it, such as an OAuth client's ID.
+`vero local-version` prints the number, for a prebuild script that numbers
+Xcode's own builds the same way.
 
 ## PORTING.md
 

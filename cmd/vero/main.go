@@ -106,7 +106,7 @@ func main() {
 			"       vero new NAME [front ends, as for add] [--module PATH] [add's flags]\n"+
 			"       vero add [desktop|mobile|all|macos|gtk|wpf|android|ios|web|wasi|plan9 ...] [--except LIST] [--dir DIR]\n"+
 			"                [--menubar | --tray] [--summary TEXT] [--description TEXT] [--publisher \"Name <email>\"] [--keep-worker] [--force]\n"+
-			"       vero install [--published 1.2.3] [--dir DIR]\n"+
+			"       vero install [--published 1.2.3] [--ldflags FLAGS] [--dir DIR]\n"+
 			"                builds the Mac app from here and installs it, numbered just above the release that is out\n"+
 			"       vero local-version [--published 1.2.3] [--dir DIR]\n"+
 			"                prints that number, for a prebuild script that numbers Xcode's own builds the same way\n"+

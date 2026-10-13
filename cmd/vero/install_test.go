@@ -35,3 +35,17 @@ func TestLocalVersion(t *testing.T) {
 		t.Error("1.2 was taken as a version")
 	}
 }
+
+// TestInstallArgs: vero install passes what the app builds into its
+// worker on to vero-repo, and nothing when there is nothing.
+func TestInstallArgs(t *testing.T) {
+	args := installArgs("app", "1.2.3.202610131600", "out", "-X main.key=k")
+	if n := len(args); n < 2 || args[n-2] != "--ldflags" || args[n-1] != "-X main.key=k" {
+		t.Errorf("args %q end without the ldflags", args)
+	}
+	for _, a := range installArgs("app", "1.2.3.202610131600", "out", "") {
+		if a == "--ldflags" {
+			t.Error("--ldflags given with nothing to give")
+		}
+	}
+}
