@@ -58,7 +58,7 @@ func csharpAPI(api *API, namespace string) string {
 	}
 	for _, r := range api.Requests {
 		b.WriteString(csharpDoc(r.Doc, "    "))
-		method := pascal(r.Name) + "Async"
+		method := csharpMethod(r.Name)
 		params, arg := "", "new { }"
 		switch {
 		case r.Value != nil:
@@ -175,4 +175,19 @@ func csharpDoc(doc, indent string) string {
 	}
 	doc = strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;").Replace(doc)
 	return indent + "/// <summary>\n" + docLines(doc, indent+"/// ") + indent + "/// </summary>\n"
+}
+
+// clientMethods are VeroClient's own methods that a request's method could
+// be named: an instance method hides an extension method of the same name,
+// so a request called send would never be called.
+var clientMethods = map[string]bool{"CallAsync": true, "SendAsync": true}
+
+// csharpMethod is a request's method on VeroClient: SyncNowAsync for
+// syncNow, and SendRequestAsync for send, which VeroClient has already.
+func csharpMethod(name string) string {
+	m := pascal(name) + "Async"
+	if clientMethods[m] {
+		m = pascal(name) + "RequestAsync"
+	}
+	return m
 }

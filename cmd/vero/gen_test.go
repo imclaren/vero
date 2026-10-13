@@ -218,3 +218,13 @@ func TestReplyIsTaken(t *testing.T) {
 		t.Error("Reply is not among the names a worker's type cannot keep")
 	}
 }
+
+// TestCSharpMethodNames: a request called send or call is not hidden by
+// VeroClient's own SendAsync and CallAsync.
+func TestCSharpMethodNames(t *testing.T) {
+	for name, want := range map[string]string{"syncNow": "SyncNowAsync", "send": "SendRequestAsync", "call": "CallRequestAsync"} {
+		if got := csharpMethod(name); got != want {
+			t.Errorf("%s is %s, want %s", name, got, want)
+		}
+	}
+}
