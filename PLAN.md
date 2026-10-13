@@ -487,6 +487,17 @@ being tested.
 
 ## Phase 5. calmdocs, a menu bar app whose worker also runs alone
 
+Progress on 13 October 2026, on sync-macos' vero-0.18 branch: steps 1 to
+6 are done. The worker keeps its state in a `vero.State`, so that vero gen
+reads it; the Mac app uses the generated requests and `VeroUpdates`, the
+Swift package's new Sparkle product, which installs an update only while
+no folder syncs (`isBusy`) and never in a test's copy. `CALMDOCS_DEMO`
+runs the worker on made-up groups and folders. The tray apps pass on
+Debian, and the Mac recording leaves the copy in use untouched. Step 7's
+tests are running; moving the releases onto vero needs the user's choice
+of where calmdocs.com publishes the new systems, and the Sparkle key
+exported, as audiobooks' was.
+
 1. Move the worker from ~/src/syncclient into sync-macos as `cmd/worker`,
    drop its own updates and the separate publishing of the worker to the
    server, and replace them with vero's updates.
