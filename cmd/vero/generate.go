@@ -137,14 +137,20 @@ func render(text string, app *App) ([]byte, error) {
 func writePorting(app *App, added []string) error {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Taking %s to more systems\n\n", app.Display)
-	fmt.Fprintf(&b, "`vero add` wrote a starter front end for each system below, wired to the worker in `%s/`: its state (`%s`) and its requests (%s). Each is a first draft to make your own, not a finished app. This file says what to look at; delete it when you are done.\n\n",
-		app.Worker, app.State.Name, requestList(app))
-	b.WriteString("## The front ends added\n\n")
-	for _, p := range added {
-		s := starters[p]
-		fmt.Fprintf(&b, "- **%s** in `%s/`: %s\n", p, s.folder, s.note)
+	if len(added) == 0 {
+		// Every front end was there already: what the worker needs is
+		// still worth saying.
+		fmt.Fprintf(&b, "`vero add` read the worker in `%s/` for what needs attention on more systems. Every front end asked for is there already, so it added none. This file says what to look at; delete it when you are done.\n\n", app.Worker)
+	} else {
+		fmt.Fprintf(&b, "`vero add` wrote a starter front end for each system below, wired to the worker in `%s/`: its state (`%s`) and its requests (%s). Each is a first draft to make your own, not a finished app. This file says what to look at; delete it when you are done.\n\n",
+			app.Worker, app.State.Name, requestList(app))
+		b.WriteString("## The front ends added\n\n")
+		for _, p := range added {
+			s := starters[p]
+			fmt.Fprintf(&b, "- **%s** in `%s/`: %s\n", p, s.folder, s.note)
+		}
+		b.WriteString("\nEach folder has a README saying how to build and run it. `vero-app.toml` now lists them, so `vero release` packages them (see vero's PACKAGING.md, \"Creating app installers\").\n\n")
 	}
-	b.WriteString("\nEach folder has a README saying how to build and run it. `vero-app.toml` now lists them, so `vero release` packages them (see vero's PACKAGING.md, \"Creating app installers\").\n\n")
 	limited := false
 	for _, p := range added {
 		limited = limited || starters[p].limited
@@ -165,8 +171,10 @@ func writePorting(app *App, added []string) error {
 		b.WriteString("## The worker\n\nNothing in the worker looks tied to one system: it should build and run as it is on each.\n\n")
 	}
 	b.WriteString("## Checklist\n\n")
-	b.WriteString("- [ ] Build each front end as its README says, and run it against the worker.\n")
-	b.WriteString("- [ ] Make the starter windows your own: they show every field of the state and a control for every request, which is a start, not a design.\n")
+	if len(added) > 0 {
+		b.WriteString("- [ ] Build each front end as its README says, and run it against the worker.\n")
+		b.WriteString("- [ ] Make the starter windows your own: they show every field of the state and a control for every request, which is a start, not a design.\n")
+	}
 	b.WriteString("- [ ] Fill in `vero-app.toml`: the summary, description, publisher, homepage, licence and site, and what each system's package needs.\n")
 	b.WriteString("- [ ] Replace the icon, which is vero's example's until you do: a square PNG, 512 or 1024 pixels.\n")
 	if limited && app.ServeImport != "" {

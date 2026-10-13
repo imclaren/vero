@@ -181,7 +181,11 @@ func main() {
 		os.Exit(1)
 	}
 	if len(added) == 0 {
-		fmt.Println("nothing to add: every front end asked for is there already")
+		if err := writePorting(app, nil); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		fmt.Println("nothing to add: every front end asked for is there already. PORTING.md says what in the worker needs attention on more systems")
 		return
 	}
 	fmt.Printf("added %s for %s\n", strings.Join(added, ", "), app.Name)

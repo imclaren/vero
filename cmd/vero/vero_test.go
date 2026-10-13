@@ -556,3 +556,18 @@ func main() {
 		t.Errorf("state %+v", app.State)
 	}
 }
+
+// TestPortingWithNothingAdded: an app whose front ends are all there still
+// gets the checklist of what its worker needs, without the starters' part.
+func TestPortingWithNothingAdded(t *testing.T) {
+	dir := t.TempDir()
+	app := &App{Dir: dir, Display: "Mail", Worker: "cmd/worker", Notes: []Note{{Title: "cgo", Text: "Uses cgo.", Where: []string{"disk.go:6"}}}}
+	if err := writePorting(app, nil); err != nil {
+		t.Fatal(err)
+	}
+	porting, _ := os.ReadFile(filepath.Join(dir, "PORTING.md"))
+	text := string(porting)
+	if !strings.Contains(text, "added none") || !strings.Contains(text, "`disk.go:6`") || strings.Contains(text, "starter") {
+		t.Errorf("PORTING.md:\n%s", text)
+	}
+}
