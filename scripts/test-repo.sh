@@ -167,7 +167,10 @@ elif [ -n "$VMSYS" ]; then
     # long gone, which make the system's updates fail. Each is removed
     # first, and this test's site adds its own again.
     case $VMSYS in
-        freebsd|dragonfly) FORGET="for f in /usr/local/etc/pkg/repos/*.conf; do grep -qs 10.0.2.2 \$f && rm -f \$f; done; true" ;;
+        # What was installed from them goes too, as on illumos below: a
+        # copy left from an earlier run has the same version, so pkg would
+        # keep it in place of the build under test.
+        freebsd|dragonfly) FORGET="for f in /usr/local/etc/pkg/repos/*.conf; do grep -qs 10.0.2.2 \$f || continue; r=\$(basename \$f .conf); for n in \$(pkg query -a '%R %n' | awk -v r=\$r '\$1 == r {print \$2}'); do pkg delete -y \$n; done; rm -f \$f; done; true" ;;
         netbsd) FORGET="[ -f /usr/pkg/etc/pkgin/repositories.conf ] && sed -i.vero '/10.0.2.2/d' /usr/pkg/etc/pkgin/repositories.conf; true" ;;
         # The packages installed from them go too: one that is left can
         # hold back every later update, once its dependencies move on.
