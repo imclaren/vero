@@ -169,7 +169,9 @@ elif [ -n "$VMSYS" ]; then
     case $VMSYS in
         freebsd|dragonfly) FORGET="for f in /usr/local/etc/pkg/repos/*.conf; do grep -qs 10.0.2.2 \$f && rm -f \$f; done; true" ;;
         netbsd) FORGET="[ -f /usr/pkg/etc/pkgin/repositories.conf ] && sed -i.vero '/10.0.2.2/d' /usr/pkg/etc/pkgin/repositories.conf; true" ;;
-        illumos) FORGET="for p in \$(pkg publisher -H | awk '\$NF ~ /10.0.2.2/ {print \$1}'); do pkg unset-publisher \$p; done; true" ;;
+        # The packages installed from them go too: one that is left can
+        # hold back every later update, once its dependencies move on.
+        illumos) FORGET="for p in \$(pkg publisher -H | awk '\$NF ~ /10.0.2.2/ {print \$1}'); do for f in \$(pkg list -Hv | sed -n \"s|^\\(pkg://\$p/[^@]*\\)@.*|\\1|p\"); do pkg uninstall \$f; done; pkg unset-publisher \$p; done; true" ;;
         *) FORGET=true ;;
     esac
     SETUP="$FORGET; $SETUP"
