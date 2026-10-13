@@ -161,7 +161,7 @@ func writeSite(site, url string, a *App, latest Latest, s *signer, noPage bool, 
 	for _, sys := range unixSystems {
 		for k := range latest.Downloads {
 			if strings.HasPrefix(k, sys.name+"-") {
-				p.Unix = append(p.Unix, unixInstructions(p, sys, ""))
+				p.Unix = append(p.Unix, withNote(p, unixInstructions(p, sys, "")))
 				break
 			}
 		}
@@ -169,7 +169,7 @@ func writeSite(site, url string, a *App, latest Latest, s *signer, noPage bool, 
 	for _, sys := range []string{"alpine", "void", "chimera"} {
 		for k := range latest.Downloads {
 			if strings.HasPrefix(k, sys+"-") {
-				p.Linux = append(p.Linux, linuxInstructions(p, sys, ""))
+				p.Linux = append(p.Linux, withNote(p, linuxInstructions(p, sys, "")))
 				break
 			}
 		}
@@ -275,6 +275,18 @@ func aurCommands(p page) []string {
 // unixInstructions are the commands, run as root, that add the app's
 // repository on sys and install it, and the one that updates it. yes
 // makes them ask nothing, for install.sh.
+// withNote adds what the app says of the system, from [gtk] notes, to
+// what vero says of it.
+func withNote(p page, s unixSection) unixSection {
+	if p.App.GTK == nil {
+		return s
+	}
+	if n := p.App.GTK.Notes[s.System]; n != "" {
+		s.Note = strings.TrimSpace(s.Note + " " + n)
+	}
+	return s
+}
+
 func unixInstructions(p page, sys unixSystem, yes string) unixSection {
 	n, u := p.App.Name, p.URL
 	s := unixSection{System: sys.name, Label: sys.label}

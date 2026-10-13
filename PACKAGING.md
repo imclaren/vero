@@ -72,6 +72,12 @@ such as `depends` in `[gtk.deb]`, and is added after the packages that vero choo
 [cmd/vero-repo/deps.go](cmd/vero-repo/deps.go) has the names. An app
 without `uses` or `extra` lists everything in each section itself.
 
+`notes` puts a sentence of the app's own beside a system on the download
+page, by the system's name there, such as `notes = { netbsd = "Mail shows
+as plain text, since NetBSD has no WebKitGTK 6." }`. It is for what the
+app cannot do on that system. It applies to the systems listed beyond
+Debian, Fedora, openSUSE, Arch and the Flatpak.
+
 Debian, Fedora, openSUSE and Arch are always packaged, with `[gtk.deb]`,
 `[gtk.rpm]` and `[gtk.arch]` for their settings. Each other system is
 packaged when its section is there, even an empty one. These are

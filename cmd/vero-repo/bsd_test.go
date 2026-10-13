@@ -571,3 +571,19 @@ func TestIllumosIconOutsideTheme(t *testing.T) {
 		t.Errorf("no %s", icon)
 	}
 }
+
+// TestSystemNotes: what the app says of a system follows what vero says of
+// it on the download page.
+func TestSystemNotes(t *testing.T) {
+	p := page{App: &App{Name: "mail", GTK: &GTK{Notes: map[string]string{"netbsd": "Mail shows as plain text."}}}}
+	s := withNote(p, unixSection{System: "netbsd", Note: "These need pkgin."})
+	if s.Note != "These need pkgin. Mail shows as plain text." {
+		t.Errorf("the note is %q", s.Note)
+	}
+	if s := withNote(p, unixSection{System: "freebsd"}); s.Note != "" {
+		t.Errorf("FreeBSD's note is %q", s.Note)
+	}
+	if s := withNote(page{App: &App{Name: "mail"}}, unixSection{System: "netbsd", Note: "x"}); s.Note != "x" {
+		t.Errorf("without [gtk], the note is %q", s.Note)
+	}
+}

@@ -96,6 +96,10 @@ type GTK struct {
 	Uses       []string `toml:"uses"`
 	Extra      []string `toml:"extra"`
 	Categories string   `toml:"categories"`
+	// Notes are what the download page says beside a system, by its name
+	// on the page, such as "netbsd" or "alpine": what the app cannot do
+	// there, say, as "Mail shows as plain text: NetBSD has no WebKitGTK 6."
+	Notes map[string]string `toml:"notes"`
 	// Deb is what the Debian package needs from Debian; RPM what the rpm
 	// needs from Fedora or openSUSE; Arch what the AUR package needs from
 	// Arch Linux; and Flatpak, the runtime the Flatpak runs on.
