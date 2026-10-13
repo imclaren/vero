@@ -85,6 +85,8 @@ public class VeroApp : Application
     readonly List<Action<JsonElement>> watchers = new();
     Mutex? single;
     System.Windows.Forms.NotifyIcon? tray;
+    // The tray's own picture, and the same with a dot that says it is busy.
+    System.Drawing.Icon? trayIcon, busyIcon;
     bool quitting;
     readonly Dictionary<string, (Action? pressed, List<(string text, Action action)> buttons)> notified = new();
 
@@ -414,9 +416,10 @@ public class VeroApp : Application
             if (File.Exists(path)) icon = new System.Drawing.Icon(path);
         }
         icon ??= Environment.ProcessPath is string exe ? System.Drawing.Icon.ExtractAssociatedIcon(exe) : null;
+        trayIcon = icon ?? System.Drawing.SystemIcons.Application;
         tray = new System.Windows.Forms.NotifyIcon
         {
-            Icon = icon ?? System.Drawing.SystemIcons.Application,
+            Icon = trayIcon,
             Text = Options.Name,
             Visible = true,
         };
@@ -461,6 +464,32 @@ public class VeroApp : Application
         tray.ContextMenuStrip = menu;
         old?.Dispose();
     }
+
+    /// <summary>Shows on the tray icon whether the app is busy, as while it
+    /// syncs: the app's own icon with a dot in its corner, or without.</summary>
+    public void SetTrayBusy(bool busy)
+    {
+        if (tray is null || trayIcon is null) return;
+        if (busy && busyIcon is null)
+        {
+            using var picture = new System.Drawing.Bitmap(32, 32);
+            using (var g = System.Drawing.Graphics.FromImage(picture))
+            {
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                g.DrawIcon(new System.Drawing.Icon(trayIcon, 32, 32), new System.Drawing.Rectangle(0, 0, 32, 32));
+                // Windows' own blue, ringed in white so that it shows on a
+                // dark taskbar and a light one.
+                g.FillEllipse(System.Drawing.Brushes.White, 15, 15, 17, 17);
+                using var blue = new System.Drawing.SolidBrush(System.Drawing.Color.FromArgb(0, 120, 212));
+                g.FillEllipse(blue, 17, 17, 13, 13);
+            }
+            busyIcon = System.Drawing.Icon.FromHandle(picture.GetHicon());
+        }
+        tray.Icon = busy ? busyIcon : trayIcon;
+    }
+
+    /// <summary>For tests: whether the tray icon shows that the app is busy.</summary>
+    public bool TrayBusy() => tray is not null && busyIcon is not null && tray.Icon == busyIcon;
 
     /// <summary>For tests: the tray's menu as it stands.</summary>
     public IReadOnlyList<string> TrayItems() =>

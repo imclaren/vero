@@ -199,6 +199,10 @@ public sealed class CheckApp : VeroApp
         SetTray(tooltip: "Syncing", items: new List<(string, Action?)> { ("3 files to send", null), ("-", null), ("Sync Now", () => { }) });
         items = TrayItems();
         Expect(items.Take(3).SequenceEqual(new[] { "3 files to send", "-", "Sync Now" }), "the app's own items first: " + string.Join(" | ", items));
+        SetTrayBusy(true);
+        Expect(TrayBusy(), "the tray icon shows that the app is busy");
+        SetTrayBusy(false);
+        Expect(!TrayBusy(), "and then that it is not");
         Expect(SmallView is { IsVisible: true, ShowInTaskbar: false }, "the small window shows, with no taskbar button");
         var area = SystemParameters.WorkArea;
         if (SmallView is not null)

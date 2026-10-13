@@ -25,7 +25,9 @@ import Sparkle
 ///     Button("Check for Updates…") { updates.checkForUpdates() }
 ///         .disabled(!updates.canCheckForUpdates)
 ///
-/// An app on the App Store leaves this product out, and Sparkle with it.
+/// A test's copy, with VERO_PROFILE or VERO_TEST set, does not start
+/// Sparkle at all. An app on the App Store leaves this product out, and
+/// Sparkle with it.
 public final class VeroUpdater: ObservableObject {
     /// Sparkle itself, for anything this does not cover.
     public let updater: SPUUpdater
@@ -69,13 +71,16 @@ public final class VeroUpdater: ObservableObject {
         let delegate = Delegate()
         delegate.busy.value = busy
         self.delegate = delegate
+        // A test's copy never updates: an update would replace the copy
+        // under test with the release.
         controller = SPUStandardUpdaterController(
-            startingUpdater: true, updaterDelegate: delegate, userDriverDelegate: delegate)
+            startingUpdater: !Self.isTestCopy, updaterDelegate: delegate, userDriverDelegate: delegate)
         updater = controller.updater
-        updater.updateCheckInterval = checkEvery
         // Assigned in init, so didSet does not write it back to Sparkle.
         automaticallyUpdates = updater.automaticallyChecksForUpdates
         updater.publisher(for: \.canCheckForUpdates).assign(to: &$canCheckForUpdates)
+        guard !Self.isTestCopy else { return }
+        updater.updateCheckInterval = checkEvery
         if automaticallyUpdates { checkInBackground() }
     }
 
@@ -95,6 +100,13 @@ public final class VeroUpdater: ObservableObject {
 
     private func checkInBackground() {
         if !updater.sessionInProgress { updater.checkForUpdatesInBackground() }
+    }
+
+    /// A copy that a test runs: VERO_PROFILE keeps its settings apart, and
+    /// VERO_TEST plays a test's steps in it.
+    static var isTestCopy: Bool {
+        let env = ProcessInfo.processInfo.environment
+        return !(env["VERO_PROFILE"] ?? "").isEmpty || !(env["VERO_TEST"] ?? "").isEmpty
     }
 
     static func activate() {
