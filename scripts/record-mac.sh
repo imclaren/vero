@@ -8,7 +8,11 @@
 # ~/.cache/vero/test-results/index.html shows with every other system's.
 #
 #   scripts/record-mac.sh --app path/to/vero-app.toml --bundle path/to/My.app
-#       [--env NAME=value]... [--clean PATH]... [--limit SECONDS]
+#       [--env NAME=value]... [--clean PATH]... [--limit SECONDS] [--no-record]
+#
+# --no-record plays the steps without capturing the window, for a terminal
+# without Screen Recording permission: the steps' result still says
+# whether they passed.
 #
 # --clean removes a file or folder first, under ~/Library, such as the
 # settings the copy kept from the last recording, so each one starts as a
@@ -19,7 +23,7 @@
 # window needs Screen Recording permission for the terminal it runs in.
 set -e
 VERO=$(cd "$(dirname "$0")/.." && pwd)
-TOML="" BUNDLE="" LIMIT=600 ENVS="" CLEAN=""
+TOML="" BUNDLE="" LIMIT=600 ENVS="" CLEAN="" RECORD=yes
 while [ $# -gt 0 ]; do
     case $1 in
         --app) TOML=$2; shift ;;
@@ -29,6 +33,7 @@ $2"; shift ;;
         --clean) case $2 in "$HOME"/Library/?*) CLEAN="$CLEAN
 $2" ;; *) echo "--clean takes a path under ~/Library: $2" >&2; exit 2 ;; esac; shift ;;
         --limit) LIMIT=$2; shift ;;
+        --no-record) RECORD="" ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
     shift
@@ -73,6 +78,18 @@ began=$(date +%s)
 ) >"$out/app.log" 2>&1 &
 app=$!
 trap 'kill $app 2>/dev/null || true' EXIT
+if [ -z "$RECORD" ]; then
+    # The steps alone, and their result.
+    while kill -0 $app 2>/dev/null && [ ! -f "$L/result.json" ] && [ $(($(date +%s) - began)) -lt "$LIMIT" ]; do sleep 1; done
+    sleep 2
+    kill $app 2>/dev/null || true
+    wait $app 2>/dev/null || true
+    cp "$L/result.json" "$out/" 2>/dev/null || true
+    grep 'vero test:' "$out/app.log" | sed 's/^vero test: /   /'
+    if grep -q '"ok" *: *true' "$L/result.json" 2>/dev/null; then echo "ok: the steps passed, not recorded"; exit 0; fi
+    echo "FAIL: the steps did not pass" >&2
+    exit 1
+fi
 n=0
 until win=$("$CACHE/bin/winid" $app) && [ -n "$win" ]; do
     # A copy that was signed a moment ago is checked before it starts,
