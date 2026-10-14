@@ -524,6 +524,17 @@ once vero can make headless packages.
 
 ## Phase 6. The tag and the releases
 
+Progress on 15 October 2026: vero v0.18.0 is tagged and published, with
+its tools and kit, after all four apps passed on every system. Every app
+requires v0.18.0 with no `replace` lines, its Xcode project takes vero's
+Swift package Up to Next Major from 0.18.0, and each passed its Mac demo
+steps, Debian 13 and Windows again on the tag. audiobooks, calmtasks,
+calmdocs (with syncclient) and treehouse are merged into their main
+branches. treehouse 0.2.0 is on its releases branch, waiting for its
+server to be redeployed. The other three apps' releases wait for the
+owner. calmdocs' Mac release was dry-run on the tag, with its second
+worker for macOS 12, once its go.mod allowed Go 1.26.
+
 When all four apps pass on every system:
 
 1. Tag vero v0.18.0 and publish its release.
