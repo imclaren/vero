@@ -171,7 +171,10 @@ elif [ -n "$VMSYS" ]; then
         # copy left from an earlier run has the same version, so pkg would
         # keep it in place of the build under test.
         freebsd|dragonfly) FORGET="for f in /usr/local/etc/pkg/repos/*.conf; do grep -qs 10.0.2.2 \$f || continue; r=\$(basename \$f .conf); for n in \$(pkg query -a '%R %n' | awk -v r=\$r '\$1 == r {print \$2}'); do pkg delete -y \$n; done; rm -f \$f; done; true" ;;
-        netbsd) FORGET="[ -f /usr/pkg/etc/pkgin/repositories.conf ] && sed -i.vero '/10.0.2.2/d' /usr/pkg/etc/pkgin/repositories.conf; true" ;;
+        # The app's own package from an earlier run goes too, since one of
+        # the same version is kept in place of the build under test.
+        netbsd) FORGET="[ -f /usr/pkg/etc/pkgin/repositories.conf ] && sed -i.vero '/10.0.2.2/d' /usr/pkg/etc/pkgin/repositories.conf; /usr/sbin/pkg_delete $APP_NAME 2>/dev/null; true" ;;
+        openbsd) FORGET="pkg_delete $APP_NAME 2>/dev/null; true" ;;
         # The packages installed from them go too: one that is left can
         # hold back every later update, once its dependencies move on.
         illumos) FORGET="for p in \$(pkg publisher -H | awk '\$NF ~ /10.0.2.2/ {print \$1}'); do for f in \$(pkg list -Hv | sed -n \"s|^\\(pkg://\$p/[^@]*\\)@.*|\\1|p\"); do pkg uninstall \$f; done; pkg unset-publisher \$p; done; true" ;;
