@@ -25,3 +25,5 @@ cmd/vero-repo/vero-repo
 dist/
 cmd/vero/vero
 /wasi-app
+# SwiftPM writes these when it builds; a library leaves its versions to the apps.
+Package.resolved
