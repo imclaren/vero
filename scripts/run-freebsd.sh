@@ -109,7 +109,7 @@ EOF
     echo "made $VM/seed.iso"
 fi
 
-SSH="ssh -i $VM/key -p $SSH_PORT -o StrictHostKeyChecking=no \
+SSH="ssh -i $VM/key -p $SSH_PORT -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
      -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR root@127.0.0.1"
 
 # A VM left running from a previous go: stop it the polite way.  Killing

@@ -63,7 +63,7 @@ if [ ! -f "$VM/disk.qcow2" ]; then
 fi
 [ -f "$VM/key" ] || ssh-keygen -q -t ed25519 -N "" -f "$VM/key" -C vero
 
-SSH="ssh -i $VM/key -p $SSH_PORT -o StrictHostKeyChecking=no \
+SSH="ssh -i $VM/key -p $SSH_PORT -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
      -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o IdentitiesOnly=yes root@127.0.0.1"
 
 if [ -f "$VM/qemu.pid" ] && kill -0 "$(cat "$VM/qemu.pid")" 2>/dev/null; then
