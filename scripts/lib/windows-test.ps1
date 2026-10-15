@@ -74,6 +74,12 @@ switch ($Phase) {
         note "launch-result" (Test-Path "$here\launch\result.json")
     }
     "nsis" {
+        # A copy left by an earlier test that failed part way would keep
+        # running, holding its files, so that the old code is what is
+        # tested: it is stopped and uninstalled first.
+        stopApp $dir
+        if (Test-Path "$dir\uninstall.exe") { Start-Process -Wait -FilePath "$dir\uninstall.exe" -ArgumentList "/S"; Start-Sleep 3 }
+        stopApp $dir
         if (install "1.0.0") {
             note "nsis-worker" (& "$dir\$Worker" -version 2>&1)
             note "nsis-app" (Test-Path "$dir\$Exe")

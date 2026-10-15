@@ -88,6 +88,30 @@ windows_wait() {
     return 1
 }
 
+# windows_signed_in PORT: makes sure the VM signs vero in by itself at
+# every start, and that it has this time, restarting it once if not. The
+# answer file's automatic sign-in counts down from 99 and then stops, which
+# left a VM used for many tests at its lock screen, where nothing can start
+# on the desktop. The setting made here does not count down.
+windows_signed_in() {
+    windows_ssh "$1" "\$k = 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon'; Set-ItemProperty \$k AutoAdminLogon '1'; Set-ItemProperty \$k DefaultUserName 'vero'; Set-ItemProperty \$k DefaultPassword 'vero'; Remove-ItemProperty \$k AutoLogonCount -ErrorAction SilentlyContinue" >/dev/null 2>&1
+    i=0
+    while [ $i -lt 12 ]; do
+        windows_ssh "$1" "if (Get-Process explorer -ErrorAction SilentlyContinue) { 'yes' }" 2>/dev/null | grep -q yes && return 0
+        sleep 5; i=$((i + 1))
+    done
+    echo "   nobody is signed in to the VM; restarting it so that vero is"
+    windows_ssh "$1" "Restart-Computer -Force" >/dev/null 2>&1
+    sleep 30
+    windows_wait "$1" 300 || return 1
+    i=0
+    while [ $i -lt 24 ]; do
+        windows_ssh "$1" "if (Get-Process explorer -ErrorAction SilentlyContinue) { 'yes' }" 2>/dev/null | grep -q yes && return 0
+        sleep 5; i=$((i + 1))
+    done
+    return 1
+}
+
 # windows_running: whether vero's Windows VM is running: its disk is open,
 # whatever other VMs are.
 windows_running() { pgrep -qf "${VM:-$HOME/vm/vero-windows}/disk.qcow2"; }

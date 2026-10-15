@@ -21,4 +21,12 @@ Write-Host "go     : $(go version 2>&1)"
 Write-Host "dotnet : $(dotnet --version 2>&1)"
 Write-Host "gcc    : $(gcc --version 2>&1 | Select-Object -First 1)"
 
+# Sign vero in at every start, for good: the answer file's automatic
+# sign-in stops after LogonCount starts, and tests need a desktop.
+$k = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
+Set-ItemProperty $k AutoAdminLogon "1"
+Set-ItemProperty $k DefaultUserName "vero"
+Set-ItemProperty $k DefaultPassword "vero"
+Remove-ItemProperty $k AutoLogonCount -ErrorAction SilentlyContinue
+
 Stop-Transcript
