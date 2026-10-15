@@ -240,7 +240,7 @@ else
             TARGETS=chimera SLEEP=86400
             SETUP="apk add chimerautils-extra > /dev/null"
             INSTALL="fetch -qo - $URL/install.sh | sh"
-            XSETUP="apk add -q xserver-xorg-xvfb xwd xdpyinfo"
+            XSETUP="apk add -q sway grim"
             UPDATE="apk upgrade -U > /dev/null" ;;
         *void*)
             TARGETS=void
@@ -395,6 +395,7 @@ windows_test() {
     "$VERO/scripts/run-windows.sh" --headless --payload "$PAY" --ssh "$SSHPORT" >"$CACHE/windows-vm.log" 2>&1 &
     QEMU=$!
     windows_wait "$SSHPORT" 300 || { echo "FAIL: the VM never answered over SSH: scripts/setup-windows-ssh.sh sets it up" >&2; exit 1; }
+    windows_signed_in "$SSHPORT" || { echo "FAIL: the VM did not sign vero in to its desktop" >&2; exit 1; }
     windows_ssh "$SSHPORT" "New-Item -ItemType Directory -Force C:/vero-test | Out-Null; Remove-Item -Recurse -Force C:/vero-test/*"
     windows_scp "$SSHPORT" "$PAY"/* vero@127.0.0.1:C:/vero-test/
     # phase NAME: one of windows-test.ps1's phases, its lines printed.
