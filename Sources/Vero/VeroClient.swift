@@ -56,6 +56,8 @@ public final class VeroClient: ObservableObject {
     @Published public private(set) var inFlightByTag: [String: Int] = [:]
 
     /// The last error that was not simply "the worker is restarting", or nil.
+    /// A successful call clears it only when it is set, since every write
+    /// to a published property redraws each view that observes the model.
     @Published public private(set) var lastError: String?
 
     /// True while any request is in flight.
@@ -155,7 +157,7 @@ public final class VeroClient: ObservableObject {
             let reply: R = try await withWorker(timeout: timeout) {
                 try await self.link.send(request, returning: R.self)
             }
-            lastError = nil
+            if lastError != nil { lastError = nil }
             return reply
         } catch {
             record(error)
@@ -177,7 +179,7 @@ public final class VeroClient: ObservableObject {
             let data = try await withWorker(timeout: timeout) {
                 try await self.link.send(request)
             }
-            lastError = nil
+            if lastError != nil { lastError = nil }
             return data
         } catch {
             record(error)
@@ -283,7 +285,7 @@ public final class VeroClient: ObservableObject {
             let reply = try await withWorker(timeout: timeout) {
                 try await self.link.call(request)
             }
-            lastError = nil
+            if lastError != nil { lastError = nil }
             return reply
         } catch {
             record(error)
