@@ -616,10 +616,15 @@ class Window((Adw.ApplicationWindow if Adw is not None else Gtk.ApplicationWindo
     def _banner(self, text: str, button: str, kind: str) -> dict:
         if Adw is not None:
             b = Adw.Banner(title=text, revealed=False)
+            # The text as it is, not as markup: where markup is on, an
+            # escaped apostrophe showed as "&apos;" on some systems.
+            plain = hasattr(b, "set_use_markup")
+            if plain:
+                b.set_use_markup(False)
             if button:
                 b.set_button_label(button)
             return {"widget": b,
-                    "show": lambda t: (b.set_title(GLib.markup_escape_text(t)), b.set_revealed(bool(t))),
+                    "show": lambda t: (b.set_title(t if plain else GLib.markup_escape_text(t)), b.set_revealed(bool(t))),
                     "button": lambda do: b.connect("button-clicked", lambda *_: do())}
         revealer = Gtk.Revealer(transition_type=Gtk.RevealerTransitionType.SLIDE_DOWN)
         row = Gtk.Box(spacing=12)
