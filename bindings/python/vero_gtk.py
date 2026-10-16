@@ -1279,16 +1279,20 @@ class App(_Base):  # type: ignore[misc, valid-type]
 
     # The worker.
 
+    # The worker's states and answers go to the main loop ahead of drawing,
+    # not when it is idle: an animation that keeps the loop busy, such as a
+    # loading placeholder's shimmer, would otherwise hold back the very
+    # answer that ends it.
     def _read_events(self) -> None:
         assert self.vero is not None
         try:
             latest = self.vero.latest()
             if latest is not None:
-                GLib.idle_add(self._got_state, latest)
+                GLib.idle_add(self._got_state, latest, priority=GLib.PRIORITY_DEFAULT)
         except VeroError:
             pass
         for state in self.vero.events():
-            GLib.idle_add(self._got_state, state)
+            GLib.idle_add(self._got_state, state, priority=GLib.PRIORITY_DEFAULT)
 
     def _got_state(self, state: Any) -> bool:
         self.state = state
@@ -1327,10 +1331,10 @@ class App(_Base):  # type: ignore[misc, valid-type]
                 return
             except (Refused, NotRunning, VeroError) as e:
                 words = str(e)
-                GLib.idle_add(lambda: (failed or self.problem)(words) and False)
+                GLib.idle_add(lambda: (failed or self.problem)(words) and False, priority=GLib.PRIORITY_DEFAULT)
                 return
             if done is not None:
-                GLib.idle_add(lambda: done(reply) and False)
+                GLib.idle_add(lambda: done(reply) and False, priority=GLib.PRIORITY_DEFAULT)
 
         threading.Thread(target=run, daemon=True).start()
 
@@ -1515,10 +1519,16 @@ class UndoStack:
     function may return a function that redoes it, or None. The window's
     toast offers Undo for the newest. clear() forgets everything, as when
     the account changes.
+
+    earlier, if given, is called on Ctrl+Z when nothing of this run is left
+    to undo, so that the app can ask the worker to undo a step from an
+    earlier run, as from the worker's own history. It may return a function
+    that redoes it, or None.
     """
 
-    def __init__(self, app: App) -> None:
+    def __init__(self, app: App, earlier: Callable[[], Any] | None = None) -> None:
         self.app = app
+        self.earlier = earlier
         self.undos: list[tuple[str, Callable[[], Any]]] = []
         self.redos: list[tuple[str, Callable[[], Any]]] = []
 
@@ -1532,6 +1542,10 @@ class UndoStack:
 
     def undo(self) -> None:
         if not self.undos:
+            if self.earlier is not None:
+                redo = self.earlier()
+                if callable(redo):
+                    self.redos.append(("", redo))
             return
         text, do = self.undos.pop()
         redo = do()

@@ -57,6 +57,74 @@ def bus() -> bool:
     return bool(address) and address != NO_BUS
 
 
+def gtk_importable() -> bool:
+    try:
+        import gi  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
+@unittest.skipUnless(gtk_importable(), "no PyGObject")
+class InProcessTests(unittest.TestCase):
+    """The parts that need no window, run in this process."""
+
+    def test_answers_go_to_the_main_loop_ahead_of_drawing(self) -> None:
+        import vero_gtk as vg
+        from gi.repository import GLib
+
+        queued: list[int] = []
+        saved = GLib.idle_add
+
+        def idle_add(fn, *args, priority=GLib.PRIORITY_DEFAULT_IDLE):
+            queued.append(priority)
+            return 0
+
+        class Worker:
+            def call(self, name, payload):
+                if name == "refuse":
+                    raise vg.Refused("No.")
+                return {"ok": True}
+
+        app = vg.App.__new__(vg.App)
+        app.vero = Worker()
+        GLib.idle_add = idle_add
+        try:
+            import threading
+            before = set(threading.enumerate())
+            app.ask("hello", {}, lambda _r: None)
+            app.ask("refuse", {}, lambda _r: None, lambda _e: None)
+            for t in set(threading.enumerate()) - before:
+                t.join(5)
+        finally:
+            GLib.idle_add = saved
+        self.assertEqual(queued, [GLib.PRIORITY_DEFAULT, GLib.PRIORITY_DEFAULT])
+
+    def test_undo_reaches_back_to_earlier_runs(self) -> None:
+        import vero_gtk as vg
+
+        class App:
+            def active(self):
+                return None
+
+        done: list[str] = []
+
+        def earlier():
+            done.append("earlier undone")
+            return lambda: done.append("earlier redone")
+
+        undo = vg.UndoStack(App(), earlier)
+        undo.push("Archived.", lambda: done.append("this run undone"))
+        undo.undo()
+        undo.undo()
+        undo.redo()
+        self.assertEqual(done, ["this run undone", "earlier undone", "earlier redone"])
+
+        plain = vg.UndoStack(App())
+        plain.undo()
+        plain.redo()
+
+
 @unittest.skipUnless(display(), "no display")
 class GtkLibraryTests(unittest.TestCase):
     @classmethod
