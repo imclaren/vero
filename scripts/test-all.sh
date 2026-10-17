@@ -23,6 +23,7 @@
 #       [--containers N]      how many containers at once (all of them)
 #       [--port 8700]         the first port to try for the sites
 #       [--prune]             remove vero's stale test caches, and stop
+#       [--status]            print the status of the run going now, and stop
 #
 # The systems: debian debian12 ubuntu fedora opensuse arch alpine chimera
 # void flatpak freebsd netbsd openbsd dragonfly illumos windows, and mac
@@ -49,11 +50,15 @@
 # A VM is made the first time it is needed, which takes from minutes to
 # more than an hour, and needs room: run scripts/doctor.sh to see what is
 # missing. Each system's log is in ~/.cache/vero/test-runs/, and a line for
-# each says PASS, FAIL or skipped as it finishes. It exits 1 when any
-# system failed.
+# each says PASS, FAIL or skipped as it finishes; in a terminal, a status
+# of every system is drawn in place instead, with its stage, its times
+# and an estimate of the time left. The status is also in
+# ~/.cache/vero/test-runs/status.txt, rewritten as it changes, and on the
+# results page, which refreshes itself while the run goes; --status prints
+# it. It exits 1 when any system failed.
 set -e
 VERO=$(cd "$(dirname "$0")/.." && pwd)
-APP="" QUICK="" ONLY="" SKIP="" NOVMS="" FIRST=8700 UPDATES="" RECORD="" AGAIN="" FRESH="" VMS=2 CONTAINERS=0 PRUNE=""
+APP="" QUICK="" ONLY="" SKIP="" NOVMS="" FIRST=8700 UPDATES="" RECORD="" AGAIN="" FRESH="" VMS=2 CONTAINERS=0 PRUNE="" STATUS=""
 while [ $# -gt 0 ]; do
     case $1 in
         --app) APP=$2; shift ;;
@@ -70,6 +75,7 @@ while [ $# -gt 0 ]; do
         --containers) CONTAINERS=$2; shift ;;
         --port) FIRST=$2; shift ;;
         --prune) PRUNE=yes ;;
+        --status) STATUS=yes ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
     shift
@@ -78,6 +84,18 @@ CACHE="${VERO_CACHE:-$HOME/.cache/vero}"
 VERO_CACHE=$CACHE
 export VERO_CACHE
 . "$VERO/scripts/lib/space.sh"
+if [ -n "$STATUS" ]; then
+    LOGS="$CACHE/test-runs"
+    if [ -f "$LOGS/running" ] && kill -0 "$(cat "$LOGS/running")" 2>/dev/null; then
+        cat "$LOGS/status.txt" 2>/dev/null || echo "The run has only just started."
+    elif [ -f "$LOGS/status.txt" ]; then
+        echo "No run is going now. The last run ended like this:"
+        cat "$LOGS/status.txt"
+    else
+        echo "No run is going now, and none has left a status."
+    fi
+    exit 0
+fi
 if [ -n "$PRUNE" ]; then
     vero_prune
     echo "Pruned what vero no longer needs. scripts/doctor.sh shows what is left."
@@ -153,7 +171,7 @@ release_ports() { for p in $(grep -lx "$$" "$PORTS"/*/pid 2>/dev/null); do rm -r
 finish() {
     # Packaging still going in the background stops with the run.
     for p in $(jobs -p); do pkill -P "$p" 2>/dev/null || true; kill "$p" 2>/dev/null || true; done
-    rm -f "$WANT" "$JOBS" "$SAID"
+    rm -f "$WANT" "$JOBS" "$SAID" "$LOGS/running"
     rm -rf "$SHARED"
     release_ports
 }
@@ -276,6 +294,15 @@ done
 
 level="the full run"
 [ -n "$QUICK" ] && level="a quick run"
+# The status, kept up to date in the background until the run is over.
+. "$VERO/scripts/lib/status.sh"
+RUN_BEGAN=$(date +%s)
+TERMINAL=""
+[ -t 1 ] && TERMINAL=yes
+while read -r secs name rest; do rm -f "$LOGS/$name.began"; done <"$JOBS"
+echo $$ >"$LOGS/running"
+status_loop &
+STATUS_LOOP=$!
 echo "testing $(cut -d' ' -f2 "$JOBS" | tr '\n' ' ')in $level${UPDATES:+, with the update test}${RECORD:+, recorded}; logs in $LOGS"
 
 # one NAME KIND PORT ARGUMENT...: one system's test, a line saying how
@@ -285,6 +312,8 @@ one() {
     shift 3
     log="$LOGS/$name.log"
     began=$(date +%s)
+    : >"$log"
+    echo "$began" >"$LOGS/$name.began"
     fam=$(family "$name" | cut -d' ' -f1)
     upd=--no-update rec=--no-record
     [ -n "$UPDATES" ] && upd=--update
@@ -298,7 +327,10 @@ one() {
         key=$(sed -n 's/^system key: //p' "$log" | head -1)
         printf '%s\n%s\n' "$APPSTATE $VEROSTATE $key" "${UPDATES:+update} ${RECORD:+record}" >"$PASSES/$name"
         # Only a run that made nothing new says how long the system takes.
-        grep -q 'which this key needs once' "$log" || echo "$name $took" >>"$TIMES"
+        if ! grep -q 'which this key needs once' "$log"; then
+            echo "$name $took" >>"$TIMES"
+            record_stages "$name" "$took"
+        fi
     else
         echo "FAIL $name ($(($(date +%s) - began))s): $(grep "FAIL" "$log" | head -1 | cut -c1-160)"
     fi
@@ -336,11 +368,20 @@ run_lanes() {
 count=$(awk '$3 == "container" || $3 == "mac"' "$JOBS" | wc -l | tr -d ' ')
 [ "$CONTAINERS" -gt 0 ] 2>/dev/null || CONTAINERS=$count
 [ "$CONTAINERS" -gt 0 ] || CONTAINERS=1
-{
+# In a terminal the status shows each line; elsewhere each is printed.
+run_all() {
     lanes "$VMS" vm emulated | run_lanes &
     lanes "$CONTAINERS" container mac | run_lanes &
     wait
-} | tee -a "$SAID"
+}
+if [ -n "$TERMINAL" ]; then (run_all) >>"$SAID"; else run_all | tee -a "$SAID"; fi
+rm -f "$LOGS/running"
+wait "$STATUS_LOOP" 2>/dev/null || true
+write_status
+if [ -n "$TERMINAL" ]; then
+    printf '\033[H\033[J'
+    cat "$LOGS/status.txt"
+fi
 sh "$VERO/scripts/lib/results-page.sh" "$CACHE/test-results"
 echo "every result: $CACHE/test-results/index.html"
 # It fails when any system did.

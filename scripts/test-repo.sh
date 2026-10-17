@@ -184,6 +184,10 @@ elif [ -n "$VMSYS" ]; then
             XSETUP="pkg_add -I tigervnc ImageMagick > /dev/null"
             UPDATE="PKG_PATH=$URL/openbsd/%a/:installpath pkg_add -u $APP_NAME" ;;
         dragonfly) SSH_PORT=2225 PREFIX=/usr/local PY=python3.11
+            # Emulated, it takes minutes to boot, so each run carries on
+            # from its snapshot's saved state, with the clock set again, in
+            # the form of date that RESUME gives.
+            RESUME=+%Y%m%d%H%M.%S
             INSTALL="fetch -q -o - $URL/install.sh | sh"
             # Just the example: an upgrade of everything takes in
             # whatever DragonFly's own repository is changing that day,
@@ -191,6 +195,7 @@ elif [ -n "$VMSYS" ]; then
             XSETUP="pkg install -y tigervnc-server ImageMagick7 > /dev/null"
             UPDATE="pkg upgrade -y $APP_NAME > /dev/null" ;;
         illumos) SSH_PORT=2226 PREFIX=/usr PY=/usr/bin/python3.9
+            RESUME=+%m%d%H%M%Y.%S
             # OpenIndiana's own packages, from which the app's IPS package
             # takes GTK 4, libadwaita and PyGObject.
             INSTALL="curl -fsSL $URL/install.sh | sh"
@@ -547,9 +552,15 @@ make_ready() {
         vm_stop clean
         echo "the snapshot takes $(du -sh "$READY.tmp" | cut -f1)"
         vero_vm_disks "$VMDIR" >"$READY.tmp/disks"
+        echo "$APP_DEPS" >"$READY.tmp/deps"
         rm -rf "$READY"
         mv "$READY.tmp" "$READY"
         touch "$READY/ok"
+        # A snapshot that this one replaces, made for the same needs, goes.
+        for r in "$VMDIR"/ready-*; do
+            [ "$r" != "$READY" ] && [ "$(cat "$r/deps" 2>/dev/null)" = "$APP_DEPS" ] &&
+                rm -rf "$r" && echo "removed the snapshot this one replaces, $r"
+        done
         return
     fi
     stage "making the ready-made system, which this key needs once ($READY)"
@@ -563,8 +574,14 @@ make_ready() {
             { echo "FAIL: the app's dependencies did not install in the ready-made system" >&2; exit 1; }
     fi
     docker commit -c "LABEL dev.vero.ready=1" -c "LABEL dev.vero.system=$LABEL" -c "LABEL dev.vero.key=$RKEY" \
-        -c "LABEL dev.vero.period=$(period)" "$NAME" "$READY" >/dev/null
+        -c "LABEL dev.vero.period=$(period)" -c "LABEL dev.vero.deps=$APP_DEPS" "$NAME" "$READY" >/dev/null
     docker rm -f "$NAME" >/dev/null 2>&1 || true
+    # An image that this one replaces, made for the same needs, goes.
+    docker image ls --filter "label=dev.vero.system=$LABEL" --filter "label=dev.vero.deps=$APP_DEPS" \
+        --format '{{.Repository}}:{{.Tag}}' | while read -r old; do
+        [ "$old" = "$READY" ] && continue
+        docker image rm "$old" >/dev/null 2>&1 && echo "removed the ready-made system this one replaces, $old"
+    done
 }
 
 # mac_test: the disk image on this Mac, then the appcast after an update.
@@ -811,6 +828,73 @@ STAGES=2
 [ -n "$UPDATES" ] && STAGES=$((STAGES + 2))
 rm -rf "$SITE"
 [ "$VMSYS" = windows ] && windows_boot
+# vm_boot: a BSD's or illumos's VM started on this run's own overlay, on
+# the snapshot, or with --fresh on the VM's own disk; either is left as it
+# was. With a snapshot made already, it starts in the background while
+# the packages are made, and vm_wait waits for it.
+vm_boot() {
+    # An emulated VM's snapshot keeps its running state, saved the first
+    # time a run needs it, and each run carries on from that.
+    VERO_RESUME=""
+    if [ -n "$RESUME" ] && [ -z "$FRESH" ]; then
+        [ -f "$READY/state.gz" ] || save_state "$READY" || echo "(the VM's state was not saved, so it boots instead)"
+        [ -f "$READY/state.gz" ] && VERO_RESUME="$READY/state.gz"
+    fi
+    export VERO_RESUME
+    RUNDIR="$VMDIR/run-$PORT"
+    rm -rf "$RUNDIR"
+    if [ -n "$FRESH" ]; then overlay "$VMDIR" "$RUNDIR"; else USED_READY=yes; touch "$READY/ok"; overlay "$READY" "$RUNDIR"; fi ||
+        { echo "FAIL: could not make the run's overlay" >&2; exit 1; }
+    VERO_DISK_DIR="$RUNDIR" "$VERO/scripts/run-$VMSYS.sh" --shell --no-open >"$CACHE/vm-boot-$PORT.log" 2>&1 &
+    BOOTING=$!
+}
+vm_wait() {
+    wait "$BOOTING" || { echo "FAIL: the $VMSYS VM did not start:" >&2; tail -5 "$CACHE/vm-boot-$PORT.log" >&2; exit 1; }
+    rm -f "$CACHE/vm-boot-$PORT.log"
+    if [ -n "$VERO_RESUME" ]; then
+        echo "carried on from the snapshot's saved state"
+        in_container "date -u $(date -u "$RESUME") > /dev/null" || echo "(the VM's clock could not be set)"
+    fi
+}
+# save_state DIR: the VM booted on the snapshot in DIR, and its running
+# state saved there, compressed, as state.gz; qemu then quits, so that
+# the snapshot's disks stay as they were when the state was saved.
+save_state() {
+    echo "saving the VM's running state, once, so that runs carry on from it"
+    VERO_RESUME="" VERO_DISK_DIR="$1" "$VERO/scripts/run-$VMSYS.sh" --shell --no-open >/dev/null 2>&1 || { vm_stop; return 1; }
+    python3 - "$1/qmp.sock" "$1/state.gz.tmp" <<'PY' || { vm_stop; rm -f "$1/state.gz.tmp"; return 1; }
+import json, socket, sys, time
+s = socket.socket(socket.AF_UNIX); s.connect(sys.argv[1]); f = s.makefile("rw"); f.readline()
+def ask(c, **a):
+    f.write(json.dumps({"execute": c, "arguments": a} if a else {"execute": c}) + "\n"); f.flush()
+    while True:
+        r = json.loads(f.readline())
+        if "event" not in r:
+            return r
+ask("qmp_capabilities")
+ask("stop")
+ask("migrate", uri="exec:gzip -1 > " + sys.argv[2])
+for _ in range(1800):
+    st = ask("query-migrate").get("return", {}).get("status")
+    if st == "completed":
+        break
+    if st in ("failed", "cancelled"):
+        sys.exit(1)
+    time.sleep(1)
+else:
+    sys.exit(1)
+ask("quit")
+PY
+    n=0
+    while [ -f "$VMDIR/qemu.pid" ] && kill -0 "$(cat "$VMDIR/qemu.pid")" 2>/dev/null && [ $n -lt 60 ]; do sleep 1; n=$((n + 1)); done
+    rm -f "$VMDIR/qemu.pid"
+    mv "$1/state.gz.tmp" "$1/state.gz"
+    echo "the saved state takes $(du -sh "$1/state.gz" | cut -f1)"
+}
+if [ -n "$VMSYS" ] && [ "$VMSYS" != windows ] && [ -n "$HAVE_READY" ]; then
+    echo "== booting the $VMSYS VM, while the packages are made"
+    vm_boot
+fi
 stage "releasing 1.0.0"
 if [ -n "$MAC" ]; then release 1.0.0 100; else release 1.0.0; fi
 # Built aside and moved into place, since other runs may be starting it.
@@ -835,14 +919,11 @@ if [ "$VMSYS" = windows ]; then
     exit 0
 fi
 if [ -n "$VMSYS" ]; then
-    [ -n "$HAVE_READY" ] || make_ready
-    # This run's own overlay, on the snapshot, or with --fresh on the VM's
-    # own disk; either is left as it was.
-    RUNDIR="$VMDIR/run-$PORT"
-    rm -rf "$RUNDIR"
-    if [ -n "$FRESH" ]; then overlay "$VMDIR" "$RUNDIR"; else USED_READY=yes; touch "$READY/ok"; overlay "$READY" "$RUNDIR"; fi ||
-        { echo "FAIL: could not make the run's overlay" >&2; exit 1; }
-    VERO_DISK_DIR="$RUNDIR" "$VERO/scripts/run-$VMSYS.sh" --shell --no-open >/dev/null
+    if [ -z "$HAVE_READY" ]; then
+        make_ready
+        vm_boot
+    fi
+    vm_wait
     IMAGE="the $VMSYS VM"
 else
     [ -n "$HAVE_READY" ] || make_ready

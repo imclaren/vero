@@ -86,8 +86,14 @@ fi
 
 boot() {   # $1: extra arguments, e.g. the install media
     rm -f "$VM/console.sock"
+    # With VERO_DISK_DIR, qemu's monitor is on a socket there, with which
+    # test-repo.sh saves the running VM; VERO_RESUME names a state so
+    # saved, from which the VM carries on instead of booting.
+    set --
+    [ -n "$VERO_DISK_DIR" ] && set -- "$@" -qmp "unix:$VERO_DISK_DIR/qmp.sock,server=on,wait=off"
+    [ -n "$VERO_RESUME" ] && set -- "$@" -incoming "exec:gzip -dc $VERO_RESUME"
     # -vga std, even though nothing looks at it: see the note at the top.
-    qemu-system-x86_64 -accel tcg -cpu max -smp 2 -m 4096 \
+    qemu-system-x86_64 -accel tcg -cpu max -smp 2 -m 4096 "$@" \
         -drive if=virtio,format=qcow2,file="$DISKS/disk.qcow2" \
         $1 \
         -netdev "user,id=n0,ipv6=off,hostfwd=tcp::$SSH_PORT-:22,hostfwd=tcp::$PORT-:5900" \

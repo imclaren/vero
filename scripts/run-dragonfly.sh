@@ -88,7 +88,14 @@ CGO_ENABLED=0 GOOS=dragonfly GOARCH=amd64 go build -o "$VM/worker" ./example/wor
 # -vga none: without it DragonFly writes to the VGA console and nothing
 # reaches the serial line this script drives the first boot over.
 # ipv6=off: qemu offers an IPv6 route that goes nowhere and fetches hang.
-qemu-system-x86_64 -accel tcg -smp 2 -m 2048 \
+# With VERO_DISK_DIR, qemu's monitor is on a socket there, with which
+# test-repo.sh saves the running VM; VERO_RESUME names a state so saved,
+# from which the VM carries on instead of booting, which takes minutes
+# here.
+set --
+[ -n "$VERO_DISK_DIR" ] && set -- "$@" -qmp "unix:$VERO_DISK_DIR/qmp.sock,server=on,wait=off"
+[ -n "$VERO_RESUME" ] && set -- "$@" -incoming "exec:gzip -dc $VERO_RESUME"
+qemu-system-x86_64 -accel tcg -smp 2 -m 2048 "$@" \
     -drive if=virtio,format=qcow2,file="$DISKS/disk.qcow2" \
     -drive if=virtio,format=qcow2,file="$DISKS/local.qcow2" \
     -netdev "user,id=n0,ipv6=off,hostfwd=tcp::$SSH_PORT-:22,hostfwd=tcp::$PORT-:5900" \
