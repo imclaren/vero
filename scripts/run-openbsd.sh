@@ -111,9 +111,14 @@ Set name(s) = done
 Directory does not contain SHA256.sig. Continue without verification = yes
 EOF
 
-pkill -f "http.server $HTTP_PORT" 2>/dev/null || true
-python3 -m http.server "$HTTP_PORT" --bind 0.0.0.0 --directory "$VM" >/dev/null 2>&1 &
-HTTP=$!
+# Only the install reads it, so a boot of a made VM, such as a test's,
+# serves nothing and leaves the port to an install running beside it.
+HTTP=""
+if [ "$INSTALL" = yes ]; then
+    pkill -f "http.server $HTTP_PORT" 2>/dev/null || true
+    python3 -m http.server "$HTTP_PORT" --bind 0.0.0.0 --directory "$VM" >/dev/null 2>&1 &
+    HTTP=$!
+fi
 
 boot() {   # $1: extra -drive for the installer
     # No GPU here, unlike the other VMs: OpenBSD moves its console to the
