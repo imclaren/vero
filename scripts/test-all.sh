@@ -152,7 +152,7 @@ mkdir -p "$PORTS"
 release_ports() { for p in $(grep -lx "$$" "$PORTS"/*/pid 2>/dev/null); do rm -rf "$(dirname "$p")"; done; }
 finish() {
     # Packaging still going in the background stops with the run.
-    for p in $(jobs -p); do pkill -P "$p" 2>/dev/null; kill "$p" 2>/dev/null; done
+    for p in $(jobs -p); do pkill -P "$p" 2>/dev/null || true; kill "$p" 2>/dev/null || true; done
     rm -f "$WANT" "$JOBS" "$SAID"
     rm -rf "$SHARED"
     release_ports

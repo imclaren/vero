@@ -18,7 +18,8 @@
 #   - VM snapshots (ready-*) whose disk has changed since they were made,
 #     or that have not been used for a month, and a run's overlay (run-*)
 #     whose VM is no longer running;
-#   - test packages and sites in vero's cache unused for a week.
+#   - the packages of a test run that has finished, and test packages and
+#     sites in vero's cache unused for a week.
 
 : "${VERO_CACHE:=$HOME/.cache/vero}"
 : "${VERO_MIN_FREE_GB:=10}" "${VERO_MIN_DOCKER_FREE_GB:=2}"
@@ -27,8 +28,11 @@ VERO_VMS="$HOME/vm"
 # of vero, since they all share Docker's images.
 VERO_READY_USED="$HOME/.cache/vero/ready"
 
-# What each system needs, in GB, measured on vero's example and on an app
-# with a web view and ffmpeg, the larger of the two, with room to spare:
+# What each system needs, in GB, measured with an app with a web view and
+# ffmpeg, rounded up: a ready-made container image takes 1 to 2 GB of
+# Docker's disk, a BSD snapshot 0.2 to 0.3 GB and each run's overlay as
+# much again, and a Windows run's overlay about 1 GB. illumos's snapshot,
+# which brings the system up to date, is an estimate. The columns are:
 # on Docker's disk, the ready-made system and the test container's own
 # changes; on this Mac's, the packages, the site and, for a VM, its
 # snapshot and the run's overlay. A ready-made system already made needs
@@ -45,12 +49,12 @@ alpine       1   1   0   1
 chimera      2   1   0   1
 void         2   1   0   1
 flatpak      1   1   0   1
-freebsd      0   0   3   1
-netbsd       0   0   3   1
-openbsd      0   0   3   1
-dragonfly    0   0   3   1
-illumos      0   0   6   2
-windows      0   0   2   2
+freebsd      0   0   1   1
+netbsd       0   0   1   1
+openbsd      0   0   1   1
+dragonfly    0   0   1   1
+illumos      0   0   4   1
+windows      0   0   0   2
 mac          0   0   1   1"
 
 # vero_space_need SYSTEM COLUMN: the number in the table's COLUMN, 2 to 5,
@@ -158,7 +162,13 @@ vero_prune() {
             fi
         done
     done
-    for d in "$VERO_CACHE"/*-packages-* "$VERO_CACHE"/*-site-* "$VERO_CACHE"/launch-* "$VERO_CACHE"/packages-run.*; do
+    # A run's packages, once the run that made them has gone.
+    for d in "$VERO_CACHE"/packages-run.*; do
+        [ -d "$d" ] || continue
+        kill -0 "${d##*.}" 2>/dev/null && continue
+        rm -rf "$d" && echo "pruned $d"
+    done
+    for d in "$VERO_CACHE"/*-packages-* "$VERO_CACHE"/*-site-* "$VERO_CACHE"/launch-* "$VERO_CACHE"/windows-test*; do
         [ -d "$d" ] || continue
         [ -n "$(find "$d" -maxdepth 0 -mtime -7)" ] && continue
         rm -rf "$d" && echo "pruned $d"
