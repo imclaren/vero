@@ -21,6 +21,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -93,6 +94,11 @@ public sealed class VeroClient : IDisposable
             RedirectStandardOutput = true,
             UseShellExecute = false,
             CreateNoWindow = true,
+            // The worker speaks UTF-8. Without these, a windowed app reads
+            // and writes the pipes in the ANSI code page, and any character
+            // beyond ASCII, such as a dash or an accent, arrives garbled.
+            StandardInputEncoding = new UTF8Encoding(false),
+            StandardOutputEncoding = new UTF8Encoding(false),
         };
         if (arguments is not null)
         {
