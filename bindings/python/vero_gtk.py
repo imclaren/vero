@@ -1003,7 +1003,7 @@ class App(_Base):  # type: ignore[misc, valid-type]
     from the app. A tray app (menubar=True) gives small_window instead, the
     small window its tray icon opens, and may give window too, for a main
     window opened from the small one. tray=True gives a window app a tray
-    icon and keeps it running when its window is closed, as treehouse does
+    icon and keeps it running when its window is closed, as a mail app does
     while it syncs.
 
     opened is told what the app was asked to open: links, such as mailto:

@@ -95,7 +95,7 @@ func localVersion(dir, published string) (version, from string, err error) {
 
 // publishedVersion is the newest version among every latest.json vero can
 // find for the app: in its folder, as vero ship and a release script leave
-// them; on a releases branch, as treehouse keeps it; and at its site.
+// them; on a releases branch, where an app may keep it; and at its site.
 func publishedVersion(dir string) (string, string) {
 	var best, where string
 	consider := func(data []byte, source string) {

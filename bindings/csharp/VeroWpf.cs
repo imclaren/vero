@@ -52,7 +52,7 @@ public sealed class VeroAppOptions
     public string Worker { get; init; } = "";
     public IEnumerable<string>? Arguments { get; init; }
     /// <summary>A tray icon, and running on when the window is closed, as
-    /// treehouse does while it syncs.</summary>
+    /// a mail app does while it syncs.</summary>
     public bool Tray { get; init; }
     /// <summary>An app that lives in the tray, whose icon opens a small
     /// window, as the Mac's menu bar apps do. The app overrides
