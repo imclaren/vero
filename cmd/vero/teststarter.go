@@ -26,6 +26,9 @@ files = []
 # change the settings and sign-ins of the copy you use: kit/keychain and
 # kit/profile follow VERO_PROFILE, and vero's Swift package does too.
 env = { VERO_PROFILE = "test" }
+# A recording of each system in vero's full test run, for the install
+# page. Other runs play the steps without one, unless asked with --record.
+record = true
 
 [[test.step]]
 pause = 3

@@ -10,8 +10,11 @@ path/to/vero/scripts/test-repo.sh --app vero-app.toml --vm windows          # in
 ```
 
 `test-repo.sh --vm windows` reaches the VM over SSH. It installs the app,
-plays its steps, records it, updates it and removes it, and registers the
-MSIX in developer mode when the app has `[wpf.msix]`. A VM installed before
+plays its steps, records it when asked, updates it and removes it, and registers the
+MSIX in developer mode when the app has `[wpf.msix]`. The VM runs on a
+throwaway overlay on its own disk, which the test leaves as it was, and it
+starts while the installers are built. `test-all.sh --quick` tests Windows
+and Debian, without the update and the recording. A VM installed before
 SSH was set up gets it from `scripts/setup-windows-ssh.sh`, and
 `run-windows.sh --ssh 2222` then opens port 2222 to it, with the key
 `~/.ssh/vero-windows`. `dotnet build` in `windows/` checks on the Mac that
