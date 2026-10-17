@@ -88,8 +88,9 @@ func (t *tomlFile) write(app *App, add string) error {
 		if d.Publisher == "" {
 			d.Publisher = "Your Name <you@example.com>"
 		}
-		t.text = "# vero-app.toml describes this app to vero's packaging: see vero's\n" +
-			"# PACKAGING.md, \"Creating app installers\". Paths are relative to this file.\n\n" +
+		t.text = "# vero-app.toml describes this app to vero's packaging and tests. vero's\n" +
+			"# example/vero-app.toml has a comment on every setting. Paths are relative\n" +
+			"# to this file.\n\n" +
 			"name = \"" + app.Name + "\"\n" +
 			"display_name = \"" + app.Display + "\"\n" +
 			"id = \"" + app.ID + "\"\n" +

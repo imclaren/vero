@@ -183,7 +183,7 @@ func upgradeToml(text string) (string, []string) {
 		}
 		return "[" + strings.Join(q, ", ") + "]"
 	}
-	add := []string{"# What the app uses and needs, from which vero works out each system's", "# packages: see vero's PACKAGING.md.", "uses = " + quote(uses)}
+	add := []string{"# What the app uses and needs, from which vero works out each system's", "# packages, as vero's docs/describe-the-app.md says.", "uses = " + quote(uses)}
 	if len(extra) > 0 {
 		add = append(add, "extra = "+quote(extra))
 	}

@@ -11,7 +11,7 @@ import (
 
 // The app's copy of vero's AGENTS.md, the guide for coding agents, which
 // vero new writes and vero upgrade replaces. It is vero's alone, as the
-// bindings are: the app's own rules go in a file of the app's own, which
+// bindings are. The app's own rules go in a file of the app's own, which
 // vero never touches, so that an upgrade has nothing to merge.
 const agentsName = "AGENTS.md"
 
@@ -25,7 +25,7 @@ const agentsNote = "> vero writes this file from its own `AGENTS.md`, and `vero 
 	"> changes. Read that file as well, since its rules about this app come first.\n\n"
 
 // veroModule is the folder of the vero module that the app's go.mod
-// requires: a checkout, when go.mod replaces vero with one.
+// requires, which is a checkout when go.mod replaces vero with one.
 func veroModule(dir string) (string, error) {
 	out, err := output(dir, "go", "list", "-m", "-f", "{{.Dir}}", "github.com/imclaren/vero")
 	if err != nil {

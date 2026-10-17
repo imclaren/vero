@@ -4,7 +4,7 @@ This page lists the kit's packages, which give a worker what it needs from
 the system on which it runs, with one API for every system. The kit is a
 module of its own, `github.com/imclaren/vero/kit`, so that vero's library
 keeps no dependencies, and `go get github.com/imclaren/vero/kit` adds it to
-an app. [Write the worker](../docs/worker.md#a-worker-for-every-system)
+an app. [Build the worker for every system](../docs/build-the-worker-everywhere.md)
 explains when a worker needs it.
 
 | Package | What it does | Where |
@@ -28,4 +28,4 @@ build of that program for each system and architecture, and finds it with
 `kit/tools`, which looks wherever the app is installed. On the Mac,
 `resources` in `[macos]` puts such programs in the app, and on Linux,
 `resources` in `[gtk.flatpak]` puts them in the Flatpak, as
-[`vero-repo`](../cmd/vero-repo/README.md) describes.
+[example/vero-app.toml](../example/vero-app.toml) describes.
