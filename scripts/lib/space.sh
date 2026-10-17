@@ -53,9 +53,10 @@ illumos      0   0   6   2
 windows      0   0   2   2
 mac          0   0   1   1"
 
-# vero_space_need SYSTEM COLUMN: the table's number, 1 to 4, for SYSTEM.
+# vero_space_need SYSTEM COLUMN: the number in the table's COLUMN, 2 to 5,
+# for SYSTEM.
 vero_space_need() {
-    echo "$vero_space_table" | awk -v s="$1" -v c="$2" '$1 == s { print $(c + 1); found = 1 } END { if (!found) print 1 }'
+    echo "$vero_space_table" | awk -v s="$1" -v c="$2" '$1 == s { print $c; found = 1 } END { if (!found) print 1 }'
 }
 
 # vero_free_gb PATH: the free space, in whole GB, on the disk that holds

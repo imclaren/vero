@@ -487,16 +487,16 @@ cleanup() {
         rm -rf "$CACHE/mac-test" "$HOME/Library/Application Support/Example"
     elif [ "$VMSYS" = windows ]; then
         [ -n "$QEMU" ] && windows_quit
-        [ -n "$RUNDIR" ] && rm -rf "$RUNDIR"
+        [ -n "$RUNDIR" ] && { echo "the run's overlay took $(du -sh "$RUNDIR" | cut -f1)"; rm -rf "$RUNDIR"; }
     elif [ -n "$VMSYS" ]; then
         vm_stop
-        [ -n "$RUNDIR" ] && rm -rf "$RUNDIR"
+        [ -n "$RUNDIR" ] && { echo "the run's overlay took $(du -sh "$RUNDIR" | cut -f1)"; rm -rf "$RUNDIR"; }
         rm -rf "$READY.tmp"
     else
         docker rm -f "$NAME" >/dev/null 2>&1 || true
     fi
     [ -n "$SERVER" ] && kill "$SERVER" 2>/dev/null || true
-    [ -n "$PASSED" ] && rm -rf "$SITE" "$PACKAGES" "$CACHE/windows-test-$PORT"
+    [ -n "$PASSED" ] && rm -rf "$SITE" "$PACKAGES" "$CACHE/windows-test-$PORT" "$CACHE/windows-test-$PORT-disc"
     return 0
 }
 trap cleanup EXIT
@@ -518,6 +518,7 @@ make_ready() {
         in_container "$SETUP" && in_container "$INSTALL" && in_container "${XSETUP:-true}" && in_container "$FORGET" ||
             { echo "FAIL: could not make the VM's snapshot" >&2; exit 1; }
         vm_stop clean
+        echo "the snapshot takes $(du -sh "$READY.tmp" | cut -f1)"
         vero_vm_disks "$VMDIR" >"$READY.tmp/disks"
         rm -rf "$READY"
         mv "$READY.tmp" "$READY"
@@ -609,7 +610,11 @@ echo "PASS"
 # windows_test: the installers in vero's Windows VM, over SSH: the NSIS
 # installer, installed, started on the desktop, updated to 1.0.1 and
 # uninstalled; then the MSIX's files, registered, started and removed.
-windows_test() {
+# windows_boot: vero's Windows VM started on a throwaway overlay on its
+# own disk, which is left as it was. It starts before the packages are
+# ready, since nothing reaches it on its disc, and windows_test waits for
+# it.
+windows_boot() {
     . "$VERO/scripts/lib/windows-disc.sh"
     VMDIR="$HOME/vm/vero-windows"
     # Not 2222, which is FreeBSD VM's, so that both can be tested at once.
@@ -619,20 +624,23 @@ windows_test() {
     VM=$VMDIR windows_running && { echo "the Windows VM is running already: stop it first" >&2; exit 1; }
     pgrep -qf "$VMDIR/run-" && { echo "another test is using the Windows VM: wait for it to finish" >&2; exit 1; }
     PAY="$CACHE/windows-test-$PORT"
-    rm -rf "$PAY" && mkdir -p "$PAY/disc"
-    cp "$PACKAGES"/*-setup.exe "$VERO/scripts/lib/windows-test.ps1" "$VERO/scripts/lib/launch-windows.ps1" "$PAY/"
-    [ -n "$APP_MSIX" ] && cp "$PACKAGES"/*.msix "$PAY/"
+    rm -rf "$PAY" "$PAY-disc" && mkdir -p "$PAY" "$PAY-disc"
     # The installers go in over SSH, so the VM's disc holds only a note.
-    echo "vero's test copies its files in over SSH." >"$PAY/disc/README.txt"
-    # The run is on a throwaway overlay on the VM's own disk, which is
-    # left as it was.
+    echo "vero's test copies its files in over SSH." >"$PAY-disc/README.txt"
     RUNDIR="$VMDIR/run-$PORT"
     rm -rf "$RUNDIR"
     overlay "$VMDIR" "$RUNDIR" || { echo "FAIL: could not make the run's overlay" >&2; exit 1; }
     VM=$RUNDIR
-    echo "== booting the Windows VM (about a minute)"
-    "$VERO/scripts/run-windows.sh" --vm "$RUNDIR" --headless --payload "$PAY/disc" --ssh "$SSHPORT" >"$CACHE/windows-vm-$PORT.log" 2>&1 &
+    echo "== booting the Windows VM, while the packages are made"
+    "$VERO/scripts/run-windows.sh" --vm "$RUNDIR" --headless --payload "$PAY-disc" --ssh "$SSHPORT" >"$CACHE/windows-vm-$PORT.log" 2>&1 &
     QEMU=$!
+}
+
+windows_test() {
+    cp "$PACKAGES"/*-setup.exe "$VERO/scripts/lib/windows-test.ps1" "$VERO/scripts/lib/launch-windows.ps1" "$PAY/"
+    [ -n "$APP_MSIX" ] && cp "$PACKAGES"/*.msix "$PAY/"
+    STAGES=$((3 + ${LAUNCH:+1} + ${UPDATES:+1} + 0))
+    stage "waiting for the Windows VM"
     windows_wait "$SSHPORT" 300 || { echo "FAIL: the VM never answered over SSH: scripts/setup-windows-ssh.sh sets it up" >&2; exit 1; }
     windows_signed_in "$SSHPORT" || { echo "FAIL: the VM did not sign vero in to its desktop" >&2; exit 1; }
     windows_ssh "$SSHPORT" "New-Item -ItemType Directory -Force C:/vero-test | Out-Null; Remove-Item -Recurse -Force C:/vero-test/*"
@@ -643,13 +651,13 @@ windows_test() {
     }
     # expect LINE: windows-test.ps1 printed that line.
     expect() { grep -qx "$1" "$PAY/results.txt" || { echo "FAIL: no \"$1\" from the VM" >&2; exit 1; }; }
-    echo "== the NSIS installer"
+    stage "the NSIS installer"
     phase nsis
     for line in "nsis-worker: 1.0.0" "nsis-app: True" "nsis-startmenu: True" "nsis-uninstaller: True" "nsis-runs: True"; do expect "$line"; done
     python3 "$VERO/scripts/lib/qmp.py" /tmp/vero-qmp.sock shot "$PAY/nsis.ppm" && sips -s format png "$PAY/nsis.ppm" --out "$PAY/nsis.png" >/dev/null
     echo "ok: 1.0.0 installed and running (the desktop: $PAY/nsis.png)"
     if [ -n "$LAUNCH" ]; then
-        echo "== starting the app and playing its steps${RECORD:+, recorded}"
+        stage "starting the app and playing its steps${RECORD:+, recorded}"
         lb=$(date +%s)
         L="$PAY/launch" out="$RESULTS/windows"
         fresh_results "$out"
@@ -664,7 +672,7 @@ windows_test() {
         finish_launch "$out" "$lb"
     fi
     if [ -n "$UPDATES" ]; then
-        echo "== releasing 1.0.1, and installing it over 1.0.0"
+        stage "releasing 1.0.1, and installing it over 1.0.0"
         release 1.0.1
         cp "$PACKAGES"/*-1.0.1-*-setup.exe "$PAY/"
         windows_scp "$SSHPORT" "$PAY"/*-1.0.1-*-setup.exe vero@127.0.0.1:C:/vero-test/
@@ -681,7 +689,7 @@ windows_test() {
         echo "PASS (no MSIX: the app's vero-app.toml has no [wpf.msix])"
         return
     fi
-    echo "== the MSIX"
+    stage "the MSIX"
     phase msix
     for line in "msix-installed: True" "msix-worker: 1.0.0" "msix-runs: True"; do expect "$line"; done
     phase msix-done
@@ -757,7 +765,7 @@ finish_launch() {
         echo "(recording and log in $out)" >&2
         exit 1
     fi
-    if [ -f "$out/app.gif" ]; then
+    if [ -n "$RECORD" ] && [ -f "$out/app.gif" ]; then
         echo "ok: the app started and its steps passed; recorded in $out/app.gif"
     else
         echo "ok: the app started and its steps passed (not recorded: test-all.sh --record records it)"
@@ -775,6 +783,7 @@ STAGES=2
 [ -n "$LAUNCH" ] && STAGES=$((STAGES + 1))
 [ -n "$UPDATES" ] && STAGES=$((STAGES + 2))
 rm -rf "$SITE"
+[ "$VMSYS" = windows ] && windows_boot
 stage "releasing 1.0.0"
 if [ -n "$MAC" ]; then release 1.0.0 100; else release 1.0.0; fi
 # Built aside and moved into place, since other runs may be starting it.

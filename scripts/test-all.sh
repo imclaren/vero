@@ -262,6 +262,8 @@ for f in linux bsd windows flatpak; do
     mkdir -p "$SHARED/$f"
     (
         for v in 1.0.0 ${UPDATES:+1.0.1}; do
+            # Windows' VM is ARM64, and each processor costs a publish.
+            [ $f = windows ] && VERO_PACKAGE_GOARCHES=arm64
             if sh "$VERO/scripts/package.sh" --app "$TOML" --version "$v" --targets "$targets" \
                 --out "$SHARED/$f/$v" >"$SHARED/$f/$v.log" 2>&1; then
                 touch "$SHARED/$f/$v.done"
