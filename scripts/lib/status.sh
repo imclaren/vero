@@ -93,26 +93,36 @@ status_line() {
         "$(echo "$title" | cut -c1-40)" "$(mmss $in)" "$(mmss $total)" "$left"
 }
 
-# write_status: $LOGS/status.txt written afresh, when it has changed.
+# write_status: this run's status written afresh to $LOGS/status.PID.txt,
+# and $LOGS/status.txt made from it and from every other run going now,
+# so that two runs at once each show in it and neither replaces the other.
 write_status() {
     {
         so_far=$(mmss $(($(date +%s) - RUN_BEGAN)))
-        if [ -f "$LOGS/running" ]; then
+        if [ -f "$LOGS/running.$$" ]; then
             echo "vero test run of $APP_NAME, $level, started at $(date -r "$RUN_BEGAN" '+%H:%M:%S'), $so_far so far"
         else
             echo "vero test run of $APP_NAME, $level, started at $(date -r "$RUN_BEGAN" '+%H:%M:%S'), finished after $so_far"
         fi
         grep '^skipped' "$SAID" 2>/dev/null | sed 's/^skipped \([^:]*\):.*/\1/' | while read -r n; do status_line "$n"; done
         while read -r secs name rest; do status_line "$name"; done <"$JOBS"
-    } >"$LOGS/status.txt.new"
-    mv -f "$LOGS/status.txt.new" "$LOGS/status.txt"
+    } >"$LOGS/status.$$.txt.new"
+    mv -f "$LOGS/status.$$.txt.new" "$LOGS/status.$$.txt"
+    {
+        for r in "$LOGS"/running.*; do
+            p=${r##*.}
+            [ "$p" != $$ ] && [ -f "$LOGS/status.$p.txt" ] && kill -0 "$p" 2>/dev/null && { cat "$LOGS/status.$p.txt"; echo; }
+        done
+        cat "$LOGS/status.$$.txt"
+    } >"$LOGS/status.txt.$$"
+    mv -f "$LOGS/status.txt.$$" "$LOGS/status.txt"
 }
 
 # status_loop: the status kept up to date while the run goes, drawn in
 # place in a terminal, and the results page with it now and then.
 status_loop() {
     i=0
-    while [ -f "$LOGS/running" ]; do
+    while [ -f "$LOGS/running.$$" ]; do
         write_status
         if [ -n "$TERMINAL" ]; then
             printf '\033[H\033[J'

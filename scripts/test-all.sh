@@ -86,7 +86,10 @@ export VERO_CACHE
 . "$VERO/scripts/lib/space.sh"
 if [ -n "$STATUS" ]; then
     LOGS="$CACHE/test-runs"
-    if [ -f "$LOGS/running" ] && kill -0 "$(cat "$LOGS/running")" 2>/dev/null; then
+    # Each run going now has its running.PID; status.txt shows them all.
+    live=""
+    for r in "$LOGS"/running.*; do [ -f "$r" ] && kill -0 "${r##*.}" 2>/dev/null && live=yes; done
+    if [ -n "$live" ]; then
         cat "$LOGS/status.txt" 2>/dev/null || echo "The run has only just started."
     elif [ -f "$LOGS/status.txt" ]; then
         echo "No run is going now. The last run ended like this:"
@@ -171,7 +174,9 @@ release_ports() { for p in $(grep -lx "$$" "$PORTS"/*/pid 2>/dev/null); do rm -r
 finish() {
     # Packaging still going in the background stops with the run.
     for p in $(jobs -p); do pkill -P "$p" 2>/dev/null || true; kill "$p" 2>/dev/null || true; done
-    rm -f "$WANT" "$JOBS" "$SAID" "$LOGS/running"
+    rm -f "$WANT" "$JOBS" "$SAID" "$LOGS/running.$$" "$LOGS/status.$$.txt"
+    # A run that was killed leaves its running.PID, which goes now.
+    for r in "$LOGS"/running.*; do [ -f "$r" ] && ! kill -0 "${r##*.}" 2>/dev/null && rm -f "$r"; done
     rm -rf "$SHARED"
     release_ports
 }
@@ -300,7 +305,7 @@ RUN_BEGAN=$(date +%s)
 TERMINAL=""
 [ -t 1 ] && TERMINAL=yes
 while read -r secs name rest; do rm -f "$LOGS/$name.began"; done <"$JOBS"
-echo $$ >"$LOGS/running"
+echo $$ >"$LOGS/running.$$"
 VERO_TEST_LOGS=$LOGS
 export VERO_TEST_LOGS
 status_loop &
@@ -377,7 +382,7 @@ run_all() {
     wait
 }
 if [ -n "$TERMINAL" ]; then (run_all) >>"$SAID"; else run_all | tee -a "$SAID"; fi
-rm -f "$LOGS/running"
+rm -f "$LOGS/running.$$"
 wait "$STATUS_LOOP" 2>/dev/null || true
 write_status
 if [ -n "$TERMINAL" ]; then

@@ -12,7 +12,9 @@
 dir=${1:?the results folder}
 logs=$2
 live=""
-[ -n "$logs" ] && [ -f "$logs/running" ] && kill -0 "$(cat "$logs/running")" 2>/dev/null && live=yes
+if [ -n "$logs" ]; then
+    for f in "$logs"/running.*; do [ -f "$f" ] && kill -0 "${f##*.}" 2>/dev/null && live=yes; done
+fi
 {
     echo '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>vero test results</title>'
     [ -n "$live" ] && echo '<meta http-equiv="refresh" content="5">'
