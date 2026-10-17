@@ -119,6 +119,10 @@ trap cleanup EXIT INT TERM
 
 # The live image has no way in: sshd is off and root has no password.  So the
 # first boot is driven over the console - the only thing it is used for.
+# A VM that carries on from a saved state is past all of this already.
+if [ -n "$VERO_RESUME" ]; then
+    echo "carrying on from $VERO_RESUME"
+else
 echo "first boot (emulated, so about a minute)"
 python3 - "$VM/console.sock" "$(cat "$VM/key.pub")" "$FIRST_BOOT" <<'PY'
 import socket, sys, time
@@ -180,6 +184,7 @@ send("sh -c 'grep -q sshd_enable /etc/rc.conf || echo sshd_enable=YES >> /etc/rc
 out = send("rcstart sshd", 60)
 print("   ", "sshd started" if "Starting sshd" in out else out.strip()[-80:])
 PY
+fi
 
 printf "waiting for ssh"
 n=0

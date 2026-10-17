@@ -872,7 +872,8 @@ def ask(c, **a):
         if "event" not in r:
             return r
 ask("qmp_capabilities")
-ask("stop")
+# Saved while it runs, not paused: a state saved paused would come back
+# paused.
 ask("migrate", uri="exec:gzip -1 > " + sys.argv[2])
 for _ in range(1800):
     st = ask("query-migrate").get("return", {}).get("status")
