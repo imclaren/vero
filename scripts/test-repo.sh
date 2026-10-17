@@ -561,7 +561,9 @@ make_ready() {
             [ "$r" != "$READY" ] && [ "$(cat "$r/deps" 2>/dev/null)" = "$APP_DEPS" ] &&
                 rm -rf "$r" && echo "removed the snapshot this one replaces, $r"
         done
-        return
+        # The loop's status is its last test's, which is false when
+        # nothing was removed, and set -e would end the run on it.
+        return 0
     fi
     stage "making the ready-made system, which this key needs once ($READY)"
     docker rm -f "$NAME" >/dev/null 2>&1 || true
@@ -582,6 +584,7 @@ make_ready() {
         [ "$old" = "$READY" ] && continue
         docker image rm "$old" >/dev/null 2>&1 && echo "removed the ready-made system this one replaces, $old"
     done
+    return 0
 }
 
 # mac_test: the disk image on this Mac, then the appcast after an update.
