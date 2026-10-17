@@ -1,5 +1,7 @@
 # Release
 
+*Step 13 of 15 in [the vero guide](README.md).*
+
 A release builds the app for every system, packages it, and writes a
 complete install site to `dist/site`. Two commands do it, and both run in
 the app's folder.
@@ -64,3 +66,7 @@ A release works without any developer account. The Mac then shows a
 warning and asks the person to choose Open Anyway in Privacy & Security,
 and Windows shows More info, then Run anyway.
 [Sign and publish](sign-and-publish.md) removes both warnings.
+
+---
+
+Next: [Sign and publish](sign-and-publish.md).

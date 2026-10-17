@@ -1,5 +1,7 @@
 # Updates
 
+*Step 15 of 15 in [the vero guide](README.md).*
+
 Once an app is installed, each release reaches the person through
 whatever updates the rest of their system. There is nothing to build into
 the app for most systems.
@@ -48,3 +50,7 @@ This builds the Mac app from the working copy, signs it, and puts it in
 update. `--ldflags` passes what a release would build into the worker,
 and `vero local-version` prints the same version number, for an Xcode
 prebuild script that wants to match it.
+
+---
+
+That is the last step. Back to [the vero guide](README.md).

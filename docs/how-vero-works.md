@@ -1,7 +1,9 @@
 # How vero works
 
+*Step 1 of 15 in [the vero guide](README.md).*
+
 This page explains the pieces of a vero app and the words the rest of the
-documentation uses. Read it once, before the recipes. If you only want to
+documentation uses. Read it once, before the rest of the guide. If you only want to
 try vero, the [README](../README.md) has a ten-minute walkthrough.
 
 On this page:
@@ -214,7 +216,7 @@ important parts are:
 - `[test]` and `[[test.step]]`, which say what the automated test does
   once the app's window is open.
 
-[Describe the app](describe-the-app.md) goes through every section, and
+[Describe the app](describe-the-app.md), step 3, goes through every section, and
 [example/vero-app.toml](../example/vero-app.toml) has a comment on each
 setting.
 
@@ -311,3 +313,7 @@ system's users get.
   WASI and Plan 9. They build and run, but `vero ship` does not test them.
 - **System.** An operating system, or a distribution of one. vero treats
   Debian, Fedora and FreeBSD as three systems.
+
+---
+
+Next: [Set up a Mac](set-up-a-mac.md).

@@ -2,7 +2,7 @@
 
 This file is for a coding agent that makes or changes an app built on
 vero. It is the rules, the commands and the release checklist. The
-[recipes](docs/README.md) have the detail, and
+[vero guide](docs/README.md) has the detail, and
 [How vero works](docs/how-vero-works.md) explains the pieces. Everything
 here runs on a Mac with Apple silicon, Go and Xcode.
 

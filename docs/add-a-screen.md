@@ -1,5 +1,7 @@
 # Add a screen
 
+*Step 6 of 15 in [the vero guide](README.md).*
+
 The starter that `vero new` writes shows every field of the state and a
 button for every request. A real app replaces that with screens of its
 own, one set per front end. This page is about doing that without losing
@@ -41,3 +43,7 @@ widgets directly where you can.
 - The starters in `macos/`, `gtk/` and `windows/` are the place to begin.
   They already read the state and send every request.
 - [Add a request](add-a-request.md).
+
+---
+
+Next: [Secrets and sign-in](secrets-and-sign-in.md).

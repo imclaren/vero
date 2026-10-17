@@ -1,5 +1,7 @@
 # Set up a Mac
 
+*Step 2 of 15 in [the vero guide](README.md).*
+
 Everything vero does happens on one Mac with Apple silicon: writing the
 app, building it for every system, testing it in containers and virtual
 machines, and releasing it. This page gets that Mac ready.
@@ -53,3 +55,7 @@ decline the question. Nothing else depends on it, and you can run
 `scripts/doctor.sh`, in a checkout of vero
 (`git clone https://github.com/imclaren/vero`), lists each system, what
 it needs on this Mac, and whether it is there. It changes nothing.
+
+---
+
+Next: [Describe the app](describe-the-app.md).

@@ -1,5 +1,7 @@
 # Sign and publish
 
+*Step 14 of 15 in [the vero guide](README.md).*
+
 A release needs no account with anyone. Signing removes the warnings that
 the Mac and Windows show for an unsigned app, and publishing puts the app
 in the package directories that people already use. Both are optional,
@@ -37,3 +39,7 @@ made. Nothing to set up there.
 of them the site has files for.
 
 Android and iOS signing are described on [the lab](lab.md) page.
+
+---
+
+Next: [Updates](updates.md).

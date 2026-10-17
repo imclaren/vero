@@ -1,5 +1,7 @@
 # Test on Linux and the BSDs
 
+*Step 10 of 15 in [the vero guide](README.md).*
+
 The GTK front end is one app that runs unchanged on Linux, the BSDs and
 illumos. vero tests it on each of those systems from the Mac. Linux
 distributions run in Docker containers, and each BSD and illumos in a
@@ -94,3 +96,7 @@ no longer needed. A test refuses to start if it would leave less than
 
 The log is in `~/.cache/vero/test-runs/`. The recording, if there is one,
 often shows what went wrong before the log does.
+
+---
+
+Next: [Test on Windows](test-on-windows.md).

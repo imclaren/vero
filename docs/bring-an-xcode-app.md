@@ -1,5 +1,7 @@
 # Bring an Xcode app
 
+*A side step of [the vero guide](README.md), for an app that already has an Xcode project.*
+
 A Mac app that already has an Xcode project keeps it. vero adds the
 worker, the generated binding and the other systems' front ends around
 it.
@@ -30,3 +32,7 @@ it.
 
 [example/menubar-app](../example/menubar-app) is a whole app built this
 way.
+
+---
+
+Back to: [Describe the app](describe-the-app.md), step 3 of the guide.

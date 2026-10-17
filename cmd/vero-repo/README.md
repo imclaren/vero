@@ -1,5 +1,7 @@
 # vero-repo
 
+*Reference page of [the vero guide](../../docs/README.md).*
+
 `vero-repo` is the packaging tool. It makes every installer, package
 repository, signature and index that a release needs, and the install
 site that holds them. You rarely run it yourself: `vero release` and

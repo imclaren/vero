@@ -23,7 +23,7 @@ from one machine:
   each window, and publishes installers, package repositories and an
   install page with built-in updates.
 
-[How vero works](docs/how-vero-works.md) explains the pieces in more depth.
+[How vero works](docs/how-vero-works.md) explains the pieces in more depth, and it is step one of [the vero guide](docs/README.md).
 
 ## Ten minutes to a running app
 
@@ -141,9 +141,9 @@ test or release them yet.
 - **To understand the pieces** before you write anything, read
   [How vero works](docs/how-vero-works.md). It explains the worker, the
   front end, the state and the requests, and ends with a glossary.
-- **To do a particular job**, such as adding a request, testing on
-  FreeBSD or signing a release, find it in the
-  [recipes](docs/README.md). Each recipe is one page for one task.
+- **To build an app, step by step**, follow [the vero guide](docs/README.md).
+  It is fifteen short pages in the order you meet them, from setting up
+  the Mac to shipping updates, and each page says what comes next.
 - **To look something up**: the [Go reference](https://pkg.go.dev/github.com/imclaren/vero)
   for the worker's API, the [kit](kit/README.md) for secrets,
   notifications, sleep and updates, and the

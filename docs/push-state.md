@@ -1,5 +1,7 @@
 # Push state
 
+*Step 4 of 15 in [the vero guide](README.md).*
+
 The worker keeps everything the window shows in one Go struct, the
 state. vero sends the whole struct to every window each time its JSON
 changes. The window never asks for it and never polls. This page shows
@@ -59,3 +61,7 @@ inside the function.
 - [Add a request](add-a-request.md), for changing the state in answer to
   the window.
 - [How vero works](how-vero-works.md), for why the state is one struct.
+
+---
+
+Next: [Add a request](add-a-request.md).

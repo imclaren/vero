@@ -1,5 +1,7 @@
 # Describe the app
 
+*Step 3 of 15 in [the vero guide](README.md).*
+
 `vero-app.toml` sits beside the app's `go.mod` and tells vero everything
 it needs to package and test the app that is not in the code: the app's
 name and identifier, where each front end is, which systems to package
@@ -112,3 +114,7 @@ sources are elsewhere:
 [gen]
 swift = "MyApp/Sources/WorkerAPI.swift"
 ```
+
+---
+
+Next: [Push state](push-state.md).

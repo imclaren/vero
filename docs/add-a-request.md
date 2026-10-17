@@ -1,5 +1,7 @@
 # Add a request
 
+*Step 5 of 15 in [the vero guide](README.md).*
+
 A request is a message that the window sends to the worker, such as
 "rename job 3 to Photos". The worker answers it with a handler, a Go
 function registered under the request's name. This page adds one.
@@ -92,3 +94,7 @@ an event, and the window redraws from that.
 
 - [Push state](push-state.md), for how the state reaches the window.
 - [How vero works](how-vero-works.md), for the protocol underneath.
+
+---
+
+Next: [Add a screen](add-a-screen.md).

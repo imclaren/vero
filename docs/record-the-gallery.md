@@ -1,5 +1,7 @@
 # Record the gallery pictures
 
+*Step 12 of 15 in [the vero guide](README.md).*
+
 Every test run records the app's window as a GIF, plus a still of its
 last frame. The recordings go on the install page, under "See it at
 work", so that people can see the app on their own system before they
@@ -49,3 +51,7 @@ Three things to know:
 Each of vero's `scripts/run-*.sh` scripts takes `--record out.gif`, as in
 `scripts/run-freebsd.sh --record docs/screenshots/freebsd.gif`. That is
 how the pictures in vero's README are made.
+
+---
+
+Next: [Release](release.md).

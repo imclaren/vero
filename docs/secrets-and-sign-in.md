@@ -1,5 +1,7 @@
 # Secrets and sign-in
 
+*Step 7 of 15 in [the vero guide](README.md).*
+
 Tokens, passwords and anything else that must not sit in a plain file go
 through `kit/keychain`. It stores each secret in the system's own secure
 store: the login keychain on the Mac, the Credential Manager on Windows,
@@ -54,3 +56,7 @@ built into the worker at release time:
 ```bash
 vero release --ldflags "-X main.clientID=..."
 ```
+
+---
+
+Next: [Build the worker for every system](build-the-worker-everywhere.md).

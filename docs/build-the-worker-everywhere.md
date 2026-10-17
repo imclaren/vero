@@ -1,5 +1,7 @@
 # Build the worker for every system
 
+*Step 8 of 15 in [the vero guide](README.md).*
+
 The worker is built from the Mac for every system and processor that the
 app ships to, with cgo turned off. No cgo means no C compiler for each
 target and no C library to find on each system. It is the reason one Mac
@@ -41,3 +43,7 @@ Set `cgo = true` under `[worker]` in `vero-app.toml`. The Mac's worker is
 then built with cgo and Xcode's clang, and every other system's without
 it. The code that needs cgo must be behind a build tag so that the other
 builds still compile.
+
+---
+
+Next: [Write test steps](write-test-steps.md).

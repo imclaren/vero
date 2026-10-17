@@ -1,5 +1,7 @@
 # Test on Windows
 
+*Step 11 of 15 in [the vero guide](README.md).*
+
 WPF only runs on Windows, so vero tests the Windows front end in a
 Windows 11 ARM virtual machine under qemu on the Mac. The VM is made once
 and then reused.
@@ -56,3 +58,7 @@ ssh -i ~/.ssh/vero-windows -p 2222 vero@127.0.0.1
 
 A VM that was installed before SSH was part of the setup gets it from
 `scripts/setup-windows-ssh.sh`.
+
+---
+
+Next: [Record the gallery pictures](record-the-gallery.md).

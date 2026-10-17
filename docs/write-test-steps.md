@@ -1,5 +1,7 @@
 # Write test steps
 
+*Step 9 of 15 in [the vero guide](README.md).*
+
 A vero test installs the app on a system, opens its window, and then
 does what a person would: sends requests, waits for the state to change,
 and lets the recording show the result. The steps that do this are
@@ -61,3 +63,7 @@ The Mac is recorded only when `[test] env` sets `VERO_PROFILE`. That is
 a safety check: a recording on the Mac runs the app as you, and the
 profile is what stops it touching the settings and secrets of the copy
 you use.
+
+---
+
+Next: [Test on Linux and the BSDs](test-on-linux-and-the-bsds.md).

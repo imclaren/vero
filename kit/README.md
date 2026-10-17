@@ -1,5 +1,7 @@
 # The kit
 
+*Reference page of [the vero guide](../docs/README.md).*
+
 The worker is plain Go and runs the same on every system. But some
 things an app needs are different on each system: where secrets are
 kept, how a notification is shown, how to stop the machine sleeping.
