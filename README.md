@@ -142,8 +142,8 @@ test or release them yet.
   [How vero works](docs/how-vero-works.md). It explains the worker, the
   front end, the state and the requests, and ends with a glossary.
 - **To build an app, step by step**, follow [the vero guide](docs/README.md).
-  It is fifteen short pages in the order you meet them, from setting up
-  the Mac to shipping updates, and each page says what comes next.
+  It goes from setting up the Mac to shipping updates, one page per step,
+  and each page says what comes next.
 - **To look something up**: the [Go reference](https://pkg.go.dev/github.com/imclaren/vero)
   for the worker's API, the [kit](kit/README.md) for secrets,
   notifications, sleep and updates, and the
