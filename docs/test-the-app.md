@@ -127,8 +127,9 @@ path/to/vero/scripts/run-windows.sh --iso ~/Downloads/win11.iso --install   # ab
 path/to/vero/scripts/setup-windows-display.sh
 ```
 
-The install is unattended: it makes a local account, sets up SSH so that
-the tests can reach the VM, and installs the .NET SDK in it. After that:
+The install is unattended: it makes a local account whose password never
+expires, signs it in at every start, sets up SSH so that the tests can
+reach the VM, and installs the .NET SDK in it. After that:
 
 ```bash
 path/to/vero/scripts/test-all.sh --app vero-app.toml --only windows

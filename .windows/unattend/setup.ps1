@@ -27,4 +27,11 @@ Set-ItemProperty $k DefaultUserName "vero"
 Set-ItemProperty $k DefaultPassword "vero"
 Remove-ItemProperty $k AutoLogonCount -ErrorAction SilentlyContinue
 
+# The password must never expire. Windows expires a local account's
+# password after 42 days by default, and from then on the automatic
+# sign-in stops at the lock screen and every test fails to reach the
+# desktop. A VM made before this line gets it with:
+#   ssh -i ~/.ssh/vero-windows -p 2222 vero@127.0.0.1 "Set-LocalUser -Name vero -PasswordNeverExpires \$true"
+Set-LocalUser -Name vero -PasswordNeverExpires $true
+
 Stop-Transcript

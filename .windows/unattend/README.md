@@ -11,9 +11,20 @@ Windows installers, in a Windows 11 ARM VM under qemu:
   satisfy, makes a local account (Windows 11 otherwise insists on a
   Microsoft account), logs in by itself, and at first login runs
   `setup-ssh.ps1`, then `setup.ps1`.
-- `setup.ps1`: installs Go, the .NET 8 SDK and git with winget. There is
-  no C compiler to install, since the worker is pure Go and the C#
-  binding starts it as a process rather than loading a library.
+- `setup.ps1`: installs Go, the .NET 8 SDK and git with winget, makes
+  the sign-in automatic at every start, and sets the account's password
+  to never expire. There is no C compiler to install, since the worker
+  is pure Go and the C# binding starts it as a process rather than
+  loading a library.
+
+A VM made before the password was set to never expire stops signing in
+42 days after its install, and every test then fails with "the VM did
+not sign vero in to its desktop". Fix it once, over SSH:
+
+```bash
+scripts/run-windows.sh --ssh 2222
+ssh -i ~/.ssh/vero-windows -p 2222 vero@127.0.0.1 "Set-LocalUser -Name vero -PasswordNeverExpires \$true"
+```
 
 `setup-ssh.ps1` isn't kept here: it's
 [`scripts/lib/windows-ssh.ps1`](../../scripts/lib/windows-ssh.ps1), which
