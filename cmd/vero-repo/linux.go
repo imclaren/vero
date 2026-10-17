@@ -11,6 +11,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -345,6 +346,16 @@ func allows(section string, arches []string, goarch string) bool {
 	return false
 }
 
+// testedArch says whether to make packages for goarch, a processor as Go
+// names it. vero's tests set VERO_PACKAGE_GOARCHES, such as "amd64,arm64",
+// to the processors of the systems they test on, so that a test does not
+// build packages for processors that no system it tests has. Without it,
+// every processor the app asks for is made.
+func testedArch(goarch string) bool {
+	only := os.Getenv("VERO_PACKAGE_GOARCHES")
+	return only == "" || slices.Contains(strings.Split(only, ","), goarch)
+}
+
 // linuxArchesOf are the architectures section's packages are made for,
 // given the arches it names: amd64 and arm64 when it names none, and only
 // those it names when it does.
@@ -352,7 +363,7 @@ func linuxArchesOf(section string, arches []string) []linuxArch {
 	var out []linuxArch
 	for _, a := range linuxArches {
 		name := a.names[section]
-		if name == "" || (len(arches) == 0 && a.extra) || (len(arches) > 0 && !allows(section, arches, a.goarch)) {
+		if name == "" || (len(arches) == 0 && a.extra) || (len(arches) > 0 && !allows(section, arches, a.goarch)) || !testedArch(a.goarch) {
 			continue
 		}
 		out = append(out, linuxArch{a.goarch, name, a.names["deb"]})
@@ -466,7 +477,7 @@ func (a *App) archesFor(sys *unixSystem) []unixArch {
 	}
 	var out []unixArch
 	for _, arch := range sys.arches {
-		if (len(arches) == 0 && !arch.extra) || (len(arches) > 0 && allows(sys.name, arches, arch.goarch)) {
+		if ((len(arches) == 0 && !arch.extra) || (len(arches) > 0 && allows(sys.name, arches, arch.goarch))) && testedArch(arch.goarch) {
 			out = append(out, arch)
 		}
 	}

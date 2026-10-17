@@ -247,6 +247,11 @@ family() {
         windows) echo "windows windows${APP_MSIX:+,msix}" ;;
     esac
 }
+# Only for the processors of the systems tested: ARM64, as this Mac and its
+# VMs are, and x86-64, which Arch, DragonFly and illumos are emulated as.
+# vero release still makes every one the app asks for.
+VERO_PACKAGE_GOARCHES=${VERO_PACKAGE_GOARCHES:-arm64,amd64}
+export VERO_PACKAGE_GOARCHES
 # The packages, once per family, in the background: each system waits for
 # its own family's, in $SHARED/FAMILY/VERSION, which VERSION.done marks.
 mkdir -p "$SHARED"

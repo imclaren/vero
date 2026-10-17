@@ -241,3 +241,21 @@ to = "%s"
 		}
 	}
 }
+
+// TestTestedArch: VERO_PACKAGE_GOARCHES narrows the processors packaged,
+// and every one the app asks for is packaged without it.
+func TestTestedArch(t *testing.T) {
+	t.Setenv("VERO_PACKAGE_GOARCHES", "")
+	if got := len(linuxArchesOf("deb", nil)); got != 2 {
+		t.Errorf("without the setting, %d processors, not 2", got)
+	}
+	t.Setenv("VERO_PACKAGE_GOARCHES", "arm64")
+	got := linuxArchesOf("deb", []string{"amd64", "arm64", "riscv64"})
+	if len(got) != 1 || got[0].goarch != "arm64" {
+		t.Errorf("with arm64 only, %v", got)
+	}
+	w := &WPF{}
+	if a, _ := w.arches(); len(a) != 1 || a[0] != "arm64" {
+		t.Errorf("Windows with arm64 only: %v", a)
+	}
+}
