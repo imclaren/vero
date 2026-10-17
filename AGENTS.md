@@ -95,7 +95,9 @@ update arrives, records each window when `[test]` has `record = true`, and
 adds DragonFly and illumos, which are emulated and slow. `--update` and
 `--record` add those to a quick run. Each system starts from a ready-made
 copy with the app's dependencies installed, and a system that passed with
-nothing changed since is skipped, unless `--again` is given. Results are in
+nothing changed since is skipped, unless `--again` is given. While a run
+goes, `test-all.sh --status` and `~/.cache/vero/test-runs/status.txt` say
+where each system is and how long it has left. Results are in
 `~/.cache/vero/test-results/index.html` and logs in
 `~/.cache/vero/test-runs/`. Its systems are debian, debian12,
 ubuntu, fedora, opensuse, arch, alpine, chimera, void, flatpak, freebsd,

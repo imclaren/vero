@@ -32,7 +32,7 @@ VERO_READY_USED="$HOME/.cache/vero/ready"
 # ffmpeg, rounded up: a ready-made container image takes 1 to 2 GB of
 # Docker's disk, a BSD snapshot 0.2 to 0.3 GB and each run's overlay as
 # much again, and a Windows run's overlay about 1 GB. illumos's snapshot,
-# which brings the system up to date, is an estimate. The columns are:
+# which brings the system up to date, took 5 GB. The columns are:
 # on Docker's disk, the ready-made system and the test container's own
 # changes; on this Mac's, the packages, the site and, for a VM, its
 # snapshot and the run's overlay. A ready-made system already made needs
@@ -53,7 +53,7 @@ freebsd      0   0   1   1
 netbsd       0   0   1   1
 openbsd      0   0   1   1
 dragonfly    0   0   1   1
-illumos      0   0   4   1
+illumos      0   0   6   2
 windows      0   0   0   2
 mac          0   0   1   1"
 

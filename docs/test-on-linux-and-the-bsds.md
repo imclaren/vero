@@ -19,7 +19,10 @@ named `vero-ready-SYSTEM` for a container, and a snapshot in
 the test's tools installed. Each run uses a throwaway copy of it, so the
 VM's own disk is never changed by a test. The copy is made again when the
 system or what the app needs changes, each week for a container and each
-month for a VM, and `--fresh` starts from the system itself.
+month for a VM, and `--fresh` starts from the system itself. A FreeBSD
+or illumos snapshot is brought up to date first, and DragonFly and
+illumos, which are emulated and slow to boot, carry on from a running
+state saved with the snapshot.
 `test-all.sh --prune` removes the copies that are no longer needed, and
 `scripts/doctor.sh` shows the space that each kind takes. A system is
 refused when it would leave less than `VERO_MIN_FREE_GB` (10 GB) free.
