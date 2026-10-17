@@ -14,7 +14,7 @@ From a checkout of vero:
 
 This builds the app and the worker, puts them on a disc image, and boots
 vero's Windows 11 virtual machine with it. The VM has to exist first;
-[Test on Windows](../../docs/test-on-windows.md) makes it. Inside
+step 5 of [Test the app](../../docs/test-the-app.md) makes it. Inside
 Windows, copy the folder from the CD drive to the desktop and run the
 exe.
 

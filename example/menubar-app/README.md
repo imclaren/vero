@@ -28,5 +28,5 @@ writes.
 | [Package.swift](Package.swift) | the Swift package, depending on vero's |
 | [build.sh](build.sh) | builds the C archive, the worker and the app |
 
-[Bring an Xcode app](../../docs/bring-an-xcode-app.md) adds vero to a Mac
-app of your own that has an Xcode project.
+The end of [Build the app](../../docs/build-the-app.md) says how to add
+vero to a Mac app of your own that has an Xcode project.

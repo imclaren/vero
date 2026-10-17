@@ -1,31 +1,16 @@
 # vero-repo
 
-*Reference page of [the vero guide](../../docs/README.md).*
-
 `vero-repo` is the packaging tool. It makes every installer, package
 repository, signature and index that a release needs, and the install
 site that holds them. You rarely run it yourself: `vero release` and
 `vero ship` run it, and `vero` passes its own subcommands (`key`,
 `package`, `build`, `check`, `steps`, `show` and `plan`) on to it.
+Everything is written in Go and runs on the Mac, except a Flatpak, which
+needs Docker.
 
-Everything is written in Go and runs on the Mac. The one exception is a
-Flatpak, which needs Docker.
-
-## What a release gives each system's users
-
-| System | What its users get |
-|---|---|
-| Debian, Ubuntu and Chromebooks | An apt repository. Added once, then updated with the rest of the system. |
-| Fedora, openSUSE | An rpm repository. |
-| Arch Linux | A pacman repository, and a recipe for the AUR. |
-| Alpine, Void and Chimera | An apk or xbps repository, when the system's section is in `vero-app.toml`. |
-| Any Linux, with Flatpak | A Flatpak repository and a `.flatpakref`, when asked for. |
-| FreeBSD, DragonFly | A pkg repository. |
-| NetBSD | A pkgsrc repository for pkgin. Unsigned, because pkgsrc checks no signatures, so HTTPS has to vouch for it. |
-| OpenBSD | Signed packages for `pkg_add`. |
-| illumos | An IPS repository on OpenIndiana, served as plain files. |
-| macOS | A notarised disk image, an optional `.pkg`, a Sparkle appcast and a Homebrew cask. |
-| Windows | An installer for x64 and ARM64, a winget manifest, and an MSIX when asked for. |
+[Ship the app](../../docs/ship-the-app.md) lists what a release gives
+each system's users. This page holds the one table that is only needed
+when an app narrows or widens the processors it is built for.
 
 A private site can carry a password in the address that each system
 fetches from, such as `https://NAME:PASSWORD@example.com/myapp/arch/$arch`.

@@ -362,7 +362,7 @@ func TestNew(t *testing.T) {
 	if first, _, _ := strings.Cut(string(guide), "\n"); !strings.Contains(string(agents), first) {
 		t.Error("AGENTS.md is not vero's guide")
 	}
-	if !strings.Contains(string(agents), "](https://github.com/imclaren/vero/blob/main/docs/README.md)") || strings.Contains(string(agents), "](docs/") {
+	if !strings.Contains(string(agents), "](https://github.com/imclaren/vero/blob/main/docs/how-vero-works.md)") || strings.Contains(string(agents), "](docs/") {
 		t.Error("AGENTS.md's links do not point at vero's repository")
 	}
 	if rec := readRecord(filepath.Join(dir, "hello")); rec["AGENTS.md"] != hashOf(agents) {

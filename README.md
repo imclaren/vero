@@ -23,7 +23,7 @@ from one machine:
   each window, and publishes installers, package repositories and an
   install page with built-in updates.
 
-[How vero works](docs/how-vero-works.md) explains the pieces in more depth, and it is step one of [the vero guide](docs/README.md).
+[How vero works](docs/how-vero-works.md) explains the pieces in more depth.
 
 ## Ten minutes to a running app
 
@@ -45,20 +45,22 @@ it for now and still build and run on the Mac.
 **2. Make an app.**
 
 ```bash
-vero new hello
-cd hello
+vero new jotter
+cd jotter
 ```
 
 This writes a Go module with an example worker in `cmd/worker`, a SwiftUI
 app in `macos/`, a GTK app in `gtk/`, a WPF app in `windows/`, and a
 `vero-app.toml` that describes the app. The example worker pretends to
-sync three folders, so there is something to watch.
+sync three folders, so there is something to watch. Pick a name that no
+Linux distribution already uses for a package, or apt will install theirs
+instead of yours. `hello`, for one, is taken.
 
 **3. Run it on the Mac.**
 
 ```bash
 cd macos && ./build.sh
-VERO_PROFILE=dev ./.build/debug/Hello
+VERO_PROFILE=dev ./.build/debug/Jotter
 ```
 
 A window opens showing the worker's state, with a button for each request
@@ -138,20 +140,22 @@ test or release them yet.
 
 ## Where to go next
 
-- **To understand the pieces** before you write anything, read
-  [How vero works](docs/how-vero-works.md). It explains the worker, the
-  front end, the state and the requests, and ends with a glossary.
-- **To build an app, step by step**, follow [the vero guide](docs/README.md).
-  It goes from setting up the Mac to shipping updates, one page per step,
-  and each page says what comes next.
-- **To look something up**: the [Go reference](https://pkg.go.dev/github.com/imclaren/vero)
-  for the worker's API, the [kit](kit/README.md) for secrets,
-  notifications, sleep and updates, and the
-  [vero-repo README](cmd/vero-repo/README.md) for what a release gives
-  each system's users.
-- **If a coding agent works on your app**, it reads
-  [AGENTS.md](AGENTS.md), which `vero new` copies into every app. It is
-  the rules and the release checklist in a form an agent can follow.
-- **To work on vero itself**, see [Contributing](CONTRIBUTING.md).
+The walkthrough above continues, with the same app, on three pages. Each
+is numbered steps with the command to run and what you should see:
+
+1. [Build the app](docs/build-the-app.md). A real screen on each system,
+   a sign-in kept in the keychain, and a check that the worker builds
+   everywhere. About an hour.
+2. [Test the app](docs/test-the-app.md). The app installed and driven by
+   a script on Debian, FreeBSD and Windows, from the Mac.
+3. [Ship the app](docs/ship-the-app.md). The first release, the site,
+   updates, signing, and Homebrew.
+
+[How vero works](docs/how-vero-works.md) explains the pieces and ends
+with a glossary, for when you want to know why. For looking things up:
+the [Go reference](https://pkg.go.dev/github.com/imclaren/vero), the
+[kit](kit/README.md), and [packaging for each system](cmd/vero-repo/README.md).
+If a coding agent works on your app, it reads [AGENTS.md](AGENTS.md),
+which `vero new` copies into every app.
 
 vero is released under the [MIT licence](LICENSE).

@@ -1,10 +1,12 @@
 # Working on a vero app
 
 This file is for a coding agent that makes or changes an app built on
-vero. It is the rules, the commands and the release checklist. The
-[vero guide](docs/README.md) has the detail, and
-[How vero works](docs/how-vero-works.md) explains the pieces. Everything
-here runs on a Mac with Apple silicon, Go and Xcode.
+vero. It is the rules, the commands and the release checklist.
+[How vero works](docs/how-vero-works.md) explains the pieces, and the
+walkthroughs [Build the app](docs/build-the-app.md),
+[Test the app](docs/test-the-app.md) and [Ship the app](docs/ship-the-app.md)
+show each step with its command. Everything here runs on a Mac with
+Apple silicon, Go and Xcode.
 
 ## What a vero app is
 
@@ -27,16 +29,16 @@ here runs on a Mac with Apple silicon, Go and Xcode.
 ## Making an app
 
 ```bash
-vero new hello             # a window app, with the three desktop front ends
-vero new hello --tray      # a window app with an icon in the menu bar and the tray
-vero new hello --menubar   # an app that lives in the menu bar and the tray
+vero new jotter             # a window app, with the three desktop front ends
+vero new jotter --tray      # a window app with an icon in the menu bar and the tray
+vero new jotter --menubar   # an app that lives in the menu bar and the tray
 vero ship counter.go       # an app from one Go file, tested and released
 ```
 
 To bring an app that already has a Go worker, move the worker into
 `cmd/worker` of the app's module, run `vero add` in the module's folder,
-and work through `PORTING.md`. An app with an Xcode project keeps it; see
-[Bring an Xcode app](docs/bring-an-xcode-app.md).
+and work through `PORTING.md`. An app with an Xcode project keeps it, as the end of
+[Build the app](docs/build-the-app.md) says.
 
 ## Rules for the code
 
@@ -68,11 +70,11 @@ secrets apart from the copy that the person uses.
   `kit/keychain`. Both follow `VERO_PROFILE`, and so does vero's Swift
   package.
 - Run every development or test copy with `VERO_PROFILE` set, as in
-  `VERO_PROFILE=dev ./.build/debug/Hello`. The tests set it in
+  `VERO_PROFILE=dev ./.build/debug/Jotter`. The tests set it in
   `[test] env`, and `vero ship` records the Mac only when they do.
 - On the Mac, a copy built with Xcode also needs a bundle ID of its own,
   so that its preferences are apart from the real app's. Build it with
-  `xcodebuild PRODUCT_BUNDLE_IDENTIFIER=com.example.hello.dev`.
+  `xcodebuild PRODUCT_BUNDLE_IDENTIFIER=com.example.jotter.dev`.
 - Before the first run, check that the copy's folder, preferences and
   keychain items all carry the profile's name.
 

@@ -1,7 +1,5 @@
 # The lab
 
-*Reference page of [the vero guide](README.md).*
-
 `vero ship` builds, tests and releases for the desktop systems: macOS,
 Windows, Linux and the BSDs. vero also runs on more than those, and this
 page is where the rest live. Each has a working example in the repository,

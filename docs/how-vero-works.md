@@ -1,10 +1,10 @@
 # How vero works
 
-*Step 1 of 15 in [the vero guide](README.md).*
 
-This page explains the pieces of a vero app and the words the rest of the
-documentation uses. Read it once, before the rest of the guide. If you only want to
-try vero, the [README](../README.md) has a ten-minute walkthrough.
+This page explains the pieces of a vero app and the words the rest of
+the documentation uses. Nothing on it is needed to follow the
+walkthroughs, which start on the [front page](../README.md). Read it
+when you want to know why.
 
 On this page:
 
@@ -19,7 +19,8 @@ On this page:
 9. [The kit](#the-kit)
 10. [Testing on every system](#testing-on-every-system)
 11. [Releasing](#releasing)
-12. [Glossary](#glossary)
+12. [The vero command](#the-vero-command)
+13. [Glossary](#glossary)
 
 ## The idea
 
@@ -164,17 +165,17 @@ Those targets live in [the lab](lab.md).
 
 ## The files in an app
 
-`vero new hello` makes this:
+`vero new jotter` makes this:
 
 ```
-hello/
+jotter/
 ├── cmd/worker/main.go      the worker: state, handlers, and the real work
 ├── go.mod
 ├── vero-app.toml           describes the app to the packaging and the tests
 ├── icon.png
 ├── macos/                  SwiftUI front end (a Swift package)
-│   ├── Sources/Hello/App.swift
-│   ├── Sources/Hello/WorkerAPI.swift     generated
+│   ├── Sources/Jotter/App.swift
+│   ├── Sources/Jotter/WorkerAPI.swift     generated
 │   └── build.sh
 ├── gtk/                    GTK 4 front end, in Python
 │   ├── main.py
@@ -185,7 +186,7 @@ hello/
 │   ├── MainWindow.xaml, MainWindow.xaml.cs, App.xaml, App.xaml.cs
 │   ├── Vero.cs, VeroWpf.cs               vero's library, copied in
 │   ├── WorkerApi.cs                      generated
-│   └── Hello.csproj
+│   └── Jotter.csproj
 ├── testdata/               files that the tests use
 ├── PORTING.md              a checklist of what to finish
 ├── AGENTS.md               rules for coding agents working on the app
@@ -216,7 +217,6 @@ important parts are:
 - `[test]` and `[[test.step]]`, which say what the automated test does
   once the app's window is open.
 
-[Describe the app](describe-the-app.md), step 3, goes through every section, and
 [example/vero-app.toml](../example/vero-app.toml) has a comment on each
 setting.
 
@@ -255,9 +255,7 @@ snapshot with the app's dependencies already installed, so a test does not
 start from a bare system every time. The full run also records each
 window as a GIF, which the install page shows.
 
-[Test on Linux and the BSDs](test-on-linux-and-the-bsds.md),
-[Test on Windows](test-on-windows.md) and
-[Write test steps](write-test-steps.md) have the details.
+[Test the app](test-the-app.md) walks through it.
 
 ## Releasing
 
@@ -275,10 +273,31 @@ stops at the first system that fails.
 The first release makes a signing key. Back it up. Installed copies check
 updates against that key, and a lost key means they never update again.
 
-[Release](release.md), [Sign and publish](sign-and-publish.md) and
-[Updates](updates.md) cover this, and the
-[vero-repo README](../cmd/vero-repo/README.md) lists exactly what each
+[Ship the app](ship-the-app.md) walks through it, and lists what each
 system's users get.
+
+## The vero command
+
+`vero` with no arguments prints every command and its flags, and
+`vero COMMAND --help` prints one command's.
+
+| Command | What it does |
+|---|---|
+| `vero setup` | Installs what vero needs on this Mac, and says what is still missing. |
+| `vero new NAME` | Makes a new app: a Go module with an example worker and a front end for each desktop system. |
+| `vero add [front ends]` | Adds front ends to an app that already has a worker in `cmd/worker`. |
+| `vero gen` | Writes each front end's typed binding from the worker's Go types. `--check` fails when one is stale. |
+| `vero ship` | Tests and records the app on every system this Mac can run, then releases it. `--plan` says what it would do. `--no-release` stops before releasing. |
+| `vero release` | Builds and packages a release without testing. |
+| `vero install` | Builds the Mac app from the working copy and installs it, numbered just above the current release. |
+| `vero upgrade` | Moves an app to this version of vero. |
+| `vero credentials` | Says what is set up for signing and the stores. |
+| `vero publish` | Publishes a release to Homebrew, winget or the AUR. |
+
+`vero key`, `package`, `build`, `check`, `steps`, `show` and `plan` belong
+to [vero-repo](../cmd/vero-repo/README.md), the packaging tool, and
+`vero` passes them on. `--vero DIR`, or `VERO_DIR` for `vero setup` and
+`vero ship`, uses a checkout of vero in place of the published module.
 
 ## Glossary
 
@@ -314,6 +333,3 @@ system's users get.
 - **System.** An operating system, or a distribution of one. vero treats
   Debian, Fedora and FreeBSD as three systems.
 
----
-
-Next: [Set up a Mac](set-up-a-mac.md).

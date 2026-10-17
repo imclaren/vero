@@ -112,7 +112,7 @@ func ship(args []string) error {
 		}
 	}
 	if len(broken) > 0 {
-		return fmt.Errorf("the worker does not build for %s, as the plan above says. Each line there names what stops it; a package that needs cgo, or that has no port for that system, is the usual cause, and vero's docs/build-the-worker-everywhere.md says what to use instead",
+		return fmt.Errorf("the worker does not build for %s, as the plan above says. Each line there names what stops it; a package that needs cgo, or that has no port for that system, is the usual cause, and step 6 of vero's docs/build-the-app.md says what to use instead",
 			strings.Join(broken, ", "))
 	}
 
