@@ -43,6 +43,11 @@ done
 echo
 free=$(df -g "$HOME" | awk 'NR==2 {print $4}')
 echo "Disk: ${free}GB free. Every VM at once can grow to about 130GB, Xcode takes about 15GB and Android about 5GB."
+echo
+echo "What vero's tests keep, by kind (scripts/test-all.sh --prune removes what is stale)"
+VERO=$(cd "$(dirname "$0")/.." && pwd)
+. "$VERO/scripts/lib/space.sh"
+vero_space_report
 
 echo
 [ $missing -eq 0 ] && echo "Nothing is missing." || echo "$missing missing: scripts/setup.sh adds all but Xcode and the Windows ISO."

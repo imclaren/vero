@@ -82,17 +82,24 @@ go test ./... && go vet ./...             # the worker
 vero gen --check                          # the generated requests are current
 vero ship --plan                          # what builds and tests on this Mac, and what cannot
 
-path/to/vero/scripts/test-all.sh --app vero-app.toml                     # every system
+path/to/vero/scripts/test-all.sh --app vero-app.toml --quick             # every day: Debian and Windows
+path/to/vero/scripts/test-all.sh --app vero-app.toml                     # the full run, before a release
 path/to/vero/scripts/test-all.sh --app vero-app.toml --only "debian freebsd"
-path/to/vero/scripts/test-all.sh --app vero-app.toml --skip "illumos dragonfly"
 path/to/vero/scripts/test-all.sh --app vero-app.toml --no-vms            # containers only
 path/to/vero/scripts/test-repo.sh --app vero-app.toml --vm windows       # one system
 ```
 
-`test-all.sh` installs the app on each system from a site that it builds,
-plays the `[[test.step]]` entries, records the window and checks that an
-update arrives. Results are in `~/.cache/vero/test-results/index.html` and
-logs in `~/.cache/vero/test-runs/`. Its systems are debian, debian12,
+`test-all.sh` installs the app on each system from a site that it builds
+and plays the `[[test.step]]` entries. The full run also checks that an
+update arrives, records each window when `[test]` has `record = true`, and
+adds DragonFly and illumos, which are emulated and slow. `--update` and
+`--record` add those to a quick run. Each system starts from a ready-made
+copy with the app's dependencies installed, and a system that passed with
+nothing changed since is skipped, unless `--again` is given. While a run
+goes, `test-all.sh --status` and `~/.cache/vero/test-runs/status.txt` say
+where each system is and how long it has left. Results are in
+`~/.cache/vero/test-results/index.html` and logs in
+`~/.cache/vero/test-runs/`. Its systems are debian, debian12,
 ubuntu, fedora, opensuse, arch, alpine, chimera, void, flatpak, freebsd,
 netbsd, openbsd, dragonfly, illumos and windows. `scripts/doctor.sh` says
 what this Mac lacks for each.

@@ -21,6 +21,10 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 
 VM=${VM:-$HOME/vm/vero-netbsd}
+# VERO_DISK_DIR names a folder whose disks to boot in place of the VM's
+# own, such as the overlays on them that test-repo.sh makes, so that a
+# test leaves the VM's own disks as they were.
+DISKS=${VERO_DISK_DIR:-$VM}
 # 10.1, from NetBSD's archive now that 11.0 is out: 11.0's kernel stops
 # with an illegal instruction as it starts, in a VM on Apple silicon
 # (-accel hvf -cpu host). pkgsrc still builds packages for 10.1.
@@ -96,8 +100,8 @@ CGO_ENABLED=0 GOOS=netbsd GOARCH=arm64 go build -o "$VM/worker" ./example/worker
 qemu-system-aarch64 \
     -machine virt,highmem=on -accel hvf -cpu host -smp 4 -m 2048 \
     -drive if=pflash,format=raw,readonly=on,file="$FW/edk2-aarch64-code.fd" \
-    -drive if=pflash,format=raw,file="$VM/vars.fd" \
-    -drive if=virtio,format=qcow2,file="$VM/disk.qcow2" \
+    -drive if=pflash,format=raw,file="$DISKS/vars.fd" \
+    -drive if=virtio,format=qcow2,file="$DISKS/disk.qcow2" \
     -device virtio-gpu-pci -device qemu-xhci -device usb-kbd -device usb-tablet \
     -netdev "user,id=n0,ipv6=off,hostfwd=tcp::$SSH_PORT-:22,hostfwd=tcp::$PORT-:5900" \
     -device virtio-net-pci,netdev=n0 \

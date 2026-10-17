@@ -16,9 +16,10 @@
 # install from; the README says how.
 set -e
 VERO=$(cd "$(dirname "$0")/.." && pwd)
-BIN="$HOME/.cache/vero/bin"
+# vero-repo: the one VERO_REPO names (vero ship and test-repo.sh set it),
+# or built from this checkout into vero's cache, which VERO_CACHE can move.
+if [ -n "$VERO_REPO" ]; then exec "$VERO_REPO" package --vero "$VERO" "$@"; fi
+BIN="${VERO_CACHE:-$HOME/.cache/vero}/bin"
 mkdir -p "$BIN"
-# vero-repo: the one VERO_REPO names (vero ship sets it), or built from
-# this checkout.
-if [ -n "$VERO_REPO" ]; then cp "$VERO_REPO" "$BIN/vero-repo"; else go build -C "$VERO/cmd/vero-repo" -o "$BIN/vero-repo" .; fi
+go build -C "$VERO/cmd/vero-repo" -o "$BIN/vero-repo" .
 exec "$BIN/vero-repo" package --vero "$VERO" "$@"

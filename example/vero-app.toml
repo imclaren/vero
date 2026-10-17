@@ -250,7 +250,12 @@ arches = ["amd64", "386"]
 # request (call, with), waits until the state shows something (wait, with
 # timeout in seconds), pauses so the recording shows a moment, or copies a
 # file from [test] files (copy). {tmp} is a new empty folder, and {files}
-# the folder the files are in.
+# the folder the files are in. record = true asks the full test run for a
+# recording of each system, for the install page; other runs play the
+# steps without one, unless test-all.sh is given --record.
+[test]
+record = true
+
 [[test.step]]
 wait = { path = "jobs.#", is = 3 }
 

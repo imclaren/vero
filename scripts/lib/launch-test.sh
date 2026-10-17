@@ -5,6 +5,8 @@
 # steps, and takes a frame of the display every half second until the
 # steps have finished (and a few frames more), the app has exited, or the
 # time is up. test-repo.sh fetches the folder and makes the frames a GIF.
+# When the folder holds a file called no-frames, the steps are played and
+# no frames are taken.
 #
 #   launch-test.sh SECONDS COMMAND [ARGUMENT...]
 #
@@ -66,7 +68,9 @@ fi
 # What the display is, for when the app cannot use it.
 [ $wayland = yes ] || echo "display $DISPLAY from $(command -v Xvnc || command -v Xvfb), xdpyinfo $(xdpyinfo >/dev/null 2>&1 && echo answers || echo "does not answer")" >>"$dir/display.log"
 
-if [ $wayland = yes ]; then
+if [ -f "$dir/no-frames" ]; then
+    frame() { :; }
+elif [ $wayland = yes ]; then
     frame() { grim "$dir/frames/f$1.png" 2>/dev/null; }
 elif command -v xwd >/dev/null 2>&1 && command -v gzip >/dev/null 2>&1; then
     frame() { xwd -root -silent 2>/dev/null | gzip -1 >"$dir/frames/f$1.xwd.gz"; }

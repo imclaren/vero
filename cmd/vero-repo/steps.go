@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -34,6 +36,10 @@ type Test struct {
 	// test copy's settings apart from those of a copy in use, say.
 	Env   map[string]string `toml:"env"`
 	Steps []map[string]any  `toml:"step"`
+	// Record asks vero's full test run for a recording of each system, as
+	// pictures for the install page. Other runs play the steps without
+	// recording, unless test-all.sh is given --record.
+	Record bool `toml:"record"`
 }
 
 var stepKinds = []string{"call", "send", "wait", "pause", "copy"}
@@ -170,6 +176,10 @@ func showCommand(args []string) error {
 	if a.WPF != nil {
 		exe, msix = a.WPF.Exe, a.WPF.MSIX.IdentityName
 	}
+	record := ""
+	if a.Test != nil && a.Test.Record {
+		record = "yes"
+	}
 	file, err := filepath.Abs(*app)
 	if err != nil {
 		return err
@@ -177,8 +187,28 @@ func showCommand(args []string) error {
 	for _, kv := range [][2]string{
 		{"APP_NAME", a.Name}, {"APP_DISPLAY", a.DisplayName}, {"APP_ID", a.ID},
 		{"APP_WORKER", a.Worker.Name}, {"APP_EXE", exe}, {"APP_MSIX", msix}, {"APP_TOML", file}, {"APP_DIR", a.dir},
+		{"APP_DEPS", depsKey(a.GTK)}, {"APP_RECORD", record},
 	} {
 		fmt.Printf("%s='%s'\n", kv[0], strings.ReplaceAll(kv[1], "'", `'\''`))
 	}
 	return nil
+}
+
+// depsKey is a short hash of what the app's GTK packages ask of each
+// system. test-repo.sh keeps a ready-made system for each, with those
+// packages installed, and makes it again when this changes. The front
+// end's own files are left out, since they change nothing installed
+// beside the app.
+func depsKey(g *GTK) string {
+	if g == nil {
+		return "none"
+	}
+	d := *g
+	d.Folder, d.Entry, d.Include, d.Categories, d.Notes, d.Data = "", "", nil, "", nil, nil
+	data, err := json.Marshal(d)
+	if err != nil {
+		return "none"
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])[:12]
 }

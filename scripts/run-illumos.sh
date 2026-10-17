@@ -31,6 +31,10 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 
 VM=${VM:-$HOME/vm/vero-illumos}
+# VERO_DISK_DIR names a folder whose disks to boot in place of the VM's
+# own, such as the overlays on them that test-repo.sh makes, so that a
+# test leaves the VM's own disks as they were.
+DISKS=${VERO_DISK_DIR:-$VM}
 RELEASE=${RELEASE:-20260430}
 PORT=${PORT:-5906}
 SSH_PORT=${SSH_PORT:-2226}
@@ -81,11 +85,18 @@ if [ "$INSTALL" = yes ]; then
 fi
 
 boot() {   # $1: extra arguments, e.g. the install media
+    extra=$1
     rm -f "$VM/console.sock"
+    # With VERO_DISK_DIR, qemu's monitor is on a socket there, with which
+    # test-repo.sh saves the running VM; VERO_RESUME names a state so
+    # saved, from which the VM carries on instead of booting.
+    set --
+    [ -n "$VERO_DISK_DIR" ] && set -- "$@" -qmp "unix:$VERO_DISK_DIR/qmp.sock,server=on,wait=off"
+    [ -n "$VERO_RESUME" ] && set -- "$@" -incoming "exec:gzip -dc $VERO_RESUME"
     # -vga std, even though nothing looks at it: see the note at the top.
-    qemu-system-x86_64 -accel tcg -cpu max -smp 2 -m 4096 \
-        -drive if=virtio,format=qcow2,file="$VM/disk.qcow2" \
-        $1 \
+    qemu-system-x86_64 -accel tcg -cpu max -smp 2 -m 4096 "$@" \
+        -drive if=virtio,format=qcow2,file="$DISKS/disk.qcow2" \
+        $extra \
         -netdev "user,id=n0,ipv6=off,hostfwd=tcp::$SSH_PORT-:22,hostfwd=tcp::$PORT-:5900" \
         -device virtio-net-pci,netdev=n0 \
         -display none -vga std \

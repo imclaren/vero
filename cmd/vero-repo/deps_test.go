@@ -128,3 +128,20 @@ func TestEveryLinuxHasAFont(t *testing.T) {
 		}
 	}
 }
+
+// TestDepsKey: the key of what an app needs from each system follows its
+// dependencies, and not the front end's own files.
+func TestDepsKey(t *testing.T) {
+	a := &GTK{Folder: "gtk", Entry: "main.py", Uses: []string{"adwaita"}}
+	b := &GTK{Folder: "linux", Entry: "app.py", Uses: []string{"adwaita"}}
+	c := &GTK{Folder: "gtk", Entry: "main.py", Uses: []string{"adwaita", "webview"}}
+	if depsKey(a) != depsKey(b) {
+		t.Error("the key changed with the folder and the entry, which install nothing")
+	}
+	if depsKey(a) == depsKey(c) {
+		t.Error("the key did not change with what the app uses")
+	}
+	if depsKey(nil) != "none" {
+		t.Error("an app without a GTK front end has a key")
+	}
+}

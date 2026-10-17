@@ -4,10 +4,18 @@
 # long it took and when, which of the app's commits it was, and its log.
 # Systems are in the order the install page shows them. DIR is ~/.cache/vero/test-results,
 # which holds APP/SYSTEM/ folders; test-repo.sh and record-mac.sh run this
-# after each recording.
+# after each recording. LOGS, when given, is test-all.sh's folder of logs:
+# while a run is going, the page shows its status.txt and refreshes itself
+# every five seconds.
+#
+#   results-page.sh DIR [LOGS]
 dir=${1:?the results folder}
+logs=$2
+live=""
+[ -n "$logs" ] && [ -f "$logs/running" ] && kill -0 "$(cat "$logs/running")" 2>/dev/null && live=yes
 {
     echo '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>vero test results</title>'
+    [ -n "$live" ] && echo '<meta http-equiv="refresh" content="5">'
     echo '<style>
 :root { color-scheme: light dark; --ink: #1d1d1f; --soft: #6e6e73; --line: #d2d2d7; --bg: #fff; }
 @media (prefers-color-scheme: dark) { :root { --ink: #f5f5f7; --soft: #a1a1a6; --line: #424245; --bg: #1d1d1f; } }
@@ -17,9 +25,15 @@ h2 { margin: 32px 0 4px; } p { margin: 4px 0; color: var(--soft); }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin-top: 12px; }
 figure { margin: 0; border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
 img { display: block; width: 100%; height: auto; } a { color: inherit; }
+pre { overflow-x: auto; font-size: 13px; border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
 .PASS { color: #1a7f37; } .FAIL { color: #cf222e; } figcaption { font-size: 13px; margin-top: 6px; }
 </style><main><h1>vero test results</h1>'
     echo "<p>Updated $(date '+%Y-%m-%d %H:%M').</p>"
+    if [ -n "$live" ] && [ -f "$logs/status.txt" ]; then
+        echo "<h2>The run going now</h2><pre>"
+        sed 's/&/\&amp;/g; s/</\&lt;/g' "$logs/status.txt"
+        echo "</pre>"
+    fi
     for app in "$dir"/*/; do
         a=$(basename "$app")
         pass=0 fail=0

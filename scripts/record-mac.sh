@@ -39,7 +39,7 @@ $2" ;; *) echo "--clean takes a path under ~/Library: $2" >&2; exit 2 ;; esac; s
     shift
 done
 [ -n "$TOML" ] && [ -d "$BUNDLE" ] || { echo "usage: record-mac.sh --app vero-app.toml --bundle My.app" >&2; exit 2; }
-CACHE="$HOME/.cache/vero"
+CACHE="${VERO_CACHE:-$HOME/.cache/vero}"
 mkdir -p "$CACHE/bin"
 # vero-repo: the one VERO_REPO names (vero ship sets it), or built from
 # this checkout.

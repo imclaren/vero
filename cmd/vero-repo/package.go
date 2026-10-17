@@ -287,8 +287,15 @@ var windowsArches = []string{"x64", "arm64", "x86"}
 // arches are the Windows installers to make: [wpf]'s arches, or x64 and
 // arm64.
 func (w *WPF) arches() ([]string, error) {
+	goarch := map[string]string{"x64": "amd64", "arm64": "arm64", "x86": "386"}
 	if len(w.Arches) == 0 {
-		return []string{"x64", "arm64"}, nil
+		var out []string
+		for _, a := range []string{"x64", "arm64"} {
+			if testedArch(goarch[a]) {
+				out = append(out, a)
+			}
+		}
+		return out, nil
 	}
 	var out []string
 	for _, a := range w.Arches {
@@ -298,6 +305,9 @@ func (w *WPF) arches() ([]string, error) {
 		}
 		if !slices.Contains(windowsArches, name) {
 			return nil, fmt.Errorf("[wpf] arches: %s isn't one vero makes an installer for: x64, arm64 or x86", a)
+		}
+		if !testedArch(goarch[name]) {
+			continue
 		}
 		out = append(out, name)
 	}
