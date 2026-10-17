@@ -21,7 +21,7 @@
 # says PASS or FAIL as it finishes. It exits 1 when any system failed.
 set -e
 VERO=$(cd "$(dirname "$0")/.." && pwd)
-APP="" PARALLEL=3 ONLY="" SKIP="" NOVMS=""
+APP="" PARALLEL=3 ONLY="" SKIP="" NOVMS="" FIRST=8700
 while [ $# -gt 0 ]; do
     case $1 in
         --app) APP=$2; shift ;;
@@ -29,6 +29,7 @@ while [ $# -gt 0 ]; do
         --only) ONLY=$2; shift ;;
         --skip) SKIP=$2; shift ;;
         --no-vms) NOVMS=yes ;;
+        --port) FIRST=$2; shift ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
     shift
@@ -53,7 +54,8 @@ illumos --vm illumos
 windows --vm windows
 mac --mac"
 
-LOGS="$HOME/.cache/vero/test-runs"
+CACHE="${VERO_CACHE:-$HOME/.cache/vero}"
+LOGS="$CACHE/test-runs"
 mkdir -p "$LOGS"
 JOBS=$(mktemp)
 # Each port is reserved, as a folder holding this run's process id, so
@@ -73,7 +75,7 @@ reserve() {
     [ -n "$owner" ] && kill -0 "$owner" 2>/dev/null && return 1
     echo $$ >"$PORTS/$1/pid"
 }
-port=8700
+port=$((FIRST - 1))
 echo "$all" | while read -r name args; do
     case " $SKIP " in *" $name "*) continue ;; esac
     [ -n "$ONLY" ] && case " $ONLY " in *" $name "*) ;; *) continue ;; esac
@@ -101,7 +103,7 @@ fi'
 SAID=$(mktemp)
 trap 'rm -f "$JOBS" "$SAID"; release' EXIT
 xargs -P "$PARALLEL" -L 1 sh -c "$one" sh <"$JOBS" | tee "$SAID"
-sh "$VERO/scripts/lib/results-page.sh" "$HOME/.cache/vero/test-results"
-echo "every result: $HOME/.cache/vero/test-results/index.html"
+sh "$VERO/scripts/lib/results-page.sh" "$CACHE/test-results"
+echo "every result: $CACHE/test-results/index.html"
 # It fails when any system did.
 ! grep -q '^FAIL' "$SAID"

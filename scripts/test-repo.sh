@@ -66,7 +66,9 @@ if [ -n "$APP" ] && [ -n "$MAC" ]; then
     exit 2
 fi
 [ -n "$VMSYS$MAC" ] || vero_docker
-CACHE="$HOME/.cache/vero"
+# Everything it makes is in vero's cache, which VERO_CACHE can move, so
+# that two checkouts of vero can test at once without sharing files.
+CACHE="${VERO_CACHE:-$HOME/.cache/vero}"
 # Each stage, numbered, with the time so far: a run can take an hour.
 BEGAN=$(date +%s) STAGE=0
 stage() {
@@ -76,8 +78,10 @@ stage() {
 mkdir -p "$CACHE/bin"
 # vero-repo: the one VERO_REPO names (vero ship sets it), or built from
 # this checkout.
-if [ -n "$VERO_REPO" ]; then cp "$VERO_REPO" "$CACHE/bin/vero-repo"; else go build -C "$VERO/cmd/vero-repo" -o "$CACHE/bin/vero-repo" .; fi
+if [ -n "$VERO_REPO" ]; then [ "$VERO_REPO" -ef "$CACHE/bin/vero-repo" ] || cp "$VERO_REPO" "$CACHE/bin/vero-repo"; else go build -C "$VERO/cmd/vero-repo" -o "$CACHE/bin/vero-repo" .; fi
 REPO="$CACHE/bin/vero-repo"
+# package.sh uses the same one, rather than building its own.
+export VERO_REPO="$REPO"
 # The app's names: APP_NAME, APP_ID, APP_WORKER, APP_TOML and the rest.
 eval "$("$REPO" show --app "${APP:-$VERO/example/vero-app.toml}")" || exit 1
 P=$APP_NAME
@@ -92,7 +96,8 @@ KEY="$CACHE/$P-key" SITE="$CACHE/$P-site-$LABEL" PACKAGES="$CACHE/$P-packages-$L
 # The container reaches this Mac by this name: colima and Docker Desktop
 # both answer it.
 URL="http://host.docker.internal:$PORT"
-NAME=vero-test-$LABEL
+# The port is in the name, so that two runs at once never share one.
+NAME=vero-test-$LABEL-$PORT
 [ -f "$KEY/private.asc" ] || "$REPO" key --dir "$KEY" --name "$APP_DISPLAY test" --email test@example.com
 rm -rf "$SITE"
 
