@@ -132,19 +132,26 @@ The GTK app is one app, unchanged on every system below it.
 | **OpenBSD**<br><a href="example/gtk-app"><img src="docs/screenshots/openbsd.gif" width="300"></a><br>The same GTK app, in a virtual machine. | **NetBSD**<br><a href="example/gtk-app"><img src="docs/screenshots/netbsd.gif" width="300"></a><br>The same GTK app, in a virtual machine. |
 | **DragonFly**<br><a href="example/gtk-app"><img src="docs/screenshots/dragonfly.gif" width="300"></a><br>The same GTK app, emulated on x86. | **illumos**<br><a href="example/gtk-app"><img src="docs/screenshots/illumos.gif" width="300"></a><br>The same GTK app, on OpenIndiana. |
 
-Android, iOS, the browser, WASI and Plan 9 also build and run, with
-examples in [the lab](docs/lab.md). `vero ship` does not test or release
-those.
+Android, iOS, the browser, WASI and Plan 9 also build and run. Their
+examples live in [the lab](docs/lab.md), because `vero ship` does not
+test or release them yet.
 
 ## Where to go next
 
-- [How vero works](docs/how-vero-works.md): the architecture and a
-  glossary.
-- [Recipes](docs/README.md): one page per task, from adding a request to
-  signing a release.
-- [AGENTS.md](AGENTS.md): the rules and the release checklist, written for
-  coding agents and copied into every app.
-- [Go reference](https://pkg.go.dev/github.com/imclaren/vero) and the
-  [kit](kit/README.md).
-- [Contributing](CONTRIBUTING.md), for working on vero itself.
-- [Licence](LICENSE).
+- **To understand the pieces** before you write anything, read
+  [How vero works](docs/how-vero-works.md). It explains the worker, the
+  front end, the state and the requests, and ends with a glossary.
+- **To do a particular job**, such as adding a request, testing on
+  FreeBSD or signing a release, find it in the
+  [recipes](docs/README.md). Each recipe is one page for one task.
+- **To look something up**: the [Go reference](https://pkg.go.dev/github.com/imclaren/vero)
+  for the worker's API, the [kit](kit/README.md) for secrets,
+  notifications, sleep and updates, and the
+  [vero-repo README](cmd/vero-repo/README.md) for what a release gives
+  each system's users.
+- **If a coding agent works on your app**, it reads
+  [AGENTS.md](AGENTS.md), which `vero new` copies into every app. It is
+  the rules and the release checklist in a form an agent can follow.
+- **To work on vero itself**, see [Contributing](CONTRIBUTING.md).
+
+vero is released under the [MIT licence](LICENSE).

@@ -4,6 +4,21 @@ This page explains the pieces of a vero app and the words the rest of the
 documentation uses. Read it once, before the recipes. If you only want to
 try vero, the [README](../README.md) has a ten-minute walkthrough.
 
+On this page:
+
+1. [The idea](#the-idea)
+2. [The parts at a glance](#the-parts-at-a-glance)
+3. [The state](#the-state)
+4. [Requests and handlers](#requests-and-handlers)
+5. [Generated bindings](#generated-bindings)
+6. [Starting, stopping and restarting](#starting-stopping-and-restarting)
+7. [The files in an app](#the-files-in-an-app)
+8. [vero-app.toml](#vero-apptoml)
+9. [The kit](#the-kit)
+10. [Testing on every system](#testing-on-every-system)
+11. [Releasing](#releasing)
+12. [Glossary](#glossary)
+
 ## The idea
 
 A desktop app has two jobs. One is the real work: syncing files, talking to
@@ -38,13 +53,24 @@ from a Mac to every system Go supports. vero uses that to build, test and
 release the whole app from one Mac. Linux is tested in Docker containers,
 the BSDs and Windows in virtual machines, and the Mac on itself.
 
-## The three kinds of message
+## The parts at a glance
 
-Only three kinds of message cross the pipe. The front end sends
-**requests**. The worker sends a **reply** to each request, and sends a
-**state event** on its own whenever its state changes.
+Five things make up a vero app. Each has a section below.
 
-### The state
+| Part | What it is | Where it lives |
+|---|---|---|
+| The worker | A Go program that does the app's work | `cmd/worker` |
+| The state | One Go struct holding everything the window shows | in the worker |
+| A request | A named message from the window to the worker, answered by a handler | in the worker |
+| A binding | Generated code giving each front end typed access to the state and the requests | one file per front end |
+| A front end | The native window for one system | `macos/`, `gtk/`, `windows/` |
+
+Only three kinds of message cross the pipe between a front end and the
+worker. The front end sends **requests**. The worker sends a **reply** to
+each request, and sends a **state event** on its own whenever its state
+changes.
+
+## The state
 
 The worker keeps everything the window needs to draw in one Go struct. In
 the starter app it is called `Status` and looks like this:
@@ -75,7 +101,7 @@ Do the slow work in a goroutine of your own, then write the result back
 with `state.Do`. `state.Every` runs a function under the lock on a timer,
 for periodic work.
 
-### Requests and handlers
+## Requests and handlers
 
 A request is a message with a name and, optionally, some data. The worker
 answers it with a **handler**, a Go function you register under that name.
@@ -101,7 +127,7 @@ end and nothing else changes. The front end shows it and carries on. This
 is different from the worker crashing, which the front end also notices, but
 handles by waiting for a restart.
 
-### Generated bindings
+## Generated bindings
 
 You do not write the front end's side of the protocol by hand. After you
 change the state struct or any handler, run `vero gen`. It reads the Go
