@@ -9,8 +9,8 @@
 #
 # A test system is refused when it would leave less than VERO_MIN_FREE_GB
 # (10) free on this Mac's disk, or less than VERO_MIN_DOCKER_FREE_GB (2) on
-# Docker's. What a container needs counts on both, since colima's disk is
-# a file on this Mac's that grows as Docker fills it. vero_prune removes only what vero made and can
+# Docker's. What a container needs also counts on this Mac's disk while
+# colima's disk, a file on this Mac's, has still to grow to its full size. vero_prune removes only what vero made and can
 # never use again:
 #   - ready-made container systems (images named vero-ready-*, labelled
 #     dev.vero.ready) from an earlier period, or unused for a week;
@@ -35,16 +35,16 @@ VERO_READY_USED="$HOME/.cache/vero/ready"
 # only the second part, the run's own.
 #
 #   system      docker  docker-run  mac  mac-run
-vero_space_table="debian       2   1   1   1
-debian12     2   1   1   1
-ubuntu       2   1   1   1
-fedora       2   1   1   1
-opensuse     2   1   1   1
-arch         3   1   1   1
-alpine       1   1   1   1
-chimera      2   1   1   1
-void         2   1   1   1
-flatpak      1   1   1   1
+vero_space_table="debian       2   1   0   1
+debian12     2   1   0   1
+ubuntu       2   1   0   1
+fedora       2   1   0   1
+opensuse     2   1   0   1
+arch         3   1   0   1
+alpine       1   1   0   1
+chimera      2   1   0   1
+void         2   1   0   1
+flatpak      1   1   0   1
 freebsd      0   0   3   1
 netbsd       0   0   3   1
 openbsd      0   0   3   1
@@ -77,6 +77,16 @@ vero_docker_free_gb() {
     docker run --rm --entrypoint df "$img" -k / 2>/dev/null | awk 'NR == 2 { print int($4 / 1048576) }'
 }
 
+# vero_docker_growth_gb: how far, in whole GB, colima's disk can still
+# grow on this Mac's disk. Where there is no colima disk to look at, as
+# with Docker Desktop, it is taken to be able to grow without limit.
+vero_docker_growth_gb() {
+    disk="$HOME/.colima/_lima/_disks/colima/datadisk"
+    [ -f "$disk" ] || { echo 1000; return; }
+    size=$(stat -f %z "$disk") used=$(du -k "$disk" | cut -f1)
+    echo $(((size / 1024 - used) / 1048576))
+}
+
 # vero_space_check SYSTEM READY: says whether SYSTEM can start, and why
 # not. READY is yes when its ready-made system has been made already. On
 # too little space it prunes vero's stale copies first, and then refuses
@@ -86,7 +96,12 @@ vero_space_check() {
     d=$(vero_space_need "$sys" 2) dr=$(vero_space_need "$sys" 3)
     m=$(vero_space_need "$sys" 4) mr=$(vero_space_need "$sys" 5)
     [ "$ready" = yes ] && { d=0; m=0; }
-    need_docker=$((d + dr)) need_mac=$((m + mr + d + dr))
+    need_docker=$((d + dr)) need_mac=$((m + mr))
+    # Docker's growth that would land on this Mac's disk: none once
+    # colima's disk has its full size, as it keeps it.
+    grow=$(vero_docker_growth_gb)
+    [ "$grow" -gt "$need_docker" ] && grow=$need_docker
+    need_mac=$((need_mac + grow))
     for attempt in 1 2; do
         short=""
         free_mac=$(vero_free_gb "$VERO_CACHE")

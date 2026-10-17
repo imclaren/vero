@@ -164,7 +164,10 @@ elif [ -n "$VMSYS" ]; then
         freebsd) SSH_PORT=2222 PREFIX=/usr/local PY=python3
             INSTALL="fetch -q -o - $URL/install.sh | sh"
             XSETUP="pkg install -y tigervnc-server ImageMagick7 > /dev/null"
-            UPDATE="pkg upgrade -y > /dev/null" ;;
+            UPDATE="pkg upgrade -y > /dev/null"
+            # FreeBSD's packages roll on, so a snapshot is made from an
+            # upgraded system.
+            REFRESH="pkg upgrade -y > /dev/null" ;;
         netbsd) SSH_PORT=2223 PREFIX=/usr/pkg PY=python3.12
             # pkgin, which the install page says to add if it's missing.
             SETUP="[ -x /usr/pkg/bin/pkgin ] || PKG_PATH=https://cdn.netbsd.org/pub/pkgsrc/packages/NetBSD/\$(uname -p)/\$(uname -r | cut -d. -f1-2)/All /usr/sbin/pkg_add pkgin"
@@ -194,7 +197,12 @@ elif [ -n "$VMSYS" ]; then
             # OpenIndiana's own Xvnc and ImageMagick, as run-illumos.sh has.
             XSETUP="pkg install -q x11/server/xvnc image/imagemagick; true"
             # 4 is pkg's "nothing to do".
-            UPDATE="pkg update -q application/$APP_NAME; s=\$?; [ \$s -eq 0 ] || [ \$s -eq 4 ]" ;;
+            UPDATE="pkg update -q application/$APP_NAME; s=\$?; [ \$s -eq 0 ] || [ \$s -eq 4 ]"
+            # OpenIndiana rolls on, and a system whose incorporation lags
+            # its repository cannot install what a newer package needs, so
+            # a snapshot is made from one brought up to date, restarted
+            # into its new boot environment when the update made one.
+            REFRESH="pkg update -q --accept; s=\$?; [ \$s -eq 4 ] && exit 0; [ \$s -eq 0 ] && touch /var/tmp/vero-reboot; exit \$s" ;;
         *) echo "unknown VM: $VMSYS (freebsd, dragonfly, netbsd, openbsd or illumos)" >&2; exit 2 ;;
     esac
     : "${SETUP:=true}"
@@ -428,7 +436,7 @@ else
         docker pull -q $(echo "$RUN" | grep -o -e '--platform [^ ]*') "$IMAGE" >/dev/null 2>&1 || true
     BASE=$(docker image inspect --format '{{.Id}}' "$IMAGE" 2>/dev/null || echo "$IMAGE")
 fi
-RKEY=$(printf '%s\n' "ready 1" "$LABEL" "$BASE" "$SETUP" "$XSETUP" "$DEPS_IN" "$APP_DEPS" "$(period)" |
+RKEY=$(printf '%s\n' "ready 1" "$LABEL" "$BASE" "$SETUP" "$XSETUP" "$DEPS_IN" "$REFRESH" "$APP_DEPS" "$(period)" |
     sed "s/$APP_NAME/APP/g" | shasum | cut -c1-12)
 if [ -n "$KEYONLY" ]; then
     echo "$RKEY"
@@ -513,9 +521,28 @@ make_ready() {
         rm -rf "$READY.tmp"
         overlay "$VMDIR" "$READY.tmp" || { echo "FAIL: could not make the snapshot's overlay" >&2; exit 1; }
         VERO_DISK_DIR="$READY.tmp" "$VERO/scripts/run-$VMSYS.sh" --shell --no-open >/dev/null
+        # What earlier runs left goes first, since an update fails on a
+        # repository that is no longer there.
+        in_container "$SETUP" || { echo "FAIL: could not set up the VM's snapshot" >&2; exit 1; }
+        if [ -n "$REFRESH" ]; then
+            echo "bringing the system up to date"
+            in_container "$REFRESH" || { echo "FAIL: the system did not update" >&2; exit 1; }
+            if in_container "[ -f /var/tmp/vero-reboot ]"; then
+                echo "restarting into the updated system"
+                in_container "rm -f /var/tmp/vero-reboot; (sleep 2; reboot) > /dev/null 2>&1 &" || true
+                n=0
+                while $SSH true 2>/dev/null && [ $n -lt 60 ]; do sleep 5; n=$((n + 1)); done
+                n=0
+                until $SSH true 2>/dev/null; do
+                    n=$((n + 1))
+                    [ $n -gt 360 ] && { echo "FAIL: the VM did not come back after restarting" >&2; exit 1; }
+                    sleep 5
+                done
+            fi
+        fi
         # The app's own packages bring its dependencies, as a person's
         # install would; then the app and its repository go again.
-        in_container "$SETUP" && in_container "$INSTALL" && in_container "${XSETUP:-true}" && in_container "$FORGET" ||
+        in_container "$INSTALL" && in_container "${XSETUP:-true}" && in_container "$FORGET" ||
             { echo "FAIL: could not make the VM's snapshot" >&2; exit 1; }
         vm_stop clean
         echo "the snapshot takes $(du -sh "$READY.tmp" | cut -f1)"
