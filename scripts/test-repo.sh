@@ -820,7 +820,6 @@ finish_launch() {
 make_gif() { sh "$VERO/scripts/lib/make-gif.sh" "$1"; }
 
 # summary: index.html in the results folder, every app and system tested
-# so far.
 # so far, with the status of test-all.sh's run, when one is going.
 summary() { sh "$VERO/scripts/lib/results-page.sh" "$CACHE/test-results" "${VERO_TEST_LOGS:-}"; }
 
