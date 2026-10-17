@@ -21,6 +21,10 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 
 VM=${VM:-$HOME/vm/vero-openbsd}
+# VERO_DISK_DIR names a folder whose disks to boot in place of the VM's
+# own, such as the overlays on them that test-repo.sh makes, so that a
+# test leaves the VM's own disks as they were.
+DISKS=${VERO_DISK_DIR:-$VM}
 RELEASE=${RELEASE:-7.9}
 PORT=${PORT:-5904}          # one past NetBSD's
 SSH_PORT=${SSH_PORT:-2224}
@@ -123,8 +127,8 @@ boot() {   # $1: extra -drive for the installer
     qemu-system-aarch64 \
         -machine virt,highmem=on -accel hvf -cpu host -smp 4 -m 2048 \
         -drive if=pflash,format=raw,readonly=on,file="$FW/edk2-aarch64-code.fd" \
-        -drive if=pflash,format=raw,file="$VM/vars.fd" \
-        -drive if=virtio,format=qcow2,file="$VM/disk.qcow2" \
+        -drive if=pflash,format=raw,file="$DISKS/vars.fd" \
+        -drive if=virtio,format=qcow2,file="$DISKS/disk.qcow2" \
         $1 \
         -netdev "user,id=n0,ipv6=off,hostfwd=tcp::$SSH_PORT-:22,hostfwd=tcp::$PORT-:5900" \
         -device virtio-net-pci,netdev=n0 \

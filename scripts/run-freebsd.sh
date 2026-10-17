@@ -23,6 +23,10 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 
 VM=${VM:-$HOME/vm/vero-freebsd}
+# VERO_DISK_DIR names a folder whose disks to boot in place of the VM's
+# own, such as the overlays on them that test-repo.sh makes, so that a
+# test leaves the VM's own disks as they were.
+DISKS=${VERO_DISK_DIR:-$VM}
 # The newest release: FreeBSD builds its packages on the newest of a
 # branch, so on 15.0 they no longer run once 15.1 is out (xkbcomp needs
 # FBSD_1.9 from 15.1's libc).
@@ -136,8 +140,8 @@ boot() {   # $1: extra -netdev options
     qemu-system-aarch64 \
         -machine virt,highmem=on -accel hvf -cpu host -smp 4 -m 4096 \
         -drive if=pflash,format=raw,readonly=on,file="$FW/edk2-aarch64-code.fd" \
-        -drive if=pflash,format=raw,file="$VM/vars.fd" \
-        -drive if=virtio,format=qcow2,file="$VM/disk.qcow2" \
+        -drive if=pflash,format=raw,file="$DISKS/vars.fd" \
+        -drive if=virtio,format=qcow2,file="$DISKS/disk.qcow2" \
         -drive if=virtio,format=raw,readonly=on,file="$VM/seed.iso" \
         -device virtio-gpu-pci -device qemu-xhci -device usb-kbd -device usb-tablet \
         -netdev "user,id=n0,hostfwd=tcp::$SSH_PORT-:22,hostfwd=tcp::$PORT-:5900$1" \

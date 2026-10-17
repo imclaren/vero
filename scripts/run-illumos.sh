@@ -31,6 +31,10 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 
 VM=${VM:-$HOME/vm/vero-illumos}
+# VERO_DISK_DIR names a folder whose disks to boot in place of the VM's
+# own, such as the overlays on them that test-repo.sh makes, so that a
+# test leaves the VM's own disks as they were.
+DISKS=${VERO_DISK_DIR:-$VM}
 RELEASE=${RELEASE:-20260430}
 PORT=${PORT:-5906}
 SSH_PORT=${SSH_PORT:-2226}
@@ -84,7 +88,7 @@ boot() {   # $1: extra arguments, e.g. the install media
     rm -f "$VM/console.sock"
     # -vga std, even though nothing looks at it: see the note at the top.
     qemu-system-x86_64 -accel tcg -cpu max -smp 2 -m 4096 \
-        -drive if=virtio,format=qcow2,file="$VM/disk.qcow2" \
+        -drive if=virtio,format=qcow2,file="$DISKS/disk.qcow2" \
         $1 \
         -netdev "user,id=n0,ipv6=off,hostfwd=tcp::$SSH_PORT-:22,hostfwd=tcp::$PORT-:5900" \
         -device virtio-net-pci,netdev=n0 \

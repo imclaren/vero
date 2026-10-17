@@ -5,6 +5,7 @@
 # takes a picture of its window every half second into frames\ until the
 # steps have finished (and a few frames more), the app has exited, or the
 # time is up. test-repo.sh fetches the folder and makes the frames a GIF.
+# When the folder holds a file called no-frames, no pictures are taken.
 param([Parameter(Mandatory = $true)][string]$Exe, [Parameter(Mandatory = $true)][string]$Dir, [int]$Limit = 600)
 $ErrorActionPreference = "Continue"
 Add-Type -AssemblyName System.Drawing, System.Windows.Forms
@@ -71,10 +72,11 @@ if ($hwnd -ne [IntPtr]::Zero) {
     }
 }
 
+$record = -not (Test-Path "$Dir\no-frames")
 $started = Get-Date
 $after = 0
 for ($i = 1; ; $i++) {
-    if ($hwnd -ne [IntPtr]::Zero) {
+    if ($record -and $hwnd -ne [IntPtr]::Zero) {
         # The window's own bounds, without the shadow Windows draws round it.
         $r = New-Object VeroWindow+RECT
         [VeroWindow]::DwmGetWindowAttribute($hwnd, 9, [ref]$r, 16) | Out-Null

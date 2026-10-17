@@ -21,6 +21,10 @@ ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT"
 
 VM=${VM:-$HOME/vm/vero-dragonfly}
+# VERO_DISK_DIR names a folder whose disks to boot in place of the VM's
+# own, such as the overlays on them that test-repo.sh makes, so that a
+# test leaves the VM's own disks as they were.
+DISKS=${VERO_DISK_DIR:-$VM}
 RELEASE=${RELEASE:-6.4.2}
 PORT=${PORT:-5905}          # one past OpenBSD's
 SSH_PORT=${SSH_PORT:-2225}
@@ -85,8 +89,8 @@ CGO_ENABLED=0 GOOS=dragonfly GOARCH=amd64 go build -o "$VM/worker" ./example/wor
 # reaches the serial line this script drives the first boot over.
 # ipv6=off: qemu offers an IPv6 route that goes nowhere and fetches hang.
 qemu-system-x86_64 -accel tcg -smp 2 -m 2048 \
-    -drive if=virtio,format=qcow2,file="$VM/disk.qcow2" \
-    -drive if=virtio,format=qcow2,file="$VM/local.qcow2" \
+    -drive if=virtio,format=qcow2,file="$DISKS/disk.qcow2" \
+    -drive if=virtio,format=qcow2,file="$DISKS/local.qcow2" \
     -netdev "user,id=n0,ipv6=off,hostfwd=tcp::$SSH_PORT-:22,hostfwd=tcp::$PORT-:5900" \
     -device virtio-net-pci,netdev=n0 \
     -display none -vga none \
