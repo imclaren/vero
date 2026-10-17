@@ -1,6 +1,6 @@
 # vero
 
-vero is a way to build a desktop app once and ship it to macOS, Windows,
+vero is a way to build a desktop app once as a Go program and ship it to macOS, Windows,
 Linux and the BSDs, with a native window on each, from a single Mac.
 
 ## What it is
@@ -11,7 +11,7 @@ front end draws the window: SwiftUI on the Mac, GTK 4 on Linux and the
 BSDs, WPF on Windows. The front end starts the worker and talks to it over
 a pipe in JSON. When the worker's state changes, every window redraws.
 
-The worker has no C dependencies, so it cross-compiles from a Mac to every
+The Go worker has no C dependencies, so it cross-compiles from a Mac to every
 system Go supports. vero uses that to build, test and release everything
 from one machine:
 
@@ -125,7 +125,7 @@ app to a newer vero.
 
 ## Where it runs
 
-The GTK app is one app, unchanged on every system below it.
+The GTK app is one app, unchanged on every operating system where it runs.
 
 | | |
 |:---:|:---:|
