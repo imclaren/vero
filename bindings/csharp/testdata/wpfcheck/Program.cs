@@ -132,6 +132,16 @@ public sealed class CheckApp : VeroApp
             Undo.Redo();
             Expect(done.SequenceEqual(new[] { "undo", "redo" }), $"undo then redo: {string.Join(",", done)}");
 
+            // Something done in a dialog offers Undo in the window that owns
+            // it, as a sheet's does on the Mac.
+            var dialog = new Window { Owner = w, Width = 300, Height = 200, ShowInTaskbar = false };
+            dialog.Show();
+            dialog.Activate();
+            await System.Threading.Tasks.Task.Delay(300);
+            Undo.Push("Merged two events", () => null);
+            Expect(w.Shown().toast == "Merged two events", $"undo from a dialog, in its owner's toast: {w.Shown().toast}");
+            dialog.Close();
+
             // A notification's buttons reach the app.
             var pressed = new List<string>();
             Notify("n1", "New mail", "From Ada", new List<(string, Action)> { ("Archive", () => pressed.Add("archive")) });

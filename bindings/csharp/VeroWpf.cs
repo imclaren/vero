@@ -700,6 +700,8 @@ public class VeroWindow : Window
     readonly TextBlock toastText = new() { TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center, Foreground = Brushes.White };
     readonly Button toastButton = new() { Margin = new Thickness(12, 0, 0, 0), Visibility = Visibility.Collapsed };
     readonly DispatcherTimer toastTimer = new();
+    // Whether the toast's time waits for its window to come to the front.
+    bool toastWaiting;
     // The toast floats in a popup, a window of its own, so that a web view
     // in the window's content, which WPF cannot draw over, does not hide it.
     readonly System.Windows.Controls.Primitives.Popup toastPopup = new()
@@ -751,7 +753,17 @@ public class VeroWindow : Window
         LocationChanged += (_, _) => PlaceToast();
         SizeChanged += (_, _) => PlaceToast();
         Deactivated += (_, _) => toastPopup.IsOpen = false;
-        Activated += (_, _) => { if (toastBar.Visibility == Visibility.Visible) { toastPopup.IsOpen = true; PlaceToast(); } };
+        Activated += (_, _) =>
+        {
+            if (toastBar.Visibility != Visibility.Visible) return;
+            toastPopup.IsOpen = true;
+            PlaceToast();
+            if (toastWaiting)
+            {
+                toastWaiting = false;
+                toastTimer.Start();
+            }
+        };
         StateChanged += (_, _) => { if (WindowState == WindowState.Minimized) toastPopup.IsOpen = false; };
 
         // Ctrl+Z and Ctrl+Shift+Z undo what the worker did. A text box
@@ -820,10 +832,14 @@ public class VeroWindow : Window
         toastPopup.IsOpen = IsActive;
         PlaceToast();
         toastTimer.Stop();
+        toastWaiting = false;
         if (seconds > 0)
         {
             toastTimer.Interval = TimeSpan.FromSeconds(seconds);
-            toastTimer.Start();
+            // Shown behind a dialog, its time starts only once its window is
+            // in front, so that the person sees it.
+            if (IsActive) toastTimer.Start();
+            else toastWaiting = true;
         }
         string mine = text;
         return () => { if (toastText.Text == mine) HideToast(); };
@@ -832,6 +848,7 @@ public class VeroWindow : Window
     void HideToast()
     {
         toastTimer.Stop();
+        toastWaiting = false;
         toastBar.Visibility = Visibility.Collapsed;
         toastPopup.IsOpen = false;
         toastAction = null;
@@ -889,7 +906,19 @@ public sealed class VeroUndo
         undos.Add((text, undo));
         if (undos.Count > 100) undos.RemoveAt(0);
         redos.Clear();
-        if (toast && app.Active is VeroWindow w) w.Toast(text, "Undo", UndoLast);
+        if (toast && Host() is VeroWindow w) w.Toast(text, "Undo", UndoLast);
+    }
+
+    // The window whose toast offers Undo: the one in front, or, when that is
+    // a dialog, the window that owns it, as on the Mac, where a sheet's undo
+    // shows in its window. Failing those, the main window.
+    VeroWindow? Host()
+    {
+        for (var w = app.Active; w is not null; w = w.Owner)
+        {
+            if (w is VeroWindow v) return v;
+        }
+        return app.MainView as VeroWindow;
     }
 
     public void UndoLast() => Move(undos, redos);
