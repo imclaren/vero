@@ -1,12 +1,16 @@
 # Recipes
 
-Each recipe does one thing. [AGENTS.md](../AGENTS.md) holds the rules and
-the release checklist, and `vero` with no arguments lists every command.
+Each page here does one thing. If you are new to vero, start with
+[How vero works](how-vero-works.md), which explains the pieces and the
+words these pages use. [AGENTS.md](../AGENTS.md) is the short version
+for coding agents, with the rules and the release checklist. `vero` with
+no arguments lists every command.
 
 **Start**
+- [How vero works](how-vero-works.md), the architecture and a glossary
 - [Set up a Mac](set-up-a-mac.md)
 - [Bring an Xcode app](bring-an-xcode-app.md)
-- [Describe the app](describe-the-app.md), in `vero-app.toml`
+- [Describe the app](describe-the-app.md), the settings in `vero-app.toml`
 
 **Write the app**
 - [Add a request](add-a-request.md)
@@ -27,7 +31,7 @@ the release checklist, and `vero` with no arguments lists every command.
 - [Updates](updates.md)
 
 **Reference**
-- [Packaging for each system](../cmd/vero-repo/README.md)
+- [Packaging for each system](../cmd/vero-repo/README.md), what each system's users get
 - [The lab](lab.md), for Android, iOS, the browser, WASI, Plan 9 and every Go target
 - [Contributing to vero](../CONTRIBUTING.md)
 - [The plan for vero 0.18](history/PLAN-0.18.md), which is finished

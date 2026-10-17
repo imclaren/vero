@@ -1,31 +1,151 @@
-# kit
+# The kit
 
-This page lists the kit's packages, which give a worker what it needs from
-the system on which it runs, with one API for every system. The kit is a
-module of its own, `github.com/imclaren/vero/kit`, so that vero's library
-keeps no dependencies, and `go get github.com/imclaren/vero/kit` adds it to
-an app. [Build the worker for every system](../docs/build-the-worker-everywhere.md)
-explains when a worker needs it.
+The worker is plain Go and runs the same on every system. But some
+things an app needs are different on each system: where secrets are
+kept, how a notification is shown, how to stop the machine sleeping.
+The kit is a set of Go packages that each do one of those things, with
+one API that works everywhere.
 
-| Package | What it does | Where |
-|---|---|---|
-| `kit/keychain` | Keeps sign-ins and other secrets | The login keychain on macOS, the Credential Manager on Windows, the Secret Service on Linux and the BSDs, and a file only this user can read elsewhere |
-| `kit/profile` | Keeps a test or demo copy of the app apart from the copy in use. With `VERO_PROFILE=demo`, `profile.Dir("myapp")` is `myapp-demo` in the user's configuration folder, and `kit/keychain` keeps its items under `com.example.myapp.demo` | Every system. vero's tests set it through `vero-app.toml`'s `[test] env`, and vero's Swift package follows it for the folder from which it runs the worker |
-| `kit/awake` | Keeps the computer from sleeping while the worker has work that must finish, such as a sync, and says when the computer has woken, so that the worker can look again at what changed | `caffeinate` on macOS, `SetThreadExecutionState` on Windows, and logind's sleep inhibitor on Linux and the BSDs that run it; telling of a wake works on every system |
-| `kit/autostart` | Opens the app at sign-in | A LaunchAgent on macOS (from an app bundle, `SMAppService` from Swift is better), the Run key on Windows, an autostart `.desktop` file on Linux and the BSDs |
-| `kit/notify` | Shows a notification from the worker | The desktop's notification service on Linux and the BSDs, a toast on Windows; on macOS and iOS notifications come from the app, so the worker keeps what is new in the state and lets the front end notify |
-| `kit/update` | Says whether a newer version is on your site | Reads the `latest.json` and the Sparkle appcast that `vero-repo build` writes |
-| `kit/tools` | Finds helper programs the app ships, such as ffmpeg | Wherever the app is installed on each system, or a folder you name |
-| `kit/site` | Serves your install site from your own Go server, with `/download?for=mac` (or `windows`, `linux`, `pkg` and so on) sending each visitor to their installer | For an app with a server already, or one whose downloads are for people who have signed in (`site.Private`); the site is plain files, so this is optional |
-| `kit/cmd/vero-site` | Serves your install site on its own, with an HTTPS certificate from Let's Encrypt | For an app without a web server, as in `vero-site -dir /srv/myapp -domain downloads.example.com` |
+The kit is its own module, so that vero's core library has no
+dependencies:
 
-Each builds for every system vero does, without cgo.
+```bash
+go get github.com/imclaren/vero/kit
+```
 
-## Helper programs
+Every package builds for every system vero supports, without cgo.
+[Build the worker for every system](../docs/build-the-worker-everywhere.md)
+explains when a worker needs the kit rather than a package of its own.
 
-A worker that runs a program that the app ships, such as ffmpeg, needs a
-build of that program for each system and architecture, and finds it with
-`kit/tools`, which looks wherever the app is installed. On the Mac,
-`resources` in `[macos]` puts such programs in the app, and on Linux,
-`resources` in `[gtk.flatpak]` puts them in the Flatpak, as
-[example/vero-app.toml](../example/vero-app.toml) describes.
+## Packages
+
+### keychain
+
+Stores secrets in the system's secure store: the login keychain on
+macOS, the Credential Manager on Windows, the Secret Service on Linux and
+the BSDs. Where there is none, a file that only this user can read.
+
+```go
+item := keychain.Item{Service: "com.example.hello", Account: "token/" + user}
+err := item.Save([]byte(token))
+saved, err := item.Load()
+```
+
+[Secrets and sign-in](../docs/secrets-and-sign-in.md) has more.
+
+### profile
+
+Keeps a test or development copy of the app apart from the copy that a
+person uses. With `VERO_PROFILE=demo`, `profile.Dir("myapp")` is the
+folder `myapp-demo` in the user's configuration folder instead of
+`myapp`, and keychain items go under `com.example.myapp.demo`. The copy
+under test can neither read nor change the other's data.
+
+```go
+dir, err := profile.Dir("myapp")   // where this copy keeps its files
+```
+
+The keychain package applies the profile by itself. vero's tests set it
+through `[test] env` in `vero-app.toml`, and vero's Swift package
+follows it for the folder it runs the worker from.
+
+### awake
+
+Keeps the computer from sleeping while the worker has work that must
+finish, and says when the computer has woken, so that the worker can
+check what changed meanwhile.
+
+```go
+release, err := awake.Hold("Syncing your folders")
+defer release()
+
+stop := awake.OnWake(func() { resync() })
+```
+
+`Hold` uses caffeinate on macOS, `SetThreadExecutionState` on Windows,
+and logind's sleep inhibitor on Linux and the BSDs that run it. Where
+there is nothing to use, as on illumos, it returns `ErrUnsupported` and
+a release that does nothing. `OnWake` works everywhere.
+
+### autostart
+
+Opens the app when the person signs in: a LaunchAgent on macOS, a Run
+registry entry on Windows, and an autostart `.desktop` file on Linux,
+the BSDs and illumos.
+
+```go
+err := autostart.Enable(app)
+on, err := autostart.Enabled(app)
+```
+
+On macOS, an app in a bundle is better off asking from Swift with
+`SMAppService`, which lists the app under Login Items in System
+Settings. Use this package on macOS only for a worker that runs outside
+an app.
+
+### notify
+
+Shows a desktop notification from the worker, on the systems that let a
+program other than the app do so: over D-Bus on Linux and the BSDs, and
+as a toast on Windows.
+
+```go
+err := notify.Send(ctx, notify.Notification{Title: "Done", Body: "3 files synced"})
+```
+
+On macOS and iOS, only the app may notify, and `Send` returns
+`ErrFrontEnd`. The pattern that works everywhere is for the worker to
+put what is new in the state and let the front end show the
+notification.
+
+### update
+
+Tells the app whether a newer version is on its site, by reading the
+`latest.json` or the Sparkle appcast that a release writes. Sparkle
+handles the Mac on its own; this is for the other systems, or for an
+app's own "Check for updates" button.
+
+```go
+result, err := update.Check(ctx, "https://example.com/myapp/latest.json", version)
+```
+
+`update.Handler` wraps that as a ready-made request handler.
+
+### tools
+
+Finds a helper program that the app ships beside the worker, such as
+ffmpeg, wherever the app is installed on each system: inside the bundle
+on macOS, beside the worker on Windows, under the app's lib folder on
+Linux and the BSDs.
+
+```go
+path, err := tools.Find("ffmpeg")   // ready for os/exec
+```
+
+Ship one build of the program for each system and architecture. On the
+Mac, `resources` in `[macos]` puts them in the bundle, and for a
+Flatpak, `resources` in `[gtk.flatpak]` does the same.
+
+### site
+
+Serves the install site from an app's own Go server. The site is plain
+files, so this is optional; any web host serves it. Use it when the
+downloads should live beside the server's own pages, or should be
+available only to people who have signed in.
+
+```go
+http.Handle("/", site.Handler(site.Options{Dir: "dist/site"}))
+```
+
+It also answers `/download?for=windows&arch=x64` with a redirect to that
+installer, so that a download page need not know version numbers.
+`site.Private` wraps the handler with a sign-in check.
+
+### cmd/vero-site
+
+A standalone server for the install site, with an HTTPS certificate from
+Let's Encrypt, for an app that has no web server of its own:
+
+```bash
+vero-site -dir /srv/myapp -domain downloads.example.com
+```

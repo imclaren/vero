@@ -1,33 +1,40 @@
 # vero-repo
 
-`vero-repo` makes every installer, repository, signature and index in Go,
-and the site from which people install and update an app. `vero release`
-and `vero ship` run it, and `vero` hands `key`, `package`, `build`,
-`check`, `steps`, `show` and `plan` on to it. A release needs only the Mac,
-except for a Flatpak, which needs Docker.
+`vero-repo` is the packaging tool. It makes every installer, package
+repository, signature and index that a release needs, and the install
+site that holds them. You rarely run it yourself: `vero release` and
+`vero ship` run it, and `vero` passes its own subcommands (`key`,
+`package`, `build`, `check`, `steps`, `show` and `plan`) on to it.
+
+Everything is written in Go and runs on the Mac. The one exception is a
+Flatpak, which needs Docker.
+
+## What a release gives each system's users
 
 | System | What its users get |
 |---|---|
-| Debian, Ubuntu and Chromebooks | An apt repository, added once and then updated with the system |
-| Fedora, openSUSE | An rpm repository |
-| Arch Linux | A pacman repository, and a recipe for the AUR |
-| Alpine, Void and Chimera | An apk or xbps repository, when its section is there |
-| Any Linux, with Flatpak | A Flatpak repository and a `.flatpakref`, when asked for |
-| FreeBSD, DragonFly | A pkg repository |
-| NetBSD | A pkgsrc repository, for pkgin, unsigned since pkgsrc checks none, so HTTPS vouches for it |
-| OpenBSD | Signed packages for `pkg_add` |
-| illumos | An IPS repository on OpenIndiana, served as plain files |
-| macOS | A notarised disk image, an optional `.pkg`, a Sparkle appcast and a Homebrew cask |
-| Windows | An installer for x64 and ARM64, a winget manifest, and an MSIX when asked for |
+| Debian, Ubuntu and Chromebooks | An apt repository. Added once, then updated with the rest of the system. |
+| Fedora, openSUSE | An rpm repository. |
+| Arch Linux | A pacman repository, and a recipe for the AUR. |
+| Alpine, Void and Chimera | An apk or xbps repository, when the system's section is in `vero-app.toml`. |
+| Any Linux, with Flatpak | A Flatpak repository and a `.flatpakref`, when asked for. |
+| FreeBSD, DragonFly | A pkg repository. |
+| NetBSD | A pkgsrc repository for pkgin. Unsigned, because pkgsrc checks no signatures, so HTTPS has to vouch for it. |
+| OpenBSD | Signed packages for `pkg_add`. |
+| illumos | An IPS repository on OpenIndiana, served as plain files. |
+| macOS | A notarised disk image, an optional `.pkg`, a Sparkle appcast and a Homebrew cask. |
+| Windows | An installer for x64 and ARM64, a winget manifest, and an MSIX when asked for. |
 
-A private site can put a password in the address from which each system
-fetches, as in `https://NAME:PASSWORD@example.com/myapp/arch/$arch`.
+A private site can carry a password in the address that each system
+fetches from, such as `https://NAME:PASSWORD@example.com/myapp/arch/$arch`.
 
 ## Processors
 
-Each system is packaged for x86-64 and ARM64 where it has them. `arches` in
-a system's section narrows that list or, by naming all that it wants, widens
-it. It takes Go's names or the system's own, which are these.
+By default, each system is packaged for x86-64 and ARM64 where it has
+them. Most apps never need to change that. If yours does, `arches` in a
+system's section of `vero-app.toml` lists the processors to package for,
+which can be fewer than the default or more. It takes either Go's names
+(`amd64`, `arm64`, `riscv64`) or the system's own, which are these.
 
 | Architecture | `[gtk.deb]` | `[gtk.rpm]` | `[gtk.arch]` | `[gtk.alpine]` | `[gtk.void]` | `[gtk.chimera]` | `[gtk.flatpak]` |
 |---|---|---|---|---|---|---|---|

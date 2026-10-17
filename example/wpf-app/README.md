@@ -1,96 +1,50 @@
-# Windows example
+# The Windows example
 
-Run the following script to build and run this example on a Mac. This script
-builds the app, puts it on a disc image, and boots a Windows VM which runs the
-app:
+The same three jobs as every other example, in a WPF window. This is the
+front end that `vero new` writes for Windows, in the form of a finished
+example. It drives the worker in [../worker](../worker).
+
+## Run it from the Mac
+
+From a checkout of vero:
 
 ```bash
-git clone https://github.com/imclaren/vero && cd vero
 ./scripts/run-windows.sh
 ```
 
-## Create a vero Windows app on your Mac
+This builds the app and the worker, puts them on a disc image, and boots
+vero's Windows 11 virtual machine with it. The VM has to exist first;
+[Test on Windows](../../docs/test-on-windows.md) makes it. Inside
+Windows, copy the folder from the CD drive to the desktop and run the
+exe.
 
-This builds the app above outside the repository, so what you end up with is
-yours to change. It drives the same worker as the macOS app.
+## Run it on Windows directly
 
-### 1. Install the .NET SDK on your Mac
-
-```bash
-curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --channel 8.0
-export PATH="$HOME/.dotnet:$PATH"
+```powershell
+.\build.ps1
+.\bin\Release\net8.0-windows\VeroExample.exe
 ```
 
-That is the only toolchain needed. The worker is pure Go, so it
-cross-compiles here, and there is no C library to build for Windows at all.
+This needs the .NET SDK and Go.
 
-### 2. Build the go worker
+## What is different here
 
-The worker is [example/worker/main.go](../worker/main.go), and it does not need
-the repository cloned:
+Nothing on the Go side. Like the GTK example, the C# front end starts
+`worker.exe` with `VERO_HOST` set, and the worker supervises a second
+copy of itself. The binding is the conversation over the pipe, and
+nothing else.
 
-```bash
-mkdir -p ~/vero-example/wpf-app && cd ~/vero-example/wpf-app
-go mod init wpf-app
-go get github.com/imclaren/vero
+## The files
 
-CGO_ENABLED=0 GOOS=windows GOARCH=arm64 \
-    go build -o worker.exe github.com/imclaren/vero/example/worker
-```
+| | |
+|---|---|
+| [MainWindow.xaml](MainWindow.xaml), [MainWindow.xaml.cs](MainWindow.xaml.cs) | the front end: three rows, a Restart button each |
+| [App.xaml](App.xaml), [App.xaml.cs](App.xaml.cs), [VeroExample.csproj](VeroExample.csproj) | the application and its project |
+| [build.ps1](build.ps1) | builds the worker and the app, on Windows |
+| [../../bindings/csharp/Vero.cs](../../bindings/csharp/Vero.cs) | the binding: one process, one reader thread, JSON |
 
-### 3. Add the app's files to the same directory
+## Making one of your own
 
-The app is [VeroExample.csproj](VeroExample.csproj), [App.xaml](App.xaml),
-[App.xaml.cs](App.xaml.cs), [MainWindow.xaml](MainWindow.xaml) and
-[MainWindow.xaml.cs](MainWindow.xaml.cs), and
-[Vero.cs](../../bindings/csharp/Vero.cs) is the C# binding. Download all six:
-
-```bash
-base=https://raw.githubusercontent.com/imclaren/vero/main
-curl -O $base/bindings/csharp/Vero.cs
-for f in VeroExample.csproj App.xaml App.xaml.cs MainWindow.xaml MainWindow.xaml.cs; do
-    curl -O $base/example/wpf-app/$f
-done
-```
-
-`Vero.cs` starts `worker.exe` with `VERO_HOST=1`, which makes it supervise a
-second copy of itself and answer on its standard input and output. Restarts,
-backoff and the single-worker lock are all in the worker, so the binding is
-only the conversation.
-
-### 4. Build the exe
-
-```bash
-dotnet publish -c Release -r win-arm64 --self-contained \
-    -p:EnableWindowsTargeting=true -o out
-cp worker.exe out/
-```
-
-### 5. Run it on your Mac (on a virtual machine)
-
-The first time, install Windows into the VM from a
-[Microsoft](https://www.microsoft.com/en-us/software-download/windows11arm64)
-ISO. The install is unattended, and happens once:
-
-```bash
-brew install qemu
-git clone https://github.com/imclaren/vero
-vero/scripts/run-windows.sh --iso ~/Downloads/win11.iso --install --payload out
-```
-
-After that, this boots the same VM with your latest build. `--payload out`
-packs `out/` into a disc image, which the VM sees as a CD drive:
-
-```bash
-vero/scripts/run-windows.sh --payload out
-```
-
-Windows opens in a window on your Mac. In it, copy the `vero` folder from the
-CD drive to your home directory, and run `VeroExample.exe` inside it.
-
-## See also
-
-- [example/wpf-app](.) is this app, finished and runnable.
-- [example/menubar-app](../menubar-app) drives the same worker with a macOS SwiftUI app.
-- [example/gtk-app](../gtk-app) drives the same worker with a Linux GTK4 app.
-- [Release](../../docs/release.md) makes the Windows installers.
+`vero new hello` writes an app with this front end, a SwiftUI one and a
+GTK one, around a worker of your own. The [README](../../README.md) walks
+through it.

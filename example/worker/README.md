@@ -1,20 +1,24 @@
 # The worker
 
-A Go program that pretends to sync three folders, so the three interface
-examples have something real to drive. The same binary is behind all of them.
+The Go program behind every example. It pretends to sync three folders,
+moving each through a few phases with a progress bar, so that the front
+ends have something to show. The same binary drives the macOS, Windows,
+Linux, Android, browser and Plan 9 examples.
 
 ```bash
 go build -o worker .
-./worker            # on its own, logging to stderr
-./worker -json      # the event stream on stdout
+./worker            # on its own, logging to standard error
+./worker -json      # the state, as JSON, on standard output whenever it changes
 ./worker -version
 ```
 
-Two named handlers, which is what the interfaces call:
+It handles two requests:
 
-| Name | Takes | Returns |
+| Name | Takes | Replies with |
 |---|---|---|
 | `status` | nothing | the current `Status` |
 | `restartJob` | `{"id": 1}` | the new `Status` |
 
-It pushes an event whenever its state changes, so nothing has to poll.
+It pushes the state whenever it changes, so no front end polls.
+[main.go](main.go) is short and commented, and is the shape of the
+worker that `vero new` writes.

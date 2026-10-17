@@ -1,6 +1,9 @@
-# macOS example
+# The macOS example
 
-A SwiftUI menu bar app driving the Go worker in `../worker`.
+The same three jobs as every other example, as a SwiftUI menu bar app.
+It drives the worker in [../worker](../worker).
+
+## Run it
 
 ```bash
 ./build.sh
@@ -9,5 +12,21 @@ A SwiftUI menu bar app driving the Go worker in `../worker`.
 
 Look for the icon in the menu bar.
 
-[Bring an Xcode app](../../docs/bring-an-xcode-app.md) adds vero to a
-macOS app of your own in Xcode, starting from the Go worker.
+## What is different here
+
+The front end is Swift, which can link Go directly, so this example
+links the worker's supervisor as a C archive built from
+[../../cshim](../../cshim) and starts the worker binary from beside the
+app. vero's Swift package does the same inside an app that `vero new`
+writes.
+
+## The files
+
+| | |
+|---|---|
+| [Sources](Sources) | the front end |
+| [Package.swift](Package.swift) | the Swift package, depending on vero's |
+| [build.sh](build.sh) | builds the C archive, the worker and the app |
+
+[Bring an Xcode app](../../docs/bring-an-xcode-app.md) adds vero to a Mac
+app of your own that has an Xcode project.
