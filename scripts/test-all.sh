@@ -301,6 +301,8 @@ TERMINAL=""
 [ -t 1 ] && TERMINAL=yes
 while read -r secs name rest; do rm -f "$LOGS/$name.began"; done <"$JOBS"
 echo $$ >"$LOGS/running"
+VERO_TEST_LOGS=$LOGS
+export VERO_TEST_LOGS
 status_loop &
 STATUS_LOOP=$!
 echo "testing $(cut -d' ' -f2 "$JOBS" | tr '\n' ' ')in $level${UPDATES:+, with the update test}${RECORD:+, recorded}; logs in $LOGS"
