@@ -319,7 +319,7 @@ func unixInstructions(p page, sys unixSystem, yes string) unixSection {
 			"pkgin" + y + " -f update",
 			"pkgin" + y + " install " + n,
 		}
-		// -f again: pkgin can't add a newer summary from one repository
+		// -f again: pkgin cannot add a newer summary from one repository
 		// while another is unchanged; it numbers their packages alike.
 		s.Update = "pkgin -f upgrade"
 		if sys.name == "illumos" {
@@ -331,7 +331,7 @@ func unixInstructions(p page, sys unixSystem, yes string) unixSection {
 			}, s.Commands...)
 		}
 		if sys.name == "netbsd" {
-			s.Note = "These need pkgin, which NetBSD's installer offers; pkg_add pkgin adds it if it's missing."
+			s.Note = "These need pkgin, which NetBSD's installer offers; pkg_add pkgin adds it if it is missing."
 		} else {
 			s.Note = "These need pkgsrc, in " + prefix + ". SmartOS has it; for OmniOS and OpenIndiana, pkgsrc.smartos.org says how to add it."
 		}
@@ -458,13 +458,13 @@ var indexPage = template.Must(template.New("index").Funcs(funcs).Parse(`<!doctyp
 {{end}}</pre>
 <p>Or run one command, which does the same:</p>
 <pre>curl -fsSL {{.URL}}/install.sh | sh</pre>
-<p class="soft">These need curl, which <code>sudo apt install curl</code> adds if it's missing.</p>
+<p class="soft">These need curl, which <code>sudo apt install curl</code> adds if it is missing.</p>
 </section>
 {{- end}}
 {{- if .RPM}}
 <section data-system="linux">
 <h2>Fedora and openSUSE</h2>
-<p>Add {{.App.DisplayName}}'s repository and install it. After that, your usual updates keep it up to date. The first time, you're asked to accept the key that signs it, which is at <a href="{{.URL}}/key.asc">{{.URL}}/key.asc</a>.</p>
+<p>Add {{.App.DisplayName}}'s repository and install it. After that, your usual updates keep it up to date. The first time, you are asked to accept the key that signs it, which is at <a href="{{.URL}}/key.asc">{{.URL}}/key.asc</a>.</p>
 <p>On Fedora:</p>
 <pre>{{range dnf .}}{{.}}
 {{end}}</pre>
@@ -479,7 +479,7 @@ var indexPage = template.Must(template.New("index").Funcs(funcs).Parse(`<!doctyp
 <p><a href="{{.URL}}/flatpak/{{.App.Name}}.flatpakref">Install {{.App.DisplayName}} with Flatpak</a>, which opens it in your software centre, or run:</p>
 <pre>{{range flatpak .}}{{.}}
 {{end}}</pre>
-<p class="soft">Flatpak keeps it up to date, with your other Flatpak apps. If your system doesn't have Flatpak yet, <a href="https://flatpak.org/setup/">flatpak.org/setup</a> says how to add it.</p>
+<p class="soft">Flatpak keeps it up to date, with your other Flatpak apps. If your system does not have Flatpak yet, <a href="https://flatpak.org/setup/">flatpak.org/setup</a> says how to add it.</p>
 </section>
 {{- end}}
 {{- if .Pacman}}
@@ -531,7 +531,7 @@ var indexPage = template.Must(template.New("index").Funcs(funcs).Parse(`<!doctyp
 <section data-system="macos">
 <h2>Mac</h2>
 <p><a href="{{.Mac.URL}}">Download {{.App.DisplayName}}</a> <span class="soft">version {{.Mac.Version}}</span>, open it, and drag {{.App.DisplayName}} to Applications. It checks for updates itself.</p>
-<p class="soft">If your Mac says it can't check the app, open System Settings, choose Privacy &amp; Security, and choose <b>Open Anyway</b>.</p>
+<p class="soft">If your Mac says that it cannot check the app, open System Settings, choose Privacy &amp; Security, and choose <b>Open Anyway</b>.</p>
 </section>
 {{- end}}
 {{- range .Others}}
@@ -549,7 +549,7 @@ var indexPage = template.Must(template.New("index").Funcs(funcs).Parse(`<!doctyp
 {{- if .Windows}}
 <section data-system="windows">
 <h2>Windows</h2>
-<p>Download the installer and open it. Windows may warn that it doesn't recognise the app; choose <b>More info</b>, then <b>Run anyway</b>.</p>
+<p>Download the installer and open it. Windows may warn that it does not recognise the app. If it does, choose <b>More info</b>, then <b>Run anyway</b>.</p>
 <ul>
 {{- range .Windows}}
 <li><a href="{{.URL}}">{{.Label}}</a> <span class="soft">version {{.Version}}</span></li>
@@ -622,7 +622,7 @@ if grep -qs '^ID="\{0,1\}{{.System}}' /etc/os-release; then
 fi
 {{- end}}
 command -v curl > /dev/null || { echo "This needs curl. Install it, then run this again." >&2; exit 1; }
-# Run as root, as in a container, there's no sudo, and no need for it.
+# Run as root, as in a container, there is no sudo, and none is needed.
 [ "$(id -u)" = 0 ] && sudo() { "$@"; }
 os() { grep -qs -e "^ID=$1" -e "^ID_LIKE=.*$1" /etc/os-release; }
 {{- if .Apt}}
@@ -668,6 +668,6 @@ if command -v flatpak > /dev/null; then
     exit 0
 fi
 {{- end}}
-echo "This script doesn't know how to install {{.App.DisplayName}} here. See {{.URL}}" >&2
+echo "This script does not know how to install {{.App.DisplayName}} here. See {{.URL}}" >&2
 exit 1
 `))
