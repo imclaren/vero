@@ -32,8 +32,8 @@ let package = Package(
         // it and nobody has to build one.
         !localCVero ? .binaryTarget(
             name: "CVero",
-            url: "https://github.com/imclaren/vero/releases/download/v0.18.0/CVero.xcframework.zip",
-            checksum: "97f4989faca8cf81e82d3f5254e3406ebf70094d667c4ac5b67c0a4824d769bd"
+            url: "https://github.com/imclaren/vero/releases/download/v0.18.1/CVero.xcframework.zip",
+            checksum: "ae7469843d22e4023f3fdb4b693624e23e6b045fcf76f32f6b333b11b3641ca3"
         ) : .binaryTarget(name: "CVero", path: "dist/CVero.xcframework"),
         .target(name: "Vero", dependencies: ["CVero"]),
         .target(name: "VeroUpdates", dependencies: [.product(name: "Sparkle", package: "Sparkle")]),
