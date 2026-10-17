@@ -1536,9 +1536,22 @@ class UndoStack:
         self.undos.append((text, undo))
         del self.undos[:-100]
         self.redos.clear()
-        window = self.app.active()
-        if toast and isinstance(window, Window):
+        window = self._host()
+        if toast and window is not None:
             window.toast(text, "Undo", self.undo)
+
+    def _host(self) -> Window | None:
+        """The window whose toast offers Undo: the one in front, or, when
+        that is a dialog, the window for which it is shown, as a sheet's
+        undo shows in its window on the Mac. Failing those, the main
+        window."""
+        window = self.app.active()
+        while window is not None and not isinstance(window, Window):
+            window = window.get_transient_for()
+        main = getattr(self.app, "window", None)
+        if window is None and isinstance(main, Window):
+            window = main
+        return window
 
     def undo(self) -> None:
         if not self.undos:

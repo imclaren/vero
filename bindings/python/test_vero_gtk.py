@@ -124,6 +124,33 @@ class InProcessTests(unittest.TestCase):
         plain.undo()
         plain.redo()
 
+    def test_undo_from_a_dialog_shows_in_its_window(self) -> None:
+        import vero_gtk as vg
+
+        shown: list[str] = []
+
+        class Main(vg.Window):
+            def __init__(self) -> None:
+                pass
+
+            def toast(self, text, button="", pressed=None, seconds=5):
+                shown.append(text)
+
+        main = Main()
+
+        class Dialog:
+            def get_transient_for(self):
+                return main
+
+        class App:
+            window = main
+
+            def active(self):
+                return Dialog()
+
+        vg.UndoStack(App()).push("Merged two events.", lambda: None)
+        self.assertEqual(shown, ["Merged two events."])
+
 
 @unittest.skipUnless(display(), "no display")
 class GtkLibraryTests(unittest.TestCase):
