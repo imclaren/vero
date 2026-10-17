@@ -85,6 +85,7 @@ if [ "$INSTALL" = yes ]; then
 fi
 
 boot() {   # $1: extra arguments, e.g. the install media
+    extra=$1
     rm -f "$VM/console.sock"
     # With VERO_DISK_DIR, qemu's monitor is on a socket there, with which
     # test-repo.sh saves the running VM; VERO_RESUME names a state so
@@ -95,7 +96,7 @@ boot() {   # $1: extra arguments, e.g. the install media
     # -vga std, even though nothing looks at it: see the note at the top.
     qemu-system-x86_64 -accel tcg -cpu max -smp 2 -m 4096 "$@" \
         -drive if=virtio,format=qcow2,file="$DISKS/disk.qcow2" \
-        $1 \
+        $extra \
         -netdev "user,id=n0,ipv6=off,hostfwd=tcp::$SSH_PORT-:22,hostfwd=tcp::$PORT-:5900" \
         -device virtio-net-pci,netdev=n0 \
         -display none -vga std \
