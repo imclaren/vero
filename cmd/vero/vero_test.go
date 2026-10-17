@@ -352,6 +352,22 @@ func TestNew(t *testing.T) {
 	if !strings.Contains(string(worker), `var version = "0.1.0"`) || !strings.Contains(string(worker), "vero.NewWorker") {
 		t.Error("the worker is not vero's example at 0.1.0")
 	}
+	// vero's guide for coding agents, marked as vero's, with its links
+	// pointing at vero's repository, and recorded for vero upgrade.
+	agents, _ := os.ReadFile(filepath.Join(dir, "hello", "AGENTS.md"))
+	guide, _ := os.ReadFile(filepath.Join(root, "AGENTS.md"))
+	if !strings.HasPrefix(string(agents), agentsHeader) || !strings.Contains(string(agents), "`vero upgrade`\n> replaces it") {
+		t.Errorf("AGENTS.md does not say that vero writes it:\n%.300s", agents)
+	}
+	if first, _, _ := strings.Cut(string(guide), "\n"); !strings.Contains(string(agents), first) {
+		t.Error("AGENTS.md is not vero's guide")
+	}
+	if !strings.Contains(string(agents), "](https://github.com/imclaren/vero/blob/main/docs/README.md)") || strings.Contains(string(agents), "](docs/") {
+		t.Error("AGENTS.md's links do not point at vero's repository")
+	}
+	if rec := readRecord(filepath.Join(dir, "hello")); rec["AGENTS.md"] != hashOf(agents) {
+		t.Errorf("AGENTS.md is not recorded: %v", rec)
+	}
 	build := exec.Command("go", "build", "./...")
 	build.Dir = filepath.Join(dir, "hello")
 	if out, err := build.CombinedOutput(); err != nil {
