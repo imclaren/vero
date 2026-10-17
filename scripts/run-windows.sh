@@ -4,9 +4,15 @@
 #
 #   scripts/run-windows.sh --iso ~/Downloads/win11.iso --install   # first time
 #   scripts/run-windows.sh                                         # every time after
-#   scripts/run-windows.sh --headless                              # no window; QMP on the socket
+#   scripts/run-windows.sh --headless                              # no window; the screen on VNC display :1
 #   scripts/run-windows.sh --payload out                           # your own build, not the example
 #   scripts/run-windows.sh --ssh 2222                              # port 2222 on this Mac reaches the VM's SSH
+#   scripts/run-windows.sh --qmp /tmp/other.sock --vnc 2           # for a second VM at the same time
+#
+# qemu's monitor is on the QMP socket, /tmp/vero-qmp.sock unless --qmp
+# names another, which scripts/lib/qmp.py drives. A second VM running at
+# the same time needs its own socket, SSH port and VNC display, which is
+# how test-repo.sh runs two Windows tests at once.
 #
 # --ssh needs SSH set up in the VM: --install sets it up, with the virtio
 # drivers that give Windows on ARM a network in qemu, and
@@ -31,18 +37,24 @@ PAYLOAD=""
 SSH_PORT=""
 DISPLAY_ARGS="-display cocoa"
 QMP=/tmp/vero-qmp.sock          # short on purpose: unix paths cap at 104 bytes
+VNC=1                           # the display number, with --headless: port 5901
+HEADLESS=no
 
 while [ $# -gt 0 ]; do
     case $1 in
         --vm)       VM=${2:?--vm needs a directory}; shift 2 ;;
         --iso)      ISO=${2:?--iso needs a file}; shift 2 ;;
         --install)  INSTALL=yes; shift ;;
-        --headless) DISPLAY_ARGS="-display none -vnc 127.0.0.1:1"; shift ;;
+        --headless) HEADLESS=yes; shift ;;
         --payload)  PAYLOAD=${2:?--payload needs a directory}; shift 2 ;;
         --ssh)      SSH_PORT=${2:?--ssh needs a port}; shift 2 ;;
+        --qmp)      QMP=${2:?--qmp needs a socket path}; shift 2 ;;
+        --vnc)      VNC=${2:?--vnc needs a display number}; shift 2 ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
 done
+
+[ "$HEADLESS" = yes ] && DISPLAY_ARGS="-display none -vnc 127.0.0.1:$VNC"
 
 # Installing sets up SSH, so its port is forwarded unless another is asked for.
 [ "$INSTALL" = yes ] && [ -z "$SSH_PORT" ] && SSH_PORT=2222

@@ -402,8 +402,8 @@ vm_stop() {
 }
 # windows_quit: qemu told to stop at once, for a run on a throwaway overlay.
 windows_quit() {
-    [ -S /tmp/vero-qmp.sock ] || return 0
-    python3 - /tmp/vero-qmp.sock <<'PY' || true
+    [ -S "$QMP" ] || return 0
+    python3 - "$QMP" <<'PY' || true
 import json, socket, sys
 s = socket.socket(socket.AF_UNIX); s.connect(sys.argv[1]); f = s.makefile("rw"); f.readline()
 for c in ("qmp_capabilities", "quit"):
@@ -501,6 +501,7 @@ cleanup() {
     elif [ "$VMSYS" = windows ]; then
         [ -n "$QEMU" ] && windows_quit
         [ -n "$RUNDIR" ] && { echo "the run's overlay took $(du -sh "$RUNDIR" | cut -f1)"; rm -rf "$RUNDIR"; }
+        if [ -n "$SSHPORT" ] && [ "$(cat "$CACHE/ports/$SSHPORT/pid" 2>/dev/null)" = "$$" ]; then rm -rf "$CACHE/ports/$SSHPORT"; fi
     elif [ -n "$VMSYS" ]; then
         vm_stop
         [ -n "$RUNDIR" ] && { echo "the run's overlay took $(du -sh "$RUNDIR" | cut -f1)"; rm -rf "$RUNDIR"; }
@@ -657,19 +658,40 @@ echo "PASS"
 # windows_test: the installers in vero's Windows VM, over SSH: the NSIS
 # installer, installed, started on the desktop, updated to 1.0.1 and
 # uninstalled; then the MSIX's files, registered, started and removed.
+# windows_port: a port on this Mac for the VM's SSH, from 2227 up, and
+# with it the VNC display of the VM's screen, so that two Windows tests
+# can run at once, each on its own overlay. The BSD VMs have 2222 to
+# 2226. Each port is reserved as a folder holding this run's process id,
+# as test-all.sh reserves the sites' ports, so that two runs started
+# together never take the same one: a VM about to listen on it is as
+# taken as one that listens. A reservation whose run has gone is taken
+# over.
+windows_port() {
+    PORTS="$CACHE/ports"
+    mkdir -p "$PORTS"
+    SSHPORT=2227
+    while :; do
+        VNC=$((SSHPORT - 2200))
+        if ! lsof -nP -iTCP:$SSHPORT -sTCP:LISTEN >/dev/null 2>&1 && ! lsof -nP -iTCP:$((5900 + VNC)) -sTCP:LISTEN >/dev/null 2>&1; then
+            if mkdir "$PORTS/$SSHPORT" 2>/dev/null; then echo $$ >"$PORTS/$SSHPORT/pid"; return 0; fi
+            owner=$(cat "$PORTS/$SSHPORT/pid" 2>/dev/null)
+            if [ -z "$owner" ] || ! kill -0 "$owner" 2>/dev/null; then echo $$ >"$PORTS/$SSHPORT/pid"; return 0; fi
+        fi
+        SSHPORT=$((SSHPORT + 1))
+    done
+}
 # windows_boot: vero's Windows VM started on a throwaway overlay on its
 # own disk, which is left as it was. It starts before the packages are
 # ready, since nothing reaches it on its disc, and windows_test waits for
-# it.
+# it. The run's overlay, SSH port, VNC display and QMP socket are its
+# own, so that another Windows test can run at the same time.
 windows_boot() {
     . "$VERO/scripts/lib/windows-disc.sh"
     VMDIR="$HOME/vm/vero-windows"
-    # Not 2222, which is FreeBSD VM's, so that both can be tested at once.
-    SSHPORT=2227
     [ -f "$VMDIR/disk.qcow2" ] || { echo "no Windows VM in $VMDIR: scripts/run-windows.sh --install makes one" >&2; exit 1; }
     [ -f "$WINDOWS_KEY" ] || { echo "no $WINDOWS_KEY: scripts/setup-windows-ssh.sh sets up SSH into the VM" >&2; exit 1; }
-    VM=$VMDIR windows_running && { echo "the Windows VM is running already: stop it first" >&2; exit 1; }
-    pgrep -qf "$VMDIR/run-" && { echo "another test is using the Windows VM: wait for it to finish" >&2; exit 1; }
+    VM=$VMDIR windows_running && { echo "the Windows VM is running already on its own disk: stop it first" >&2; exit 1; }
+    windows_port
     PAY="$CACHE/windows-test-$PORT"
     rm -rf "$PAY" "$PAY-disc" && mkdir -p "$PAY" "$PAY-disc"
     # The installers go in over SSH, so the VM's disc holds only a note.
@@ -678,8 +700,9 @@ windows_boot() {
     rm -rf "$RUNDIR"
     overlay "$VMDIR" "$RUNDIR" || { echo "FAIL: could not make the run's overlay" >&2; exit 1; }
     VM=$RUNDIR
-    echo "== booting the Windows VM, while the packages are made"
-    "$VERO/scripts/run-windows.sh" --vm "$RUNDIR" --headless --payload "$PAY-disc" --ssh "$SSHPORT" >"$CACHE/windows-vm-$PORT.log" 2>&1 &
+    QMP="$RUNDIR/qmp.sock"
+    echo "== booting the Windows VM, while the packages are made (SSH on port $SSHPORT, the screen on vnc://127.0.0.1:$((5900 + VNC)))"
+    "$VERO/scripts/run-windows.sh" --vm "$RUNDIR" --headless --payload "$PAY-disc" --ssh "$SSHPORT" --qmp "$QMP" --vnc "$VNC" >"$CACHE/windows-vm-$PORT.log" 2>&1 &
     QEMU=$!
 }
 
@@ -701,7 +724,7 @@ windows_test() {
     stage "the NSIS installer"
     phase nsis
     for line in "nsis-worker: 1.0.0" "nsis-app: True" "nsis-startmenu: True" "nsis-uninstaller: True" "nsis-runs: True"; do expect "$line"; done
-    python3 "$VERO/scripts/lib/qmp.py" /tmp/vero-qmp.sock shot "$PAY/nsis.ppm" && sips -s format png "$PAY/nsis.ppm" --out "$PAY/nsis.png" >/dev/null
+    python3 "$VERO/scripts/lib/qmp.py" "$QMP" shot "$PAY/nsis.ppm" && sips -s format png "$PAY/nsis.ppm" --out "$PAY/nsis.png" >/dev/null
     echo "ok: 1.0.0 installed and running (the desktop: $PAY/nsis.png)"
     if [ -n "$LAUNCH" ]; then
         stage "starting the app and playing its steps${RECORD:+, recorded}"
