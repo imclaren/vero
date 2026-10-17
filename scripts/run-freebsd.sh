@@ -119,17 +119,17 @@ SSH="ssh -i $VM/key -p $SSH_PORT -o StrictHostKeyChecking=no -o ConnectTimeout=1
 # A VM left running from a previous go: stop it the polite way.  Killing
 # qemu while the guest is writing leaves a UFS that wants a manual fsck on
 # the next boot, which there is no way to answer from here.
-if [ -f "$VM/qemu.pid" ] && kill -0 "$(cat "$VM/qemu.pid")" 2>/dev/null; then
+if [ -f "$DISKS/qemu.pid" ] && kill -0 "$(cat "$DISKS/qemu.pid")" 2>/dev/null; then
     echo "stopping the VM that is already running"
     $SSH "poweroff" >/dev/null 2>&1 || true
     n=0
-    while kill -0 "$(cat "$VM/qemu.pid")" 2>/dev/null; do
+    while kill -0 "$(cat "$DISKS/qemu.pid")" 2>/dev/null; do
         n=$((n + 1))
-        [ $n -gt 45 ] && { kill "$(cat "$VM/qemu.pid")" 2>/dev/null; sleep 2; break; }
+        [ $n -gt 45 ] && { kill "$(cat "$DISKS/qemu.pid")" 2>/dev/null; sleep 2; break; }
         sleep 1
     done
 fi
-rm -f "$VM/qemu.pid"
+rm -f "$DISKS/qemu.pid"
 
 echo "building the FreeBSD worker"
 # Pure Go: nothing here needs a FreeBSD toolchain.
@@ -147,8 +147,8 @@ boot() {   # $1: extra -netdev options
         -netdev "user,id=n0,hostfwd=tcp::$SSH_PORT-:22,hostfwd=tcp::$PORT-:5900$1" \
         -device virtio-net-pci,netdev=n0 \
         -display none \
-        -serial file:"$VM/console.log" \
-        -pidfile "$VM/qemu.pid" -daemonize
+        -serial file:"$DISKS/console.log" \
+        -pidfile "$DISKS/qemu.pid" -daemonize
 }
 
 wait_ssh() {
@@ -156,7 +156,7 @@ wait_ssh() {
     n=0
     until $SSH true 2>/dev/null; do
         n=$((n + 1))
-        [ $n -gt 150 ] && { echo; echo "the VM never came up - see $VM/console.log" >&2; exit 1; }
+        [ $n -gt 150 ] && { echo; echo "the VM never came up - see $DISKS/console.log" >&2; exit 1; }
         printf "."
         sleep 2
     done
@@ -164,17 +164,17 @@ wait_ssh() {
 }
 
 cleanup() {
-    [ -f "$VM/qemu.pid" ] || return 0
+    [ -f "$DISKS/qemu.pid" ] || return 0
     # Ask first.  A hard kill while the guest is writing leaves a UFS that
     # wants a manual fsck on the next boot, and no way to answer it.
     $SSH "poweroff" >/dev/null 2>&1 || true
     n=0
-    while kill -0 "$(cat "$VM/qemu.pid")" 2>/dev/null; do
+    while kill -0 "$(cat "$DISKS/qemu.pid")" 2>/dev/null; do
         n=$((n + 1))
-        [ $n -gt 30 ] && { kill "$(cat "$VM/qemu.pid")" 2>/dev/null; break; }
+        [ $n -gt 30 ] && { kill "$(cat "$DISKS/qemu.pid")" 2>/dev/null; break; }
         sleep 1
     done
-    rm -f "$VM/qemu.pid"
+    rm -f "$DISKS/qemu.pid"
 }
 
 if [ "$FIRST_BOOT" = yes ]; then
@@ -188,11 +188,11 @@ if [ "$FIRST_BOOT" = yes ]; then
     $SSH "sysrc firstboot_freebsd_update_enable=NO >/dev/null 2>&1; rm -f /firstboot; poweroff" \
         >/dev/null 2>&1 || true
     n=0
-    while [ -f "$VM/qemu.pid" ] && kill -0 "$(cat "$VM/qemu.pid")" 2>/dev/null; do
+    while [ -f "$DISKS/qemu.pid" ] && kill -0 "$(cat "$DISKS/qemu.pid")" 2>/dev/null; do
         n=$((n + 1)); [ $n -gt 60 ] && break
         sleep 1
     done
-    rm -f "$VM/qemu.pid"
+    rm -f "$DISKS/qemu.pid"
 fi
 
 echo "booting the VM"
@@ -212,7 +212,7 @@ if [ "$SHELL_ONLY" = yes ]; then
     trap - EXIT INT TERM
     echo "the VM is up.  ssh in with:"
     echo "  $SSH"
-    echo "stop it with:  kill \$(cat $VM/qemu.pid)"
+    echo "stop it with:  kill \$(cat $DISKS/qemu.pid)"
     exit 0
 fi
 
@@ -264,5 +264,5 @@ if [ "$OPEN" = yes ]; then
     read -r _
 else
     trap - EXIT INT TERM
-    echo "the VM is up, VNC on $PORT.  stop it with:  kill \$(cat $VM/qemu.pid)"
+    echo "the VM is up, VNC on $PORT.  stop it with:  kill \$(cat $DISKS/qemu.pid)"
 fi

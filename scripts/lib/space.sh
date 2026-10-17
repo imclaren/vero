@@ -145,8 +145,12 @@ vero_prune() {
     fi
     for vm in "$VERO_VMS"/vero-*; do
         [ -d "$vm" ] || continue
+        # A VM run by hand has its pidfile in its own folder; a test's run
+        # has it in the run's or the snapshot's.
         running=no
-        [ -f "$vm/qemu.pid" ] && kill -0 "$(cat "$vm/qemu.pid")" 2>/dev/null && running=yes
+        for pidfile in "$vm/qemu.pid" "$vm"/*/qemu.pid; do
+            [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null && running=yes
+        done
         for r in "$vm"/run-*; do
             [ -d "$r" ] || continue
             # A run's overlay is in use while a qemu has it open.

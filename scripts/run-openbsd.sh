@@ -69,17 +69,17 @@ fi
 SSH="ssh -i $VM/key -p $SSH_PORT -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
      -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o IdentitiesOnly=yes root@127.0.0.1"
 
-if [ -f "$VM/qemu.pid" ] && kill -0 "$(cat "$VM/qemu.pid")" 2>/dev/null; then
+if [ -f "$DISKS/qemu.pid" ] && kill -0 "$(cat "$DISKS/qemu.pid")" 2>/dev/null; then
     echo "stopping the VM that is already running"
     $SSH "halt -p" >/dev/null 2>&1 || true
     n=0
-    while kill -0 "$(cat "$VM/qemu.pid")" 2>/dev/null; do
+    while kill -0 "$(cat "$DISKS/qemu.pid")" 2>/dev/null; do
         n=$((n + 1))
-        [ $n -gt 45 ] && { kill "$(cat "$VM/qemu.pid")" 2>/dev/null; sleep 2; break; }
+        [ $n -gt 45 ] && { kill "$(cat "$DISKS/qemu.pid")" 2>/dev/null; sleep 2; break; }
         sleep 1
     done
 fi
-rm -f "$VM/qemu.pid" "$VM/console.sock"
+rm -f "$DISKS/qemu.pid" "$DISKS/console.sock"
 
 echo "building the OpenBSD worker"
 CGO_ENABLED=0 GOOS=openbsd GOARCH=arm64 go build -o "$VM/worker" ./example/worker
@@ -133,28 +133,28 @@ boot() {   # $1: extra -drive for the installer
         -netdev "user,id=n0,ipv6=off,hostfwd=tcp::$SSH_PORT-:22,hostfwd=tcp::$PORT-:5900" \
         -device virtio-net-pci,netdev=n0 \
         -display none \
-        -chardev socket,id=con,path="$VM/console.sock",server=on,wait=off,logfile="$VM/console.log" \
+        -chardev socket,id=con,path="$DISKS/console.sock",server=on,wait=off,logfile="$DISKS/console.log" \
         -serial chardev:con \
-        -pidfile "$VM/qemu.pid" -daemonize
+        -pidfile "$DISKS/qemu.pid" -daemonize
 }
 
 cleanup() {
     kill $HTTP 2>/dev/null || true
-    [ -f "$VM/qemu.pid" ] || return 0
+    [ -f "$DISKS/qemu.pid" ] || return 0
     $SSH "halt -p" >/dev/null 2>&1 || true
     n=0
-    while kill -0 "$(cat "$VM/qemu.pid")" 2>/dev/null; do
-        n=$((n + 1)); [ $n -gt 30 ] && { kill "$(cat "$VM/qemu.pid")" 2>/dev/null; break; }
+    while kill -0 "$(cat "$DISKS/qemu.pid")" 2>/dev/null; do
+        n=$((n + 1)); [ $n -gt 30 ] && { kill "$(cat "$DISKS/qemu.pid")" 2>/dev/null; break; }
         sleep 1
     done
-    rm -f "$VM/qemu.pid"
+    rm -f "$DISKS/qemu.pid"
 }
 trap cleanup EXIT INT TERM
 
 if [ "$INSTALL" = yes ]; then
     echo "installing OpenBSD (once; about ten minutes)"
     boot "-drive if=virtio,format=raw,readonly=on,file=$VM/install$VERSION.img"
-    python3 - "$VM/console.sock" "$HTTP_PORT" <<'PY'
+    python3 - "$DISKS/console.sock" "$HTTP_PORT" <<'PY'
 import socket, sys, time
 
 sock, port = sys.argv[1], sys.argv[2]
@@ -232,7 +232,7 @@ if [ "$SHELL_ONLY" = yes ]; then
     kill $HTTP 2>/dev/null || true
     echo "the VM is up.  ssh in with:"
     echo "  $SSH"
-    echo "stop it with:  kill \$(cat $VM/qemu.pid)"
+    echo "stop it with:  kill \$(cat $DISKS/qemu.pid)"
     exit 0
 fi
 
@@ -291,5 +291,5 @@ if [ "$OPEN" = yes ]; then
 else
     trap - EXIT INT TERM
     kill $HTTP 2>/dev/null || true
-    echo "the VM is up, VNC on $PORT.  stop it with:  kill \$(cat $VM/qemu.pid)"
+    echo "the VM is up, VNC on $PORT.  stop it with:  kill \$(cat $DISKS/qemu.pid)"
 fi

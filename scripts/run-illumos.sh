@@ -86,7 +86,7 @@ fi
 
 boot() {   # $1: extra arguments, e.g. the install media
     extra=$1
-    rm -f "$VM/console.sock"
+    rm -f "$DISKS/console.sock"
     # With VERO_DISK_DIR, qemu's monitor is on a socket there, with which
     # test-repo.sh saves the running VM; VERO_RESUME names a state so
     # saved, from which the VM carries on instead of booting.
@@ -100,20 +100,20 @@ boot() {   # $1: extra arguments, e.g. the install media
         -netdev "user,id=n0,ipv6=off,hostfwd=tcp::$SSH_PORT-:22,hostfwd=tcp::$PORT-:5900" \
         -device virtio-net-pci,netdev=n0 \
         -display none -vga std \
-        -chardev socket,id=con,path="$VM/console.sock",server=on,wait=off,logfile="$VM/console.log" \
+        -chardev socket,id=con,path="$DISKS/console.sock",server=on,wait=off,logfile="$DISKS/console.log" \
         -serial chardev:con \
-        -pidfile "$VM/qemu.pid" -daemonize
+        -pidfile "$DISKS/qemu.pid" -daemonize
 }
 
 stop() {
-    [ -f "$VM/qemu.pid" ] || return 0
+    [ -f "$DISKS/qemu.pid" ] || return 0
     $SSH "poweroff" >/dev/null 2>&1 || true
     n=0
-    while kill -0 "$(cat "$VM/qemu.pid")" 2>/dev/null; do
-        n=$((n + 1)); [ $n -gt 40 ] && { kill "$(cat "$VM/qemu.pid")" 2>/dev/null; break; }
+    while kill -0 "$(cat "$DISKS/qemu.pid")" 2>/dev/null; do
+        n=$((n + 1)); [ $n -gt 40 ] && { kill "$(cat "$DISKS/qemu.pid")" 2>/dev/null; break; }
         sleep 1
     done
-    rm -f "$VM/qemu.pid"
+    rm -f "$DISKS/qemu.pid"
 }
 stop
 trap stop EXIT INT TERM
@@ -124,7 +124,7 @@ CGO_ENABLED=0 GOOS=illumos GOARCH=amd64 go build -o "$VM/worker" ./example/worke
 if [ "$INSTALL" = yes ]; then
     echo "installing OpenIndiana (about half an hour, emulated)"
     boot "-drive if=ide,media=cdrom,file=$VM/oi-text.iso -boot d"
-    python3 "$ROOT/scripts/lib/illumos-install.py" "$VM/console.sock" "$(cat "$VM/key.pub")"
+    python3 "$ROOT/scripts/lib/illumos-install.py" "$DISKS/console.sock" "$(cat "$VM/key.pub")"
     stop
     echo "installed"
 fi
@@ -136,7 +136,7 @@ printf "waiting for ssh"
 n=0
 until $SSH true 2>/dev/null; do
     n=$((n + 1))
-    [ $n -gt 180 ] && { echo; echo "the VM never came up - see $VM/console.log" >&2; exit 1; }
+    [ $n -gt 180 ] && { echo; echo "the VM never came up - see $DISKS/console.log" >&2; exit 1; }
     printf "."
     sleep 3
 done
@@ -154,7 +154,7 @@ if [ "$SHELL_ONLY" = yes ]; then
     trap - EXIT INT TERM
     echo "the VM is up.  ssh in with:"
     echo "  $SSH"
-    echo "stop it with:  kill \$(cat $VM/qemu.pid)"
+    echo "stop it with:  kill \$(cat $DISKS/qemu.pid)"
     exit 0
 fi
 
@@ -223,5 +223,5 @@ if [ "$OPEN" = yes ]; then
     read -r _
 else
     trap - EXIT INT TERM
-    echo "the VM is up, VNC on $PORT.  stop it with:  kill \$(cat $VM/qemu.pid)"
+    echo "the VM is up, VNC on $PORT.  stop it with:  kill \$(cat $DISKS/qemu.pid)"
 fi

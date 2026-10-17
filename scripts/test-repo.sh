@@ -161,20 +161,20 @@ elif [ -n "$VMSYS" ]; then
     TARGETS=$VMSYS
     VMDIR="$HOME/vm/vero-$VMSYS"
     case $VMSYS in
-        freebsd) SSH_PORT=2222 PREFIX=/usr/local PY=python3
+        freebsd) PREFIX=/usr/local PY=python3
             INSTALL="fetch -q -o - $URL/install.sh | sh"
             XSETUP="pkg install -y tigervnc-server ImageMagick7 > /dev/null"
             UPDATE="pkg upgrade -y > /dev/null"
             # FreeBSD's packages roll on, so a snapshot is made from an
             # upgraded system.
             REFRESH="pkg upgrade -y > /dev/null" ;;
-        netbsd) SSH_PORT=2223 PREFIX=/usr/pkg PY=python3.12
+        netbsd) PREFIX=/usr/pkg PY=python3.12
             # pkgin, which the install page says to add if it's missing.
             SETUP="[ -x /usr/pkg/bin/pkgin ] || PKG_PATH=https://cdn.netbsd.org/pub/pkgsrc/packages/NetBSD/\$(uname -p)/\$(uname -r | cut -d. -f1-2)/All /usr/sbin/pkg_add pkgin"
             INSTALL="ftp -V -o - $URL/install.sh | sh"
             XSETUP="pkgin -y install tigervnc ImageMagick > /dev/null"
             UPDATE="pkgin -y -f upgrade > /dev/null" ;;
-        openbsd) SSH_PORT=2224 PREFIX=/usr/local PY=python3
+        openbsd) PREFIX=/usr/local PY=python3
             # Python crashes importing GTK 4 on OpenBSD 7.9 for ARM, with
             # or without a display, whatever imports it: so here, GTK is
             # checked for, not started.
@@ -183,7 +183,7 @@ elif [ -n "$VMSYS" ]; then
             INSTALL="ftp -V -o - $URL/install.sh | sh"
             XSETUP="pkg_add -I tigervnc ImageMagick > /dev/null"
             UPDATE="PKG_PATH=$URL/openbsd/%a/:installpath pkg_add -u $APP_NAME" ;;
-        dragonfly) SSH_PORT=2225 PREFIX=/usr/local PY=python3.11
+        dragonfly) PREFIX=/usr/local PY=python3.11
             # Emulated, it takes minutes to boot, so each run carries on
             # from its snapshot's saved state, with the clock set again, in
             # the form of date that RESUME gives.
@@ -194,7 +194,7 @@ elif [ -n "$VMSYS" ]; then
             # which has been known to remove packages the example needs.
             XSETUP="pkg install -y tigervnc-server ImageMagick7 > /dev/null"
             UPDATE="pkg upgrade -y $APP_NAME > /dev/null" ;;
-        illumos) SSH_PORT=2226 PREFIX=/usr PY=/usr/bin/python3.9
+        illumos) PREFIX=/usr PY=/usr/bin/python3.9
             RESUME=+%m%d%H%M%Y.%S
             # OpenIndiana's own packages, from which the app's IPS package
             # takes GTK 4, libadwaita and PyGObject.
@@ -388,8 +388,8 @@ overlay() {
 # is simply stopped; a snapshot being made is shut down cleanly first, so
 # that its filesystems are whole.
 vm_stop() {
-    [ -f "$VMDIR/qemu.pid" ] || return 0
-    pid=$(cat "$VMDIR/qemu.pid")
+    [ -f "${BOOTED:-$VMDIR}/qemu.pid" ] || return 0
+    pid=$(cat "${BOOTED:-$VMDIR}/qemu.pid")
     if [ "$1" = clean ]; then
         $SSH 'PATH=/sbin:/usr/sbin:$PATH; poweroff 2>/dev/null || shutdown -p now' >/dev/null 2>&1 || true
         n=0
@@ -398,7 +398,7 @@ vm_stop() {
     kill "$pid" 2>/dev/null || true
     n=0
     while kill -0 "$pid" 2>/dev/null && [ $n -lt 20 ]; do sleep 0.5; n=$((n + 1)); done
-    rm -f "$VMDIR/qemu.pid"
+    rm -f "${BOOTED:-$VMDIR}/qemu.pid"
 }
 # windows_quit: qemu told to stop at once, for a run on a throwaway overlay.
 windows_quit() {
@@ -413,12 +413,39 @@ PY
     while windows_running && [ $i -lt 30 ]; do sleep 1; i=$((i + 1)); done
 }
 
+# vm_port: a port on this Mac for the run's VM's SSH, the first free one
+# from 2227 up, and with it the port of its VNC screen, so that two tests
+# can run at once, each on its own overlay. The run scripts' own
+# defaults, 2222 to 2226, are left to a VM run by hand. Each port is
+# reserved as a folder holding this run's process id, as test-all.sh
+# reserves the sites' ports, so that two runs started together never
+# take the same one: a VM about to listen on it is as taken as one that
+# listens. A reservation whose run has gone is taken over.
+vm_port() {
+    [ -n "$SSHPORT" ] && return 0
+    PORTS="$CACHE/ports"
+    mkdir -p "$PORTS"
+    SSHPORT=2227
+    while :; do
+        VNC=$((SSHPORT - 2200))
+        if ! lsof -nP -iTCP:$SSHPORT -sTCP:LISTEN >/dev/null 2>&1 && ! lsof -nP -iTCP:$((5900 + VNC)) -sTCP:LISTEN >/dev/null 2>&1; then
+            if mkdir "$PORTS/$SSHPORT" 2>/dev/null; then break; fi
+            owner=$(cat "$PORTS/$SSHPORT/pid" 2>/dev/null)
+            if [ -z "$owner" ] || ! kill -0 "$owner" 2>/dev/null; then break; fi
+        fi
+        SSHPORT=$((SSHPORT + 1))
+    done
+    echo $$ >"$PORTS/$SSHPORT/pid"
+    SSH_PORT=$SSHPORT VNCPORT=$((5900 + VNC))
+}
 # A VM is made the first time, by its run script, and shut down cleanly,
 # so that its snapshots start from a disk at rest.
 if [ -n "$VMSYS" ] && [ "$VMSYS" != windows ] && [ ! -f "$VMDIR/disk.qcow2" ]; then
     [ -n "$KEYONLY" ] && { echo new; exit 0; }
     echo "== making the $VMSYS VM, the first time it is needed"
-    "$VERO/scripts/run-$VMSYS.sh" --shell --no-open >/dev/null
+    BOOTED=$VMDIR
+    vm_port
+    SSH_PORT="$SSH_PORT" PORT="$VNCPORT" "$VERO/scripts/run-$VMSYS.sh" --shell --no-open >/dev/null
     SSH="ssh -i $VMDIR/key -p $SSH_PORT -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o IdentitiesOnly=yes root@127.0.0.1"
     vm_stop clean
 fi
@@ -480,6 +507,7 @@ vero_space_check "$SYSNAME" "${HAVE_READY:-no}" || exit 1
 if [ -n "$MAC" ] || [ "$VMSYS" = windows ]; then
     in_container() { sh -c "$1"; }
 elif [ -n "$VMSYS" ]; then
+    vm_port
     SSH="ssh -i $VMDIR/key -p $SSH_PORT -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o IdentitiesOnly=yes root@127.0.0.1"
     # Through sh, on its standard input, whatever root's shell is:
     # DragonFly's is csh, which reads sh's syntax differently.
@@ -501,7 +529,6 @@ cleanup() {
     elif [ "$VMSYS" = windows ]; then
         [ -n "$QEMU" ] && windows_quit
         [ -n "$RUNDIR" ] && { echo "the run's overlay took $(du -sh "$RUNDIR" | cut -f1)"; rm -rf "$RUNDIR"; }
-        if [ -n "$SSHPORT" ] && [ "$(cat "$CACHE/ports/$SSHPORT/pid" 2>/dev/null)" = "$$" ]; then rm -rf "$CACHE/ports/$SSHPORT"; fi
     elif [ -n "$VMSYS" ]; then
         vm_stop
         [ -n "$RUNDIR" ] && { echo "the run's overlay took $(du -sh "$RUNDIR" | cut -f1)"; rm -rf "$RUNDIR"; }
@@ -509,6 +536,7 @@ cleanup() {
     else
         docker rm -f "$NAME" >/dev/null 2>&1 || true
     fi
+    if [ -n "$SSHPORT" ] && [ "$(cat "$CACHE/ports/$SSHPORT/pid" 2>/dev/null)" = "$$" ]; then rm -rf "$CACHE/ports/$SSHPORT"; fi
     [ -n "$SERVER" ] && kill "$SERVER" 2>/dev/null || true
     [ -n "$PASSED" ] && rm -rf "$SITE" "$PACKAGES" "$CACHE/windows-test-$PORT" "$CACHE/windows-test-$PORT-disc"
     return 0
@@ -526,7 +554,8 @@ make_ready() {
         stage "making the VM's snapshot, which this key needs once ($READY)"
         rm -rf "$READY.tmp"
         overlay "$VMDIR" "$READY.tmp" || { echo "FAIL: could not make the snapshot's overlay" >&2; exit 1; }
-        VERO_DISK_DIR="$READY.tmp" "$VERO/scripts/run-$VMSYS.sh" --shell --no-open >/dev/null
+        BOOTED="$READY.tmp"
+        SSH_PORT="$SSH_PORT" PORT="$VNCPORT" VERO_DISK_DIR="$READY.tmp" "$VERO/scripts/run-$VMSYS.sh" --shell --no-open >/dev/null
         # What earlier runs left goes first, since an update fails on a
         # repository that is no longer there.
         in_container "$SETUP" || { echo "FAIL: could not set up the VM's snapshot" >&2; exit 1; }
@@ -658,28 +687,6 @@ echo "PASS"
 # windows_test: the installers in vero's Windows VM, over SSH: the NSIS
 # installer, installed, started on the desktop, updated to 1.0.1 and
 # uninstalled; then the MSIX's files, registered, started and removed.
-# windows_port: a port on this Mac for the VM's SSH, from 2227 up, and
-# with it the VNC display of the VM's screen, so that two Windows tests
-# can run at once, each on its own overlay. The BSD VMs have 2222 to
-# 2226. Each port is reserved as a folder holding this run's process id,
-# as test-all.sh reserves the sites' ports, so that two runs started
-# together never take the same one: a VM about to listen on it is as
-# taken as one that listens. A reservation whose run has gone is taken
-# over.
-windows_port() {
-    PORTS="$CACHE/ports"
-    mkdir -p "$PORTS"
-    SSHPORT=2227
-    while :; do
-        VNC=$((SSHPORT - 2200))
-        if ! lsof -nP -iTCP:$SSHPORT -sTCP:LISTEN >/dev/null 2>&1 && ! lsof -nP -iTCP:$((5900 + VNC)) -sTCP:LISTEN >/dev/null 2>&1; then
-            if mkdir "$PORTS/$SSHPORT" 2>/dev/null; then echo $$ >"$PORTS/$SSHPORT/pid"; return 0; fi
-            owner=$(cat "$PORTS/$SSHPORT/pid" 2>/dev/null)
-            if [ -z "$owner" ] || ! kill -0 "$owner" 2>/dev/null; then echo $$ >"$PORTS/$SSHPORT/pid"; return 0; fi
-        fi
-        SSHPORT=$((SSHPORT + 1))
-    done
-}
 # windows_boot: vero's Windows VM started on a throwaway overlay on its
 # own disk, which is left as it was. It starts before the packages are
 # ready, since nothing reaches it on its disc, and windows_test waits for
@@ -691,7 +698,7 @@ windows_boot() {
     [ -f "$VMDIR/disk.qcow2" ] || { echo "no Windows VM in $VMDIR: scripts/run-windows.sh --install makes one" >&2; exit 1; }
     [ -f "$WINDOWS_KEY" ] || { echo "no $WINDOWS_KEY: scripts/setup-windows-ssh.sh sets up SSH into the VM" >&2; exit 1; }
     VM=$VMDIR windows_running && { echo "the Windows VM is running already on its own disk: stop it first" >&2; exit 1; }
-    windows_port
+    vm_port
     PAY="$CACHE/windows-test-$PORT"
     rm -rf "$PAY" "$PAY-disc" && mkdir -p "$PAY" "$PAY-disc"
     # The installers go in over SSH, so the VM's disc holds only a note.
@@ -871,7 +878,9 @@ vm_boot() {
     rm -rf "$RUNDIR"
     if [ -n "$FRESH" ]; then overlay "$VMDIR" "$RUNDIR"; else USED_READY=yes; touch "$READY/ok"; overlay "$READY" "$RUNDIR"; fi ||
         { echo "FAIL: could not make the run's overlay" >&2; exit 1; }
-    VERO_DISK_DIR="$RUNDIR" "$VERO/scripts/run-$VMSYS.sh" --shell --no-open >"$CACHE/vm-boot-$PORT.log" 2>&1 &
+    BOOTED=$RUNDIR
+    echo "(SSH on port $SSH_PORT, the screen on vnc://127.0.0.1:$VNCPORT)"
+    SSH_PORT="$SSH_PORT" PORT="$VNCPORT" VERO_DISK_DIR="$RUNDIR" "$VERO/scripts/run-$VMSYS.sh" --shell --no-open >"$CACHE/vm-boot-$PORT.log" 2>&1 &
     BOOTING=$!
 }
 vm_wait() {
@@ -887,7 +896,8 @@ vm_wait() {
 # the snapshot's disks stay as they were when the state was saved.
 save_state() {
     echo "saving the VM's running state, once, so that runs carry on from it"
-    VERO_RESUME="" VERO_DISK_DIR="$1" "$VERO/scripts/run-$VMSYS.sh" --shell --no-open >/dev/null 2>&1 || { vm_stop; return 1; }
+    BOOTED=$1
+    SSH_PORT="$SSH_PORT" PORT="$VNCPORT" VERO_RESUME="" VERO_DISK_DIR="$1" "$VERO/scripts/run-$VMSYS.sh" --shell --no-open >/dev/null 2>&1 || { vm_stop; return 1; }
     python3 - "$1/qmp.sock" "$1/state.gz.tmp" <<'PY' || { vm_stop; rm -f "$1/state.gz.tmp"; return 1; }
 import json, socket, sys, time
 s = socket.socket(socket.AF_UNIX); s.connect(sys.argv[1]); f = s.makefile("rw"); f.readline()
@@ -913,8 +923,8 @@ else:
 ask("quit")
 PY
     n=0
-    while [ -f "$VMDIR/qemu.pid" ] && kill -0 "$(cat "$VMDIR/qemu.pid")" 2>/dev/null && [ $n -lt 60 ]; do sleep 1; n=$((n + 1)); done
-    rm -f "$VMDIR/qemu.pid"
+    while [ -f "$1/qemu.pid" ] && kill -0 "$(cat "$1/qemu.pid")" 2>/dev/null && [ $n -lt 60 ]; do sleep 1; n=$((n + 1)); done
+    rm -f "$1/qemu.pid"
     mv "$1/state.gz.tmp" "$1/state.gz"
     echo "the saved state takes $(du -sh "$1/state.gz" | cut -f1)"
 }
