@@ -1,17 +1,27 @@
-# vero-app.toml describes a vero app to vero's packaging: what its
-# installers and its install site need that isn't secret. Copy this one
-# beside your app's go.mod and change it. Paths are relative to this file.
+# vero-app.toml describes a vero app to vero's packaging and tests: what
+# its installers and its install site need that is not secret. Copy this
+# one beside your app's go.mod and change it. Paths are relative to this
+# file. Settings shown commented out are optional.
 #
 #   vero release                      from the folder this file is in
 #
-# docs/release.md goes through it all, and PACKAGING.md lists every setting.
+# Nothing secret goes here. Signing certificates and passwords are given in
+# environment variables, which vero credentials lists.
 
 # The package and command name: lower case letters, digits and hyphens.
 name = "vero-example"
 # What people see, in menus and on the install page.
 display_name = "vero example"
-# A reverse-domain name that's yours, which systems tell apps apart by.
+# A reverse-domain name of your own, by which systems tell apps apart.
 id = "dev.vero.example"
+# tray = true makes a window app with an icon in the menu bar and the
+# tray, and menubar = true an app that lives there. This example
+# sets menubar in [macos] only.
+#   tray = true
+# The link schemes and the file types, by extension, that the app opens,
+# which each system's installer registers.
+#   schemes = ["mailto"]
+#   opens = ["eml"]
 # Usually given with --version instead, so that each release says its own.
 version = "1.0.0"
 summary = "Shows jobs running in a Go worker"
@@ -38,8 +48,12 @@ icon = "icon.png"
 [worker]
 # The worker's main package, and the program's name (".exe" is added on
 # Windows). The front ends start it from beside themselves by this name.
+# The main package needs a var version, which the release sets.
 package = "worker"
 name = "worker"
+# cgo = true builds the Mac's worker with cgo and Xcode's clang, and every
+# other system's without it.
+#   cgo = false
 
 # The front end for Linux - the .deb, the rpm, the AUR package and a
 # Flatpak - and for the BSDs and illumos.
@@ -50,6 +64,9 @@ entry = "main.py"
 include = ["../bindings/python/vero.py"]
 # The menu categories, from freedesktop.org's list.
 categories = "Utility;"
+# A sentence of the app's own beside a system on the download page, for
+# what the app cannot do there, by the system's name on that page.
+#   notes = { netbsd = "Mail shows as plain text, since NetBSD has no WebKitGTK 6." }
 
 # vero works out what each system's package needs: Python, PyGObject,
 # GTK 4 and a font always, and from uses, libadwaita ("adwaita"), the web
@@ -59,11 +76,24 @@ categories = "Utility;"
 # vero works out.
 uses = []
 
-# Where the Debian package is filed.
+# Files that every Linux, BSD and illumos package and the Flatpak install
+# on the desktop, such as a search provider or a D-Bus service. to is under
+# the package's prefix: /usr on Linux, /usr/local on the BSDs and /app in a
+# Flatpak. With expand = true, {prefix}, {id} and {name} in the file are
+# filled in. A Flatpak shows such a file only when its name, and its bus
+# name, begin with the app's id.
+#   [[gtk.data]]
+#   from = "linux/dbus.service"
+#   to = "share/dbus-1/services/dev.vero.example.Search.service"
+#   expand = true
+
+# Debian, Fedora, openSUSE and Arch are always packaged, with [gtk.deb],
+# [gtk.rpm] and [gtk.arch] for their settings, such as depends, and
+# optdepends in [gtk.arch]. This is where the Debian package is filed.
 [gtk.deb]
 section = "utils"
 
-# Alpine Linux, Void Linux and Chimera Linux, each packaged for when its
+# Alpine Linux, Void Linux and Chimera Linux, each packaged when its
 # section is here, even an empty one.
 [gtk.alpine]
 
@@ -71,32 +101,39 @@ section = "utils"
 
 [gtk.chimera]
 
-# A Flatpak, for any Linux. It's made only when asked for, with build =
-# true or --targets flatpak, since making one needs Docker. The runtime it
-# runs on comes from Flathub: GNOME's has GTK 4, WebKitGTK, Python and
-# PyGObject. Leave these out for vero's default.
+# A Flatpak, for any Linux. It is made only when asked for, with build =
+# true or --targets flatpak, since making one needs Docker. Its runtime
+# comes from Flathub, and GNOME's has GTK 4, WebKitGTK, Python and
+# PyGObject. Leave these out for vero's default. resources puts more files
+# beside the worker, with {arch} for each architecture's own, and prepare
+# runs before each architecture is made, with ARCH and GOARCH set.
 [gtk.flatpak]
 build = false
 runtime = "org.gnome.Platform"
 runtime_version = "51"
+#   resources = ["ffmpeg/{arch}/ffmpeg"]
 
-# The BSDs and illumos. Each is packaged for when its section is here.
-# python is the command that starts the app there, where python3 isn't
-# one.
+# The BSDs and illumos. Each is packaged when its section is here. python
+# is the command that starts the app there, where python3 is not one.
 #
 # This section, and the Linux ones above, may also narrow the
 # architectures packaged, where the system's own packages lack something
 # the app needs on one of them. Without it, x86-64 and ARM64 are packaged,
-# where the system has them:
+# where the system has them.
 #
 #   arches = ["x86_64"]
 #
 # It can also add others, such as RISC-V, 32-bit ARM and 32-bit x86, which
-# are packaged only when named, such as in [gtk.deb]:
+# are packaged only when named, as in [gtk.deb].
 #
 #   arches = ["amd64", "arm64", "riscv64", "armhf", "i386"]
 #
-# cmd/vero-repo/README.md lists them all for each system.
+# cmd/vero-repo/README.md lists each system's names for them. Where a
+# FreeBSD or DragonFly package needs other packages on one architecture,
+# by_arch replaces deps or python there.
+#
+#   [gtk.freebsd.by_arch.armv7]
+#   python = "python3.11"
 [gtk.freebsd]
 
 [gtk.dragonfly]
@@ -107,15 +144,19 @@ runtime_version = "51"
 
 [gtk.openbsd]
 
-# The front end for Windows: its project's folder, and the program it builds.
+# The front end for Windows: its project's folder, and the program it
+# builds, published self-contained, with an installer for x64 and one for
+# ARM64. arches = ["x64", "arm64", "x86"] adds 32-bit Windows, and
+# winget_id sets the winget identifier, Publisher.App, which is otherwise
+# made from the names.
 [wpf]
 folder = "wpf-app"
 exe = "VeroExample.exe"
 
 # An MSIX for the Microsoft Store, made only when asked for, with build =
 # true or --targets msix. Partner Center gives an app its identity_name
-# and publisher when you reserve its name there; the Store signs what you
-# submit. These are placeholders, which install only with a certificate
+# and publisher when you reserve its name there, and the Store signs what
+# you submit. These are placeholders, which install only with a certificate
 # of your own that names this publisher, as test-repo.sh --vm windows
 # makes one.
 [wpf.msix]
@@ -123,10 +164,10 @@ build = false
 identity_name = "ExamplePublisher.VeroExample"
 publisher = "CN=Example Publisher"
 
-# What the app asks of the system it runs on. Each installer turns these
-# into what its system needs. On Windows, autostart offers to open the app
-# at sign-in, and webview installs Microsoft Edge WebView2 where it's
-# missing. A Flatpak may reach the network only with network, the home
+# What the app asks of the system on which it runs. Each installer turns
+# these into what its system needs. On Windows, autostart offers to open
+# the app at sign-in, and webview installs Microsoft Edge WebView2 where it
+# is missing. A Flatpak may reach the network only with network, the home
 # folder only with files, and the keyring only with keyring. A file chosen
 # in a file dialog, notifications, and opening at sign-in all go through
 # Flatpak's portals, which need nothing here.
@@ -138,23 +179,32 @@ notifications = false
 autostart = false
 webview = false
 
-# The Mac app: a SwiftPM package (product), or an Xcode project (project
-# and scheme). prepare runs before each architecture is built, with GOARCH
-# and CC set for it: here, it builds the C archive the app links. The
-# worker goes in Contents/Resources, with any files resources lists. feed
-# is where the app checks for updates, and sparkle_public_key the key it
-# checks them with, which vero-repo key prints; both go in its Info.plist.
+# The Mac app, as a SwiftPM package (product) or an Xcode project (project
+# and scheme), built for Apple silicon and Intel in one app. Its versions
+# are always the release's. prepare runs before each architecture is
+# built, with GOARCH and CC set, and here it builds the C archive that the
+# app links. The worker goes in Contents/Resources, with the files that
+# resources lists, which prebuild, run first, can make or fetch.
+# entitlements names a plist for the app. feed is where the app checks for
+# updates, and sparkle_public_key the key with which it checks them, which
+# vero key prints, and both go in a SwiftPM app's Info.plist. appcast
+# writes the appcast at another path on the site as well, and download_url
+# points the appcast and the cask at another server.
+#   resources = ["bin/ffmpeg", "bin/ffmpeg-LICENSE"]
+#   feed = "https://example.com/vero-example/macos/appcast.xml"
+#   sparkle_public_key = "..."
 [macos]
 folder = "menubar-app"
 product = "MenuBarExample"
 prepare = "CGO_ENABLED=1 go build -buildmode=c-archive -o libvero.a ../../cshim"
 menubar = true
 minimum = "13.0"
-# An installer package as well as the disk image: one that installs into
-# /Applications and gives the app to whoever installed it.
+# An installer package as well as the disk image, which installs into
+# /Applications and gives the app to whoever installed it, so that Sparkle
+# can update it without an administrator's password.
 pkg = true
 
-# The page in a browser: what its build makes, which the site serves.
+# The page in a browser, and what its build makes, which the site serves.
 [web]
 folder = "web-app"
 build = "./build.sh"
@@ -165,30 +215,37 @@ files = ["index.html", "main.wasm", "wasm_exec.js"]
 frontend = "wasi-app"
 worker = "wasi-app/worker"
 
-# The Android app: its build makes an aligned, unsigned .apk, which vero
-# signs with your keystore (VERO_ANDROID_KEYSTORE), or one it makes and
-# keeps beside your signing key. The build needs a JDK: Homebrew's openjdk
-# is used unless JAVA_HOME says otherwise.
+# The Android app. Its build makes an aligned, unsigned .apk, which vero
+# signs with your keystore (VERO_ANDROID_KEYSTORE), or with one that it
+# makes and keeps beside your signing key. aab names an .aab for Google
+# Play, if the build makes one. The build needs a JDK, and Homebrew's
+# openjdk is used unless JAVA_HOME says otherwise.
 [android]
 folder = "android-app"
 build = "JAVA_HOME=${JAVA_HOME:-/opt/homebrew/opt/openjdk} PATH=$JAVA_HOME/bin:$PATH ./build.sh --build"
 apk = ".build/app-aligned.apk"
 
-# The iOS app: its build makes an app for the Simulator. An .ipa for the
+# The iOS app. Its build makes an app for the Simulator. An .ipa for the
 # App Store is made only with your Apple account's identity and profile
-# (VERO_IOS_IDENTITY and VERO_IOS_PROFILE), from the app device_app names.
+# (VERO_IOS_IDENTITY and VERO_IOS_PROFILE), from the app that device_app
+# names, and the site's page links to app_store_url.
 [ios]
 folder = "ios-app"
 build = "./build.sh --build"
 simulator_app = ".build/VeroExample.app"
 
-# Plan 9: the front end is a Go program that finds the worker beside it.
+# Plan 9, whose front end is a Go program that finds the worker beside it.
 [plan9]
 frontend = "plan9-app"
 arches = ["amd64", "386"]
 
-# What vero's tests do with the app once it's installed and its window is
-# open, recorded as they go: scripts/test-repo.sh plays these steps through
+# Where vero gen writes each front end's requests, when not beside vero's
+# files in each front end.
+#   [gen]
+#   swift = "menubar-app/Sources/MenuBarExample/WorkerAPI.swift"
+
+# What vero's tests do with the app once it is installed and its window is
+# open, recorded as they go. scripts/test-repo.sh plays these steps through
 # vero's binding in the app, so the window shows each one. A step calls a
 # request (call, with), waits until the state shows something (wait, with
 # timeout in seconds), pauses so the recording shows a moment, or copies a

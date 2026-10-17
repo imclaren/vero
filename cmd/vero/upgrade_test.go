@@ -49,6 +49,64 @@ func TestUpgradeFiles(t *testing.T) {
 	}
 }
 
+// TestUpgradeAgents checks that vero upgrade adds vero's guide for coding
+// agents, updates a copy that vero wrote, leaves an edited copy alone
+// unless forced, and never replaces an AGENTS.md of the app's own.
+func TestUpgradeAgents(t *testing.T) {
+	app := jobsApp(t)
+	path := filepath.Join(app.Dir, "AGENTS.md")
+	upgrade := func(force bool) *upgrader {
+		t.Helper()
+		u := &upgrader{dir: app.Dir, app: app, force: force}
+		if err := u.agents(); err != nil {
+			t.Fatal(err)
+		}
+		return u
+	}
+	read := func() string { data, _ := os.ReadFile(path); return string(data) }
+
+	// An app that has none is given one, and it is recorded.
+	if u := upgrade(false); !strings.Contains(strings.Join(u.changed, "\n"), "AGENTS.md: added") {
+		t.Errorf("changed %v", u.changed)
+	}
+	fresh := read()
+	if !strings.HasPrefix(fresh, agentsHeader) || readRecord(app.Dir)["AGENTS.md"] != hashOf([]byte(fresh)) {
+		t.Fatalf("not written or not recorded:\n%.200s", fresh)
+	}
+	// Run again, nothing changes.
+	if u := upgrade(false); len(u.changed) != 0 || len(u.edited) != 0 {
+		t.Errorf("a second upgrade changed %v, edited %v", u.changed, u.edited)
+	}
+
+	// An older guide, as vero wrote it, is updated.
+	old := agentsHeader + "An older vero's guide.\n"
+	os.WriteFile(path, []byte(old), 0o644)
+	rec := readRecord(app.Dir)
+	rec["AGENTS.md"] = hashOf([]byte(old))
+	writeRecord(app.Dir, rec)
+	if u := upgrade(false); !strings.Contains(strings.Join(u.changed, "\n"), "AGENTS.md: updated") || read() != fresh {
+		t.Errorf("an older guide was not updated: %v", u.changed)
+	}
+
+	// vero's copy, edited by the app, is named and kept, unless forced.
+	edited := fresh + "\nA rule of the app's own.\n"
+	os.WriteFile(path, []byte(edited), 0o644)
+	if u := upgrade(false); len(u.edited) != 1 || u.edited[0] != "AGENTS.md" || read() != edited {
+		t.Errorf("an edited guide: edited %v", u.edited)
+	}
+	if u := upgrade(true); len(u.edited) != 0 || read() != fresh {
+		t.Errorf("--force did not replace the edited guide: edited %v", u.edited)
+	}
+
+	// An AGENTS.md of the app's own is never replaced, even when forced.
+	own := "# Rules for this app\n"
+	os.WriteFile(path, []byte(own), 0o644)
+	u := upgrade(true)
+	if read() != own || len(u.todo) != 1 || !strings.Contains(u.todo[0], "AGENTS.md is the app's own") {
+		t.Errorf("the app's own AGENTS.md: todo %v", u.todo)
+	}
+}
+
 // TestAddSwiftFile checks the edit of an Xcode project, on audiobooks':
 // the file in the app's group and its target's sources, once.
 func TestAddSwiftFile(t *testing.T) {

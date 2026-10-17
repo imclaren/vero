@@ -11,7 +11,8 @@ import (
 
 // newApp makes a vero app called name in a folder of that name: a Go
 // module that requires vero, with vero's example worker as cmd/worker to
-// start from. vero add then gives it its front ends and vero-app.toml.
+// start from, and vero's AGENTS.md, the guide for coding agents. vero
+// add then gives it its front ends and vero-app.toml.
 // module is its module path, name when empty; local, when set, is a vero
 // checkout to use in place of the published module.
 func newApp(name, module, local string) error {
@@ -47,7 +48,8 @@ func newApp(name, module, local string) error {
 	if err != nil {
 		return err
 	}
-	src, err := os.ReadFile(filepath.Join(strings.TrimSpace(out), "example", "worker", "main.go"))
+	vero := strings.TrimSpace(out)
+	src, err := os.ReadFile(filepath.Join(vero, "example", "worker", "main.go"))
 	if err != nil {
 		return err
 	}
@@ -58,8 +60,12 @@ func newApp(name, module, local string) error {
 	if err := run(name, "go", "mod", "tidy"); err != nil {
 		return err
 	}
+	// The guide for coding agents, which vero upgrade keeps up to date.
+	if err := writeAgents(name, vero); err != nil {
+		return err
+	}
 	readme := "# " + name + "\n\nA vero app: a Go worker in `cmd/worker`, which vero's example started,\n" +
-		"and a front end for each system in a folder of its own. `PORTING.md`\nsays what to do next.\n"
+		"and a front end for each system in a folder of its own. `PORTING.md`\nsays what to do next, and `AGENTS.md` is vero's guide for coding agents.\n"
 	return os.WriteFile(filepath.Join(name, "README.md"), []byte(readme), 0o644)
 }
 

@@ -17,7 +17,8 @@ import (
 
 // upgrade brings an app made with vero 0.13 or later up to the vero this
 // tool is, or to --version: go.mod and the kit, the Swift package's pin,
-// the Windows project, vero's files copied into each front end, the request
+// the Windows project, vero's files copied into each front end, the guide
+// for coding agents, the request
 // types vero gen writes, and vero-app.toml's dependencies in the form that
 // works them out. It says what it changed, and where the app's own code
 // must change, which it never does itself.
@@ -40,7 +41,7 @@ func upgrade(args []string) error {
 		return err
 	}
 	u.app = app
-	steps := []func() error{u.copyFiles, u.windowsProject, u.swiftPin, u.toml, u.gen, u.xcodeFile, u.clashes}
+	steps := []func() error{u.copyFiles, u.agents, u.windowsProject, u.swiftPin, u.toml, u.gen, u.xcodeFile, u.clashes}
 	for _, step := range steps {
 		if err := step(); err != nil {
 			return err
@@ -48,7 +49,7 @@ func upgrade(args []string) error {
 	}
 	if len(u.edited) > 0 {
 		return fmt.Errorf("these files of vero's have been changed in this app, so they were left alone:\n  %s\n"+
-			"An app changes what vero's libraries do through their settings, or by subclassing. Move the change there, then run vero upgrade again, or run it with --force to replace them",
+			"An app changes what vero's libraries do through their settings, or by subclassing, and keeps its own rules for agents in a file of its own, such as CLAUDE.md, rather than in AGENTS.md. Move the change there, then run vero upgrade again, or run it with --force to replace them",
 			strings.Join(u.edited, "\n  "))
 	}
 	fmt.Println(u.report())
