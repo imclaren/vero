@@ -492,10 +492,8 @@ func (c *checker) checkPkg(sys unixSystem) {
 			}
 			members[h.Name], _ = io.ReadAll(tr)
 		}
-		manifests, sig := members["packagesite.yaml"], bytes.TrimRight(members["signature"], "\x00")
-		sum := sha256.Sum256(manifests)
-		hashed := sha256.Sum256([]byte(hex.EncodeToString(sum[:])))
-		if err := rsa.VerifyPKCS1v15(pub, crypto.SHA256, hashed[:], sig); err != nil {
+		manifests := members["packagesite.yaml"]
+		if err := pkgVerify(pub, manifests, members["signature"]); err != nil {
 			c.fail("%s/packagesite.pkg: the signature doesn't check out with key.pem", dir)
 		}
 		sc := bufio.NewScanner(bytes.NewReader(manifests))
@@ -1124,4 +1122,15 @@ func readRepodata(data []byte) (index, meta plistDict, err error) {
 		return nil, nil, errors.New("no index.plist and index-meta.plist")
 	}
 	return index, meta, nil
+}
+
+// pkgVerify checks a signature of data as pkgSign makes it, and as pkg
+// checks it. The signature is followed by one NUL, which pkg ignores, and
+// only that one is dropped: the signature itself ends in a zero byte one
+// time in 256, which dropping every trailing NUL would cut off.
+func pkgVerify(pub *rsa.PublicKey, data, member []byte) error {
+	sig := bytes.TrimSuffix(member, []byte{0})
+	sum := sha256.Sum256(data)
+	hashed := sha256.Sum256([]byte(hex.EncodeToString(sum[:])))
+	return rsa.VerifyPKCS1v15(pub, crypto.SHA256, hashed[:], sig)
 }

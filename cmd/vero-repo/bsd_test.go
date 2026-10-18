@@ -587,3 +587,31 @@ func TestSystemNotes(t *testing.T) {
 		t.Errorf("without [gtk], the note is %q", s.Note)
 	}
 }
+
+// TestPkgSignatureEndingInZero checks that a FreeBSD repository whose
+// signature itself ends in a zero byte, as one in 256 does, checks out:
+// only the NUL that pkg ignores after it is dropped.
+func TestPkgSignatureEndingInZero(t *testing.T) {
+	s := testKey(t)
+	k, err := s.rsaKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 5000; i++ {
+		data := []byte("packagesite " + strings.Repeat("x", i))
+		member, err := s.pkgSign(data, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if member[len(member)-1] != 0 {
+			t.Fatalf("the signature has no NUL after it: %x", member[len(member)-4:])
+		}
+		if err := pkgVerify(&k.PublicKey, data, member); err != nil {
+			t.Fatalf("a signature ending %x does not check out: %v", member[len(member)-3:], err)
+		}
+		if member[len(member)-2] == 0 {
+			return // One that ends in a zero byte has checked out.
+		}
+	}
+	t.Fatal("no signature ended in a zero byte, so the case was never tried")
+}
