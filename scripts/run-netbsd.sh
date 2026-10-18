@@ -94,6 +94,12 @@ rm -f "$DISKS/qemu.pid" "$DISKS/console.sock"
 echo "building the NetBSD worker"
 CGO_ENABLED=0 GOOS=netbsd GOARCH=arm64 go build -o "$VM/worker" ./example/worker
 
+# The network card has no control queue.  NetBSD's vioif driver waits on
+# it for ever when dhcpcd and mdnsd set the card's filters together at
+# boot, and every program that touches the network then hangs with it,
+# sshd included: a boot of a test's snapshot did so about one time in
+# three.  Without the queue the card takes every packet, which is all
+# qemu's user network needs.
 # ipv6=off matters.  qemu's user networking offers an IPv6 default route that
 # goes nowhere, NetBSD's resolver prefers the AAAA record, and every fetch
 # then waits for a timeout it will always get: pkg_add appears to hang.
@@ -104,7 +110,7 @@ qemu-system-aarch64 \
     -drive if=virtio,format=qcow2,file="$DISKS/disk.qcow2" \
     -device virtio-gpu-pci -device qemu-xhci -device usb-kbd -device usb-tablet \
     -netdev "user,id=n0,ipv6=off,hostfwd=tcp::$SSH_PORT-:22,hostfwd=tcp::$PORT-:5900" \
-    -device virtio-net-pci,netdev=n0 \
+    -device virtio-net-pci,netdev=n0,ctrl_vq=off,ctrl_rx=off,ctrl_vlan=off,ctrl_rx_extra=off,ctrl_mac_addr=off,ctrl_guest_offloads=off \
     -display none \
     -chardev socket,id=con,path="$DISKS/console.sock",server=on,wait=off,logfile="$DISKS/console.log" \
     -serial chardev:con \
