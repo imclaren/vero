@@ -83,12 +83,12 @@ func credentialsCommand(args []string) error {
 			add("macOS", "notarisation", true, "VERO_NOTARY_PROFILE works", "")
 		case profile != "":
 			add("macOS", "notarisation", false, "VERO_NOTARY_PROFILE is set but notarytool cannot use it",
-				"xcrun notarytool store-credentials "+profile+" --apple-id you@example.com --team-id TEAMID --password <an app-specific password from appleid.apple.com>")
+				"xcrun notarytool store-credentials "+profile+" --apple-id you@example.com --team-id TEAMID   (it asks for an app-specific password from appleid.apple.com)")
 		case notaryProfile() != "":
 			add("macOS", "notarisation", true, "the profile named vero works", "")
 		default:
 			add("macOS", "notarisation", false, "no profile",
-				"xcrun notarytool store-credentials vero --apple-id you@example.com --team-id TEAMID --password <an app-specific password from appleid.apple.com>")
+				"xcrun notarytool store-credentials vero --apple-id you@example.com --team-id TEAMID   (it asks for an app-specific password from appleid.apple.com)")
 		}
 		if a.MacOS.Pkg {
 			signer("installer signing", "VERO_MAC_INSTALLER", "Developer ID Installer", "add a Developer ID Installer certificate in Xcode as above, for the .pkg")

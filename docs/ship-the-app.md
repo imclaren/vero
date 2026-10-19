@@ -148,7 +148,7 @@ cross, the command that fixes it:
 ✓ everything signing key          in /Users/you/Library/Application Support/vero-repo/example-publisher
 ✓ macOS      Developer ID         found in your keychain
 ✗ macOS      notarisation         no profile
-      xcrun notarytool store-credentials vero --apple-id you@example.com --team-id TEAMID --password <an app-specific password from appleid.apple.com>
+      xcrun notarytool store-credentials vero --apple-id you@example.com --team-id TEAMID   (it asks for an app-specific password from appleid.apple.com)
 ✓ macOS      Homebrew tap         ready: gh is signed in
 ✗ Windows    code signing         not set; SmartScreen warns once
       buy a code-signing certificate (an OV one from any CA: Sectigo, DigiCert, SSL.com; EV ones skip SmartScreen at once), export it as a .pfx, then

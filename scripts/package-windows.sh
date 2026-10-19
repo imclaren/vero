@@ -105,9 +105,21 @@ for arch in $ARCHES; do
     if [ -n "${VERO_WINDOWS_CERT:-}" ]; then
         command -v osslsigncode >/dev/null || { echo "VERO_WINDOWS_CERT is set, but osslsigncode is missing - brew install osslsigncode" >&2; exit 1; }
         exe="$OUT/$NAME-$VERSION-$arch-setup.exe"
-        osslsigncode sign -pkcs12 "$VERO_WINDOWS_CERT" ${VERO_WINDOWS_CERT_PASSWORD:+-pass "$VERO_WINDOWS_CERT_PASSWORD"} \
+        # The certificate's password from a file readable by its owner alone,
+        # not on the command line, where anybody on this computer could read
+        # it in the list of processes.
+        pass=()
+        if [ -n "${VERO_WINDOWS_CERT_PASSWORD:-}" ]; then
+            passfile=$(umask 077 && mktemp)
+            printf '%s' "$VERO_WINDOWS_CERT_PASSWORD" > "$passfile"
+            pass=(-readpass "$passfile")
+        fi
+        signed=0
+        osslsigncode sign -pkcs12 "$VERO_WINDOWS_CERT" ${pass[@]+"${pass[@]}"} \
             -n "$NAME" ${URL:+-i "$URL"} -h sha256 -t http://timestamp.digicert.com \
-            -in "$exe" -out "$exe.signed" >/dev/null
+            -in "$exe" -out "$exe.signed" >/dev/null || signed=$?
+        [ -n "${passfile:-}" ] && rm -f "$passfile"
+        [ "$signed" -eq 0 ] || exit "$signed"
         mv "$exe.signed" "$exe"
         echo "signed $exe"
     fi
