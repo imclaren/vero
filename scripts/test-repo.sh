@@ -661,7 +661,7 @@ mac_test() {
         newest=$(curl -fsSL "$URL/macos/appcast.xml" | grep -o '<sparkle:version>[^<]*' | head -1 | cut -d'>' -f2)
         [ "$newest" = 101 ] || { echo "FAIL: the appcast's newest build is $newest, not 101" >&2; exit 1; }
         curl -fsSL "$URL/macos/vero-example-1.0.1-notes.html" | grep -q '<li>One thing</li>' || { echo "FAIL: no release notes for 1.0.1" >&2; exit 1; }
-        curl -fsSL "$URL/macos/appcast.xml" | grep -q 'releaseNotesLink>[^<]*vero-example-1.0.1-notes.html' || { echo "FAIL: the appcast doesn't link the notes" >&2; exit 1; }
+        curl -fsSL "$URL/macos/appcast.xml" | grep -q '<description>&lt;p&gt;' || { echo "FAIL: the appcast doesn't hold the notes" >&2; exit 1; }
         curl -fsSL "$URL/homebrew/vero-example.rb" | grep -q 'version "1.0.1"' || { echo "FAIL: the cask isn't 1.0.1" >&2; exit 1; }
         echo "ok: the appcast offers 1.0.1, signed, with its notes, and the cask has it"
     else

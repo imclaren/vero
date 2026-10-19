@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"encoding/xml"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -169,9 +170,19 @@ func TestMacSite(t *testing.T) {
 		t.Errorf("notes page %v:\n%s", err, page)
 	}
 	cast, _ := os.ReadFile(filepath.Join(site, "macos", "appcast.xml"))
-	if !strings.Contains(string(cast), "<sparkle:releaseNotesLink>https://example.com/app/macos/"+a.Name+"-1.0.1-notes.html</sparkle:releaseNotesLink>") ||
-		!strings.Contains(string(cast), "<sparkle:version>41</sparkle:version>") {
+	if !strings.Contains(string(cast), "<sparkle:version>41</sparkle:version>") ||
+		strings.Contains(string(cast), "releaseNotesLink") {
 		t.Errorf("appcast:\n%s", cast)
+	}
+	// The notes are in the appcast, so that Sparkle can show an update it
+	// downloaded earlier after a newer release has removed the notes page.
+	var parsed struct {
+		Items []struct {
+			Description string `xml:"description"`
+		} `xml:"channel>item"`
+	}
+	if err := xml.Unmarshal(cast, &parsed); err != nil || len(parsed.Items) != 1 || parsed.Items[0].Description != notesHTML(notes) {
+		t.Errorf("appcast notes %v: %+v, want %q", err, parsed.Items, notesHTML(notes))
 	}
 	if top, _ := os.ReadFile(filepath.Join(site, "appcast.xml")); string(top) != string(cast) {
 		t.Error("the appcast at the top isn't the same")

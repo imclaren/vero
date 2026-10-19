@@ -150,17 +150,39 @@ func macPkg(name string) *regexp.Regexp {
 	return regexp.MustCompile(`^` + regexp.QuoteMeta(name) + `-(.+)-macos\.pkg$`)
 }
 
-// macNotes is the page of what's new in a version, which the appcast
-// links for Sparkle's update prompt.
+// macNotes is the page of what's new in a version. Its contents also go
+// in the appcast, for Sparkle's update prompt.
 func macNotes(name, version string) string { return fmt.Sprintf("%s-%s-notes.html", name, version) }
 
-// notesPage is release notes as a small page: paragraphs, split at blank
-// lines, and lines starting "- " as a list.
+// notesPage is release notes as a small page around notesHTML.
 func notesPage(title, notes string) []byte {
+	var b strings.Builder
+	b.WriteString("<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\"><title>" + html.EscapeString(strings.TrimSpace(title)) + "</title>\n")
+	b.WriteString("<style>body{font:13px -apple-system,system-ui,sans-serif;margin:12px;color-scheme:light dark}ul{padding-left:1.2em}</style></head><body>\n")
+	b.WriteString(notesHTML(notes))
+	b.WriteString("</body></html>\n")
+	return []byte(b.String())
+}
+
+// notesFromPage is the HTML inside a page that notesPage wrote, or "" for a
+// page that has no body.
+func notesFromPage(page []byte) string {
+	_, rest, ok := strings.Cut(string(page), "<body>\n")
+	if !ok {
+		return ""
+	}
+	body, _, ok := strings.Cut(rest, "</body>")
+	if !ok {
+		return ""
+	}
+	return body
+}
+
+// notesHTML is release notes as HTML: paragraphs, split at blank lines, and
+// lines starting "- " as a list.
+func notesHTML(notes string) string {
 	esc := func(s string) string { return html.EscapeString(strings.TrimSpace(s)) }
 	var b strings.Builder
-	b.WriteString("<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\"><title>" + esc(title) + "</title>\n")
-	b.WriteString("<style>body{font:13px -apple-system,system-ui,sans-serif;margin:12px;color-scheme:light dark}ul{padding-left:1.2em}</style></head><body>\n")
 	for _, para := range regexp.MustCompile(`\n\s*\n`).Split(strings.TrimSpace(notes), -1) {
 		inList := false
 		var text []string
@@ -191,8 +213,7 @@ func notesPage(title, notes string) []byte {
 			b.WriteString("</ul>\n")
 		}
 	}
-	b.WriteString("</body></html>\n")
-	return []byte(b.String())
+	return b.String()
 }
 
 // packageMac builds the Mac app and its disk image, and a .pkg if asked,
@@ -1051,11 +1072,16 @@ func buildMac(site string, newDmgs, newPkgs []string, notes string, keep int, ur
 			return nil, fmt.Errorf("%s has no readable %s", f, f+".json")
 		}
 		st, _ := os.Stat(filepath.Join(dir, f))
-		link := ""
-		if _, err := os.Stat(filepath.Join(dir, macNotes(a.Name, version[f]))); err == nil {
-			link = url + "/macos/" + macNotes(a.Name, version[f])
+		// The notes go in the appcast itself rather than as a link to
+		// their page. Sparkle keeps an update that it has downloaded and
+		// shows it later without reading the appcast again, and by then
+		// a newer release may have removed the page, which Sparkle then
+		// reports as an error. The page is still written for the site.
+		description := ""
+		if page, err := os.ReadFile(filepath.Join(dir, macNotes(a.Name, version[f]))); err == nil {
+			description = notesFromPage(page)
 		}
-		items = append(items, appcastItem{Notes: link,
+		items = append(items, appcastItem{Description: description,
 			Title: a.DisplayName + " " + version[f], Date: st.ModTime().UTC().Format("Mon, 02 Jan 2006 15:04:05 +0000"),
 			Version: info.BundleVersion, ShortVersion: info.ShortVersion, Minimum: info.Minimum,
 			Enclosure: appcastEnclosure{URL: downloads + "/" + f, Length: len(data), Type: "application/octet-stream",
@@ -1123,7 +1149,7 @@ type appcastItem struct {
 	Version      string           `xml:"sparkle:version"`
 	ShortVersion string           `xml:"sparkle:shortVersionString"`
 	Minimum      string           `xml:"sparkle:minimumSystemVersion,omitempty"`
-	Notes        string           `xml:"sparkle:releaseNotesLink,omitempty"`
+	Description  string           `xml:"description,omitempty"`
 	Enclosure    appcastEnclosure `xml:"enclosure"`
 }
 
