@@ -13,8 +13,7 @@ front end draws the window: SwiftUI on the Mac, GTK 4 on Linux and the
 BSDs, WPF on Windows. The front end starts the worker and talks to it over
 a pipe in JSON. When the worker's state changes, every window redraws.
 
-The Go worker has no C dependencies, so it cross-compiles from a Mac to every
-system Go supports. vero uses that to build, test and release everything
+The Go worker cross-compiles from a Mac to every system Go supports. vero builds, tests and releases everything
 from one machine:
 
 - `vero new` writes the worker and a starter front end for each system.
