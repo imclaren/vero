@@ -1,7 +1,9 @@
 # vero
 
+Go backend, native frontends 
+
 vero is a way to build a desktop app once as a Go program and ship it to macOS, Windows,
-Linux and the BSDs, with a native window on each, from a single Mac.
+Linux and the BSDs, with native windows and controls on each, from a single Mac.
 
 ## What it is
 
