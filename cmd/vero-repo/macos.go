@@ -712,6 +712,9 @@ func buildSwiftPMApp(a *App, tmp string) (string, error) {
 	if err := runIn("", "lipo", append([]string{"-create", "-output", filepath.Join(contents, "MacOS", m.Product)}, bins...)...); err != nil {
 		return "", err
 	}
+	if err := copyFrameworks(bins, contents, m.Product); err != nil {
+		return "", err
+	}
 	icns, err := appleIcon(a.Path(a.Icon))
 	if err != nil {
 		return "", err
@@ -720,6 +723,85 @@ func buildSwiftPMApp(a *App, tmp string) (string, error) {
 		return "", err
 	}
 	return app, os.WriteFile(filepath.Join(contents, "Info.plist"), infoPlist(a), 0o644)
+}
+
+// copyFrameworks puts the frameworks that a SwiftPM build leaves beside its
+// executable, such as Sparkle's from the VeroUpdates product, in
+// Contents/Frameworks, and tells the executable to look there. Without
+// them the app does not start: its executable names each framework by
+// @rpath, and SwiftPM gives it no rpath but the build folder's. A
+// framework from an xcframework is universal already; one built for each
+// architecture is joined with lipo.
+func copyFrameworks(bins []string, contents, product string) error {
+	copies := map[string][]string{} // each framework's name, and each architecture's copy
+	var names []string
+	for _, bin := range bins {
+		found, _ := filepath.Glob(filepath.Join(filepath.Dir(bin), "*.framework"))
+		for _, f := range found {
+			name := filepath.Base(f)
+			if copies[name] == nil {
+				names = append(names, name)
+			}
+			copies[name] = append(copies[name], f)
+		}
+	}
+	if len(names) == 0 {
+		return nil
+	}
+	dir := filepath.Join(contents, "Frameworks")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	for _, name := range names {
+		dest := filepath.Join(dir, name)
+		// cp -R keeps the framework's symlinks, Versions/Current and the
+		// ones at its top, which a framework's layout is made of.
+		if err := runIn("", "cp", "-R", copies[name][0], dest); err != nil {
+			return err
+		}
+		if len(copies[name]) < 2 {
+			continue
+		}
+		// The framework's own binary, behind the symlink at its top.
+		binary, err := filepath.EvalSymlinks(filepath.Join(dest, strings.TrimSuffix(name, ".framework")))
+		if err != nil {
+			return fmt.Errorf("%s has no binary: %w", name, err)
+		}
+		rel, err := filepath.Rel(dest, binary)
+		if err != nil {
+			return err
+		}
+		var parts []string
+		for _, c := range copies[name] {
+			parts = append(parts, filepath.Join(c, rel))
+		}
+		if same, err := sameContents(parts...); err != nil {
+			return err
+		} else if !same {
+			if err := runIn("", "lipo", append([]string{"-create", "-output", binary}, parts...)...); err != nil {
+				return err
+			}
+		}
+	}
+	return runIn("", "install_name_tool", "-add_rpath", "@executable_path/../Frameworks", filepath.Join(contents, "MacOS", product))
+}
+
+// sameContents says whether files are byte for byte the same.
+func sameContents(paths ...string) (bool, error) {
+	first, err := os.ReadFile(paths[0])
+	if err != nil {
+		return false, err
+	}
+	for _, p := range paths[1:] {
+		data, err := os.ReadFile(p)
+		if err != nil {
+			return false, err
+		}
+		if !bytes.Equal(first, data) {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 // buildXcodeApp builds an Xcode project's scheme for both architectures,
