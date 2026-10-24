@@ -443,3 +443,25 @@ func TestCheckApt(t *testing.T) {
 		t.Error("a changed .deb passed")
 	}
 }
+
+// TestCaskText: an app that updates through Sparkle gets auto_updates, its
+// macOS minimum under Homebrew's name, a quit before it is removed, and a
+// zap list of its own folders.
+func TestCaskText(t *testing.T) {
+	a := &App{Name: "wake", DisplayName: "wake", ID: "com.example.wake", Summary: "Keeps a Mac awake.", Homepage: "https://wake.example.com",
+		MacOS: &MacOS{Feed: "https://wake.example.com/appcast.xml", Minimum: "13.0", CaskDesc: "Prevents sleep."}}
+	got := caskText("https://wake.example.com/releases/macos", "", a, "0.2.0", "abc", macInfo{})
+	for _, want := range []string{
+		`version "0.2.0"`, `desc "Prevents sleep"`, `homepage "https://wake.example.com/"`, "strategy :sparkle", `url "https://wake.example.com/appcast.xml"`, "auto_updates true", `depends_on macos: :ventura`,
+		`app "wake.app"`, `uninstall quit: "com.example.wake"`, `"~/Library/Application Support/wake",`,
+		`"~/Library/Preferences/com.example.wake.plist",`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("no %s in:\n%s", want, got)
+		}
+	}
+	plain := caskText("https://x/macos", "", &App{Name: "p", DisplayName: "p", MacOS: &MacOS{Minimum: "10.9"}}, "1.0.0", "abc", macInfo{})
+	if strings.Contains(plain, "auto_updates") || strings.Contains(plain, "depends_on") || strings.Contains(plain, "livecheck") {
+		t.Errorf("an app without a feed or a known macOS:\n%s", plain)
+	}
+}

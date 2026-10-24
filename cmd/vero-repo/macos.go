@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"html"
+	neturl "net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -126,6 +127,9 @@ type MacOS struct {
 	// project's own Info.plist has to say them itself.
 	Feed             string `toml:"feed"`
 	SparklePublicKey string `toml:"sparkle_public_key"`
+	// CaskDesc is the Homebrew cask's description, when the summary names
+	// the platform, which Homebrew does not allow. The summary when unset.
+	CaskDesc string `toml:"cask_desc"`
 }
 
 // macArches are what a Mac app is built for: one binary, for both.
@@ -1255,6 +1259,14 @@ func writeCask(site, downloads, url string, a *App, version, sum string, info ma
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
+	return os.WriteFile(filepath.Join(dir, a.Name+".rb"), []byte(caskText(downloads, url, a, version, sum, info)), 0o644)
+}
+
+// caskText is the Homebrew cask for a release. An app that updates itself
+// through Sparkle says auto_updates, so that brew upgrade leaves the
+// updating to the app, and points livecheck at its appcast. The macOS it needs, quitting it before it is
+// removed, and what zap removes come from vero-app.toml.
+func caskText(downloads, url string, a *App, version, sum string, info macInfo) string {
 	app := info.App
 	if app == "" {
 		app = a.DisplayName + ".app"
@@ -1263,7 +1275,20 @@ func writeCask(site, downloads, url string, a *App, version, sum string, info ma
 	if homepage == "" {
 		homepage = url
 	}
-	cask := fmt.Sprintf(`cask %q do
+	// Homebrew wants a slash after a bare domain.
+	if u, err := neturl.Parse(homepage); err == nil && u.Host != "" && u.Path == "" {
+		homepage += "/"
+	}
+	var m MacOS
+	if a.MacOS != nil {
+		m = *a.MacOS
+	}
+	desc := strings.TrimSuffix(a.Summary, ".")
+	if m.CaskDesc != "" {
+		desc = strings.TrimSuffix(m.CaskDesc, ".")
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, `cask %q do
   version %q
   sha256 %q
 
@@ -1271,11 +1296,50 @@ func writeCask(site, downloads, url string, a *App, version, sum string, info ma
   name %q
   desc %q
   homepage %q
+`, a.Name, version, sum, downloads, a.Name, a.DisplayName, desc, homepage)
+	if m.Feed != "" {
+		// Homebrew learns of a new version from the appcast, as the app does.
+		fmt.Fprintf(&b, "\n  livecheck do\n    url %q\n    strategy :sparkle\n  end\n", m.Feed)
+	}
+	extra := false
+	if m.Feed != "" {
+		b.WriteString("\n  auto_updates true\n")
+		extra = true
+	}
+	if name := brewMacOS(macMinimum(&m)); name != "" {
+		if !extra {
+			b.WriteString("\n")
+		}
+		fmt.Fprintf(&b, "  depends_on macos: :%s\n", name)
+	}
+	fmt.Fprintf(&b, "\n  app %q\n", app)
+	if a.ID != "" {
+		fmt.Fprintf(&b, "\n  uninstall quit: %q\n", a.ID)
+	}
+	zap := []string{"~/Library/Application Support/" + a.Name}
+	if a.ID != "" {
+		zap = append(zap,
+			"~/Library/Caches/"+a.ID,
+			"~/Library/HTTPStorages/"+a.ID,
+			"~/Library/Preferences/"+a.ID+".plist",
+		)
+	}
+	b.WriteString("\n  zap trash: [\n")
+	for _, z := range zap {
+		fmt.Fprintf(&b, "    %q,\n", z)
+	}
+	b.WriteString("  ]\nend\n")
+	return b.String()
+}
 
-  app %q
-end
-`, a.Name, version, sum, downloads, a.Name, a.DisplayName, strings.TrimSuffix(a.Summary, "."), homepage, app)
-	return os.WriteFile(filepath.Join(dir, a.Name+".rb"), []byte(cask), 0o644)
+// brewMacOS is Homebrew's name for a macOS version, such as "ventura" for
+// 13.0, or empty for one it has no name for here.
+func brewMacOS(version string) string {
+	major, _, _ := strings.Cut(version, ".")
+	return map[string]string{
+		"11": "big_sur", "12": "monterey", "13": "ventura", "14": "sonoma",
+		"15": "sequoia", "26": "tahoe", "27": "golden_gate",
+	}[major]
 }
 
 func fileSHA256(path string) (string, error) {
