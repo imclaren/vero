@@ -570,8 +570,12 @@ func buildMacPkg(a *App, app, pkg, work string) error {
 	if err := exec.Command("pkgbuild", "--analyze", "--root", root, components).Run(); err != nil {
 		return fmt.Errorf("pkgbuild --analyze: %w", err)
 	}
-	if err := runIn("", "/usr/libexec/PlistBuddy", "-c", "Set :0:BundleIsRelocatable false", components); err != nil {
-		return err
+	// Installed at /Applications and nowhere else. Newer macOS leaves the
+	// key out of the analysis, so it is added when it is not there to set.
+	if exec.Command("/usr/libexec/PlistBuddy", "-c", "Set :0:BundleIsRelocatable false", components).Run() != nil {
+		if err := runIn("", "/usr/libexec/PlistBuddy", "-c", "Add :0:BundleIsRelocatable bool false", components); err != nil {
+			return err
+		}
 	}
 	if err := os.WriteFile(filepath.Join(scripts, "postinstall"), []byte(postinstall(name)), 0o755); err != nil {
 		return err
@@ -696,9 +700,11 @@ func buildSwiftPMApp(a *App, tmp string) (string, error) {
 			return "", fmt.Errorf("swift build for %s: %w", arch.swift, err)
 		}
 		fmt.Printf("built the Mac app for %s\n", arch.swift)
-		path, err := exec.Command("swift", append(args, "--show-bin-path")...).Output()
+		show := exec.Command("swift", append(args, "--show-bin-path")...)
+		show.Dir = folder
+		path, err := show.Output()
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("swift build --show-bin-path for %s: %w", arch.swift, err)
 		}
 		bins = append(bins, filepath.Join(strings.TrimSpace(string(path)), m.Product))
 	}
