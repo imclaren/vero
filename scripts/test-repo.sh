@@ -106,8 +106,10 @@ stage() {
 }
 mkdir -p "$CACHE/bin"
 # vero-repo: the one VERO_REPO names (vero ship sets it), or built from
-# this checkout.
-if [ -n "$VERO_REPO" ]; then [ "$VERO_REPO" -ef "$CACHE/bin/vero-repo" ] || cp "$VERO_REPO" "$CACHE/bin/vero-repo"; else go build -C "$VERO/cmd/vero-repo" -o "$CACHE/bin/vero-repo" .; fi
+# this checkout. It goes into place by a rename, since other runs at once
+# may be running the copy there, and macOS kills a program whose file is
+# overwritten while it runs.
+if [ -n "$VERO_REPO" ]; then [ "$VERO_REPO" -ef "$CACHE/bin/vero-repo" ] || { cp "$VERO_REPO" "$CACHE/bin/vero-repo.$$" && mv -f "$CACHE/bin/vero-repo.$$" "$CACHE/bin/vero-repo"; }; else go build -C "$VERO/cmd/vero-repo" -o "$CACHE/bin/vero-repo.$$" . && mv -f "$CACHE/bin/vero-repo.$$" "$CACHE/bin/vero-repo"; fi
 REPO="$CACHE/bin/vero-repo"
 # package.sh uses the same one, rather than building its own.
 export VERO_REPO="$REPO"
@@ -467,6 +469,20 @@ else
     docker image inspect "$IMAGE" >/dev/null 2>&1 ||
         docker pull -q $(echo "$RUN" | grep -o -e '--platform [^ ]*') "$IMAGE" >/dev/null 2>&1 || true
     BASE=$(docker image inspect --format '{{.Id}}' "$IMAGE" 2>/dev/null || echo "$IMAGE")
+    # An x86_64 image on an arm64 Docker runs under the VM's emulator.
+    # Rosetta runs Go well, and so does a current QEMU, but the QEMU 7 that
+    # colima's VM is left with when Rosetta is not registered corrupts Go's
+    # runtime, so that the worker crashes at random. tonistiigi/binfmt puts
+    # QEMU 10 in its place until the VM restarts.
+    BINFMT=tonistiigi/binfmt@sha256:400a4873b838d1b89194d982c45e5fb3cda4593fbfd7e08a02e76b03b21166f0
+    case $RUN in *amd64*)
+        if [ "$(docker info --format '{{.Architecture}}' 2>/dev/null)" != x86_64 ] &&
+            ! docker run --rm --privileged "$BINFMT" 2>/dev/null | grep -q rosetta; then
+            docker run --rm --privileged "$BINFMT" --uninstall qemu-x86_64,qemu-i386 >/dev/null 2>&1
+            docker run --rm --privileged "$BINFMT" --install amd64,386 >/dev/null 2>&1 ||
+                echo "warning: could not install QEMU for x86_64 images; the app may crash under the old one" >&2
+        fi ;;
+    esac
 fi
 RKEY=$(printf '%s\n' "ready 1" "$LABEL" "$BASE" "$SETUP" "$XSETUP" "$DEPS_IN" "$REFRESH" "$APP_DEPS" "$(period)" |
     sed "s/$APP_NAME/APP/g" | shasum | cut -c1-12)

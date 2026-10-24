@@ -42,8 +42,10 @@ done
 CACHE="${VERO_CACHE:-$HOME/.cache/vero}"
 mkdir -p "$CACHE/bin"
 # vero-repo: the one VERO_REPO names (vero ship sets it), or built from
-# this checkout.
-if [ -n "$VERO_REPO" ]; then cp "$VERO_REPO" "$CACHE/bin/vero-repo"; else go build -C "$VERO/cmd/vero-repo" -o "$CACHE/bin/vero-repo" .; fi
+# this checkout. It goes into place by a rename, since other runs at once
+# may be running the copy there, and macOS kills a program whose file is
+# overwritten while it runs.
+if [ -n "$VERO_REPO" ]; then [ "$VERO_REPO" -ef "$CACHE/bin/vero-repo" ] || { cp "$VERO_REPO" "$CACHE/bin/vero-repo.$$" && mv -f "$CACHE/bin/vero-repo.$$" "$CACHE/bin/vero-repo"; }; else go build -C "$VERO/cmd/vero-repo" -o "$CACHE/bin/vero-repo.$$" . && mv -f "$CACHE/bin/vero-repo.$$" "$CACHE/bin/vero-repo"; fi
 [ "$CACHE/bin/winid" -nt "$VERO/scripts/lib/winid.swift" ] || swiftc -O -o "$CACHE/bin/winid" "$VERO/scripts/lib/winid.swift"
 eval "$("$CACHE/bin/vero-repo" show --app "$TOML")"
 out="$CACHE/test-results/$APP_NAME/macos" L="$CACHE/mac-launch"

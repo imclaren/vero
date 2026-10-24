@@ -55,7 +55,9 @@ APP=$(cd "$APP" && pwd)
 mkdir -p "$OUT"
 OUT=$(cd "$OUT" && pwd)
 mkdir -p "$HOME/.cache/vero/bin"
-if [ -n "$VERO_REPO" ]; then mkdir -p "$HOME/.cache/vero/bin" && cp "$VERO_REPO" "$HOME/.cache/vero/bin/vero-repo"; else go build -C "$VERO/cmd/vero-repo" -o "$HOME/.cache/vero/bin/vero-repo" .; fi
+# By a rename, as test-repo.sh does, since other runs may be running it.
+B="$HOME/.cache/vero/bin"
+if [ -n "$VERO_REPO" ]; then [ "$VERO_REPO" -ef "$B/vero-repo" ] || { cp "$VERO_REPO" "$B/vero-repo.$$" && mv -f "$B/vero-repo.$$" "$B/vero-repo"; }; else go build -C "$VERO/cmd/vero-repo" -o "$B/vero-repo.$$" . && mv -f "$B/vero-repo.$$" "$B/vero-repo"; fi
 
 echo "building the worker"
 DIST="$ROOT/dist"
