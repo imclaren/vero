@@ -137,7 +137,7 @@ The GTK app is one app, unchanged on every operating system where it runs.
 
 Android, iOS, the browser, WASI and Plan 9 also build and run. Their
 examples live in [the lab](docs/lab.md), because `vero ship` does not
-test or release them yet.
+automatically test or release them.
 
 ## Where to go next
 
