@@ -52,10 +52,7 @@ cd jotter
 
 This writes a Go module with an example worker in `cmd/worker`, a SwiftUI
 app in `macos/`, a GTK app in `gtk/`, a WPF app in `windows/`, and a
-`vero-app.toml` that describes the app. The example worker pretends to
-sync three folders, so there is something to watch. Pick a name that no
-Linux distribution already uses for a package, or apt will install theirs
-instead of yours. `hello`, for one, is taken.
+`vero-app.toml` that describes the app. 
 
 **3. Run it on the Mac.**
 
