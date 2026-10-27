@@ -149,10 +149,9 @@ is numbered steps with the command to run and what you should see:
 3. [Ship the app](docs/ship-the-app.md). The first release, the site,
    updates, signing, and Homebrew.
 
-[How vero works](docs/how-vero-works.md) explains the pieces and ends
-with a glossary, for when you want to know why. References:
-the [Go reference](https://pkg.go.dev/github.com/imclaren/vero), the
-[kit](kit/README.md), and [packaging for each system](cmd/vero-repo/README.md).
+References: [How vero works](docs/how-vero-works.md) explains the pieces and ends
+with a glossary, for when you want to know why. [Go reference](https://pkg.go.dev/github.com/imclaren/vero).
+[kit](kit/README.md). [packaging for each system](cmd/vero-repo/README.md).
 
 If a coding agent works on your app, it reads [AGENTS.md](AGENTS.md),
 which `vero new` copies into every app.
