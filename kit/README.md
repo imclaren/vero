@@ -24,5 +24,4 @@ go get github.com/imclaren/vero/kit
 
 Each package's documentation on pkg.go.dev has an example and says what
 it does on each system. Every package builds for every system vero
-supports, without cgo. [Build the app](../docs/build-the-app.md) uses
-`keychain` in step 5.
+supports, without cgo. [Build the app](../docs/build-the-app.md) builds the app using the `keychain`.
