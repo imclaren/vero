@@ -151,7 +151,7 @@ is numbered steps with the command to run and what you should see:
 
 References: [How vero works](docs/how-vero-works.md) explains the pieces and ends
 with a glossary, for when you want to know why. [Go reference](https://pkg.go.dev/github.com/imclaren/vero).
-[kit](kit/README.md). [packaging for each system](cmd/vero-repo/README.md).
+The [kit](kit/README.md) build tool. [Packaging details for each system](cmd/vero-repo/README.md).
 
 If a coding agent works on your app, it reads [AGENTS.md](AGENTS.md),
 which `vero new` copies into every app.
