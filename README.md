@@ -143,7 +143,7 @@ is numbered steps with the command to run and what you should see:
 
 1. [Build the app](docs/build-the-app.md). A real screen on each system,
    a sign-in kept in the keychain, and a check that the worker builds
-   everywhere. About an hour.
+   everywhere.
 2. [Test the app](docs/test-the-app.md). The app installed and driven by
    a script on Debian, FreeBSD and Windows, from the Mac.
 3. [Ship the app](docs/ship-the-app.md). The first release, the site,
