@@ -43,7 +43,8 @@ public final class VeroUpdater: ObservableObject {
     /// Whether the app checks for, downloads and installs its updates by
     /// itself. Sparkle keeps the choice between launches, and takes its
     /// first value from SUEnableAutomaticChecks and SUAutomaticallyUpdate
-    /// in Info.plist. It is written only when it changes, so that a launch
+    /// in Info.plist, which vero-repo sets to true unless vero-app.toml
+    /// says ask_to_update. It is written only when it changes, so that a launch
     /// never overwrites what somebody chose.
     @Published public var automaticallyUpdates: Bool {
         didSet {

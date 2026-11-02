@@ -125,7 +125,10 @@ copies get it through whatever updates the rest of their system:
   Swift package to `macos/Package.swift`, make one `VeroUpdater` in the
   app and keep it, and give a menu item its `checkForUpdates()`. In
   `[macos]` of `vero-app.toml`, set `feed` to the appcast's address and
-  `sparkle_public_key` to what `vero key` prints.
+  `sparkle_public_key` to what `vero key` prints. The app then checks
+  for, downloads and installs its updates by itself, and Sparkle never
+  asks whether it may. Set `ask_to_update = true` to have it ask, at the
+  app's second launch.
 - On Windows, the app updates through winget once it is listed there
   (step 7). Until then, the worker can ask `kit/update`, which reads the
   site's `latest.json`, and the app can tell the person and open the

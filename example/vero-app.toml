@@ -187,7 +187,9 @@ webview = false
 # resources lists, which prebuild, run first, can make or fetch.
 # entitlements names a plist for the app. feed is where the app checks for
 # updates, and sparkle_public_key the key with which it checks them, which
-# vero key prints, and both go in a SwiftPM app's Info.plist. appcast
+# vero key prints, and both go in a SwiftPM app's Info.plist. An app with
+# a feed checks for and installs its updates by itself; ask_to_update =
+# true has Sparkle ask first, at the app's second launch. appcast
 # writes the appcast at another path on the site as well, and download_url
 # points the appcast and the cask at another server.
 #   resources = ["bin/ffmpeg", "bin/ffmpeg-LICENSE"]

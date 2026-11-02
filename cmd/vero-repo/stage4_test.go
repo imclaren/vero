@@ -57,6 +57,21 @@ func TestInfoPlist(t *testing.T) {
 			t.Errorf("no %q in\n%s", want, plist)
 		}
 	}
+	// An app with a feed updates itself without asking, unless it says
+	// it should ask, and an app without one says nothing of updates.
+	for _, c := range []struct {
+		feed string
+		ask  bool
+		want bool
+	}{{"https://example.com/appcast.xml", false, true}, {"https://example.com/appcast.xml", true, false}, {"", false, false}} {
+		a.MacOS = &MacOS{Product: "Example", Feed: c.feed, AskToUpdate: c.ask}
+		plist := string(infoPlist(a))
+		for _, key := range []string{"<key>SUEnableAutomaticChecks</key>\n\t<true/>", "<key>SUAutomaticallyUpdate</key>\n\t<true/>"} {
+			if strings.Contains(plist, key) != c.want {
+				t.Errorf("feed %q, ask_to_update %v: %q in the Info.plist is %v, not %v", c.feed, c.ask, key, !c.want, c.want)
+			}
+		}
+	}
 }
 
 // TestInfoPlistMenubar: a menu bar app has no Dock icon, whether

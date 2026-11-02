@@ -127,6 +127,12 @@ type MacOS struct {
 	// project's own Info.plist has to say them itself.
 	Feed             string `toml:"feed"`
 	SparklePublicKey string `toml:"sparkle_public_key"`
+	// AskToUpdate makes Sparkle ask, at the app's second launch, whether
+	// it may check for updates and install them. Without it, an app with
+	// a feed checks for, downloads and installs its updates by itself from
+	// the start, as an app that people leave open needs, and Sparkle never
+	// asks. Either way, a choice that somebody makes later is kept.
+	AskToUpdate bool `toml:"ask_to_update"`
 	// CaskDesc is the Homebrew cask's description, when the summary names
 	// the platform, which Homebrew does not allow. The summary when unset.
 	CaskDesc string `toml:"cask_desc"`
@@ -878,6 +884,13 @@ func infoPlist(a *App) []byte {
 		fmt.Fprintf(&b, "\t<key>%s</key>\n\t<string>%s</string>\n", k[0], xmlText(k[1]))
 	}
 	b.WriteString("\t<key>NSHighResolutionCapable</key>\n\t<true/>\n")
+	if m.Feed != "" && !m.AskToUpdate {
+		// Sparkle asks whether it may update the app unless these say
+		// already, and its question comes back at every check made by
+		// hand until it has an answer.
+		b.WriteString("\t<key>SUEnableAutomaticChecks</key>\n\t<true/>\n")
+		b.WriteString("\t<key>SUAutomaticallyUpdate</key>\n\t<true/>\n")
+	}
 	if m.Menubar || a.Menubar {
 		b.WriteString("\t<key>LSUIElement</key>\n\t<true/>\n")
 	}
