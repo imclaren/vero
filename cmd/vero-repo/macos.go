@@ -468,7 +468,7 @@ func signApp(app, identity, entitlements string) error {
 	}
 	for _, path := range nested {
 		sign := append([]string{}, args...)
-		if st, err := os.Stat(path); err == nil && !st.IsDir() && helper != "" {
+		if st, err := os.Stat(path); err == nil && !st.IsDir() && helper != "" && inheritsSandbox(path) {
 			sign = append(sign, "--entitlements", helper)
 		}
 		if err := quietSign(append(sign, path)); err != nil {
@@ -488,6 +488,15 @@ func signApp(app, identity, entitlements string) error {
 		return fmt.Errorf("the signed app doesn't verify: %s", strings.TrimSpace(string(out)))
 	}
 	return nil
+}
+
+// inheritsSandbox is whether a program in a sandboxed app is signed as the
+// app's helper, in its sandbox. Sparkle's programs are not: launchd starts
+// its Autoupdate, outside the app, so it has no sandbox to inherit, and
+// macOS stops it as it opens, which leaves each update failing after its
+// download. Sparkle asks for them to be signed with no entitlements.
+func inheritsSandbox(path string) bool {
+	return !strings.Contains(filepath.ToSlash(path), "/Sparkle.framework/")
 }
 
 // quietSign runs codesign, showing only what goes wrong.

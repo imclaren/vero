@@ -285,6 +285,21 @@ func TestSignSandboxed(t *testing.T) {
 	}
 }
 
+// TestSparkleInheritsNoSandbox: Sparkle's programs are signed without the
+// app's sandbox, and the app's own helpers with it.
+func TestSparkleInheritsNoSandbox(t *testing.T) {
+	for path, want := range map[string]bool{
+		"/x/Example.app/Contents/Resources/example-worker":                                true,
+		"/x/Example.app/Contents/MacOS/Example":                                           true,
+		"/x/Example.app/Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate":      false,
+		"/x/Example.app/Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app/x/y": false,
+	} {
+		if got := inheritsSandbox(path); got != want {
+			t.Errorf("%s: %v, want %v", path, got, want)
+		}
+	}
+}
+
 // TestMacOlderThanGo: an app for macOS 12 gets a second worker; one for
 // 13 or later, or with no minimum, does not.
 func TestMacOlderThanGo(t *testing.T) {
